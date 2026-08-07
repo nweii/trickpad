@@ -19,6 +19,20 @@ Shell scripts live in `scripts/` and resolve paths from the project root, two le
 
 The repository root holds the licence files, the reference documents, the starter configuration, and the two icon sources `build.sh` reads: `Trickpad.icon` for the app icon and `Trickpad-menu-bar-icon.svg` for the menu bar mark. A file at the root is either read by the build or read by a person arriving at the repository; anything else belongs in a directory above.
 
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues in `nweii/trickpad`, managed with the `gh` CLI. The tracker is public; commercial and strategic work does not belong in it. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repository root. See `docs/agents/domain.md`.
+
 ## Vendored engine, local config layer
 
 Recognition is [Jitouch](https://github.com/JitouchApp/Jitouch), vendored under `src/jitouch/` by way of a fork. The `upstream` remote points at that fork.
