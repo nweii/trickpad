@@ -30,6 +30,7 @@ If the user wants ideas, find a few concrete options that fit their workflow:
 - Consider a Shortcut, command-line tool, or small local script only when an app does not expose a suitable shortcut or URL.
 - Prefer a built-in action, keyboard shortcut, or app deep link over a custom script.
 - Consider existing bindings, comfort and repeatability, mnemonic fit, and how consequential the action is.
+- When a consequential action (submit, save, delete, send, or anything similar) is headed for a gesture that misfires more easily — taps especially — raise the risk with the user and suggest a hold gesture as the safer default, then respect their choice. What counts as consequential depends on the user, their apps, and their other bindings, so ask rather than refuse.
 - Use an application-specific binding when a gesture makes sense in one app or would conflict elsewhere.
 - `sound:NAME` (a system sound such as `sound:Glass`) and `say:WORDS` play or speak and do nothing else. They are ordinary binding values, useful for whatever the user wants them for; checking that a gesture fires at all is the obvious one. Speech can name the gesture, so several such bindings stay distinguishable by ear.
 - To confirm a gesture that still does its real work, you could add `sound` or `say` as a binding option: `{ action = "cmd+shift+4", sound = "Glass" }`. A Magic Mouse has no haptic feedback, so this is the only way to feel or hear one of its gestures fire.
