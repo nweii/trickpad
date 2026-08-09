@@ -55,6 +55,45 @@ The trackpad recognizes a hold-and-slide in one direction only, so it has one sl
 | `index-to-pinky` | Brush your fingers across in sequence, index first |
 | `pinky-to-index` | Brush your fingers across in sequence, pinky first |
 
+### Area clicks
+
+An area click is a physical click with one finger that lands in a named region of the trackpad surface. A click in a region with no binding stays a normal native click. When bound regions overlap, the most specific bound region wins: a bound corner beats any edge region, a bound third beats a bound half, and a bound half beats the whole edge.
+
+Slugs read edge first, then span, then action. Vertical edges divide top to bottom; horizontal edges divide left to right.
+
+| Write this | The region |
+|---|---|
+| `left-edge-click` | Anywhere along the left edge |
+| `right-edge-click` | Anywhere along the right edge |
+| `top-edge-click` | Anywhere along the top edge |
+| `bottom-edge-click` | Anywhere along the bottom edge |
+| `left-edge-top-half-click` | Top half of the left edge |
+| `left-edge-bottom-half-click` | Bottom half of the left edge |
+| `right-edge-top-half-click` | Top half of the right edge |
+| `right-edge-bottom-half-click` | Bottom half of the right edge |
+| `top-edge-left-half-click` | Left half of the top edge |
+| `top-edge-right-half-click` | Right half of the top edge |
+| `bottom-edge-left-half-click` | Left half of the bottom edge |
+| `bottom-edge-right-half-click` | Right half of the bottom edge |
+| `left-edge-top-third-click` | Top third of the left edge |
+| `left-edge-middle-third-click` | Middle third of the left edge |
+| `left-edge-bottom-third-click` | Bottom third of the left edge |
+| `right-edge-top-third-click` | Top third of the right edge |
+| `right-edge-middle-third-click` | Middle third of the right edge |
+| `right-edge-bottom-third-click` | Bottom third of the right edge |
+| `top-edge-left-third-click` | Left third of the top edge |
+| `top-edge-middle-third-click` | Middle third of the top edge |
+| `top-edge-right-third-click` | Right third of the top edge |
+| `bottom-edge-left-third-click` | Left third of the bottom edge |
+| `bottom-edge-middle-third-click` | Middle third of the bottom edge |
+| `bottom-edge-right-third-click` | Right third of the bottom edge |
+| `top-left-corner-click` | The top left corner |
+| `top-right-corner-click` | The top right corner |
+| `bottom-left-corner-click` | The bottom left corner |
+| `bottom-right-corner-click` | The bottom right corner |
+
+The edge bands and corner squares use starter sizes that still await validation on real hardware, so how far a region reaches into the surface can change.
+
 On both devices, a confidently recognized configured click replaces the native click: the bound action fires on release and the click does not reach the application. An ambiguous click, such as one with a resting palm, stays native and does not fire the bound action. A drag keeps its native events and does not fire the configured click action.
 
 One continuous touch sequence can run one kind of configured gesture. A swipe or hold gesture may repeat while it owns the sequence, but a physical click, tap, or different gesture will not also run until every finger lifts.
@@ -236,6 +275,8 @@ To see the same thing from the shell:
 ```
 
 Each line names one gesture from this reference and whether macOS has claimed the trigger it overlaps. A line reading `claimed=default` means macOS has never written that preference, so the built-in default decides it and System Settings is the only place to confirm.
+
+macOS can assign its own secondary click to a click in the bottom left or bottom right trackpad corner, under System Settings > Trackpad. When that option is on, macOS claims those corners, so a `bottom-left-corner-click` or `bottom-right-corner-click` binding competes with the built-in secondary click there.
 
 One kind of overlap is easy to miss. A built-in gesture that uses a *double* tap, such as the Magic Mouse two-finger double tap, contains two single taps, so a single-tap binding on the same finger count fires while you perform it.
 

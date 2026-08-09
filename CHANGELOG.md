@@ -14,6 +14,10 @@
 
 ## Unreleased
 
+### Added
+
+- Add trackpad area clicks. A physical click with one finger in a named region of the surface runs a bound action. The regions are the four edges, their halves and thirds, and the four corners. A click in a bound region replaces the native click. A click in a region with no binding stays a normal click. When bound regions overlap, the most specific bound region wins. The region sizes are first values and await tests on real hardware.
+
 ### Changed
 
 - Make a configured trackpad `three-finger-click` or `four-finger-click` replace the native click. The bound action runs and the click does not reach the application. Before, the click and the action both occurred. A click that becomes a drag stays a native drag and does not run the action. This matches the Magic Mouse click gestures.

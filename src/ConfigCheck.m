@@ -892,9 +892,18 @@ int main(void) {
                         BOOL physicalClick = [engineName hasSuffix:@"-Finger Click"] &&
                             [engine rangeOfString:[NSString stringWithFormat:@"gesture = @\"%@\"", engineName]].location != NSNotFound &&
                             [engine rangeOfString:@"dispatchCommand(gesture, device)"].location != NSNotFound;
+                        // Area clicks resolve to one gesture name at mouse-down
+                        // and dispatch it through the shared physical-click
+                        // mouse-up path, so each name needs a literal in the
+                        // engine's region tables rather than its own dispatch.
+                        BOOL areaClick = ([engineName rangeOfString:@"-Edge"].location != NSNotFound ||
+                             [engineName hasSuffix:@"-Corner Click"]) &&
+                            [engine rangeOfString:[NSString stringWithFormat:@"@\"%@\"", engineName]].location != NSNotFound &&
+                            [engine rangeOfString:@"pendingTrackpadAreaClickGesture"].location != NSNotFound &&
+                            [engine rangeOfString:@"dispatchCommand(gesture, device)"].location != NSNotFound;
                         BOOL dispatched = [engine rangeOfString:exclusiveDispatch].location != NSNotFound ||
                             [engine rangeOfString:exclusiveTapDispatch].location != NSNotFound;
-                        if (!dispatched && !physicalClick)
+                        if (!dispatched && !physicalClick && !areaClick)
                             fail([NSString stringWithFormat:@"%@ %@ has an exclusive recognizer dispatch", constant, slug],
                                  [NSString stringWithFormat:@"%@ or %@", exclusiveDispatch, exclusiveTapDispatch], @"missing");
                     }
@@ -911,6 +920,9 @@ int main(void) {
                                          @"pendingTrackpadPrimaryDown = CGEventCreateCopy(event)",
                                          @"replayPendingTrackpadPrimaryDown",
                                          @"trackpadClickFingerCount == 3", @"trackpadClickFingerCount == 4",
+                                         @"trackpadClickFingerCount == 1",
+                                         @"pendingTrackpadAreaClickGesture",
+                                         @"MGTrackpadInteractionPendingSingleContactClickPosition",
                                          @"magicMouseThreeFingerFlag", @"device = TRACKPAD",
                                          @"device = MAGICMOUSE", @"dispatchCommand(gesture, device)",
                                          @"dispatchMagicMousePhysicalClickForContactCount"]) {

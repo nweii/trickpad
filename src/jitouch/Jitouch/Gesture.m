@@ -195,6 +195,10 @@ static void clearPendingTrackpadClick(void) {
     }
 }
 
+// The area gesture recognized at a single-contact trackpad mouse-down, held
+// until its mouse-up dispatches it or a drag keeps the click native.
+static NSString *pendingTrackpadAreaClickGesture = nil;
+
 static void replayPendingTrackpadPrimaryDown(void) {
     if (pendingTrackpadPrimaryDown == NULL) return;
     CGEventSetIntegerValueField(pendingTrackpadPrimaryDown,
@@ -4417,6 +4421,134 @@ static void multitouchDeviceRemoved(void* refCon, io_iterator_t iterator) {
 
 
 
+#pragma mark - Trackpad area clicks
+
+// Area-click regions in normalized trackpad coordinates: x and y run 0..1
+// with the origin at the bottom-left, matching the raw contact frames. The
+// regions are absolute surface positions, so dominant-hand mirroring does not
+// apply. Starter geometry; these thresholds await hardware validation.
+static const float kTrackpadAreaEdgeBandDepth = 0.15f; // how far an edge band reaches into the surface
+static const float kTrackpadAreaCornerSize = 0.25f;    // side length of each corner square
+
+static NSString *trackpadAreaCornerClickName(float x, float y) {
+    BOOL left = x <= kTrackpadAreaCornerSize;
+    BOOL right = x >= 1.0f - kTrackpadAreaCornerSize;
+    BOOL bottom = y <= kTrackpadAreaCornerSize;
+    BOOL top = y >= 1.0f - kTrackpadAreaCornerSize;
+    if (top && left) return @"Top-Left-Corner Click";
+    if (top && right) return @"Top-Right-Corner Click";
+    if (bottom && left) return @"Bottom-Left-Corner Click";
+    if (bottom && right) return @"Bottom-Right-Corner Click";
+    return nil;
+}
+
+enum {
+    kTrackpadAreaEdgeLeft = 0,
+    kTrackpadAreaEdgeRight,
+    kTrackpadAreaEdgeTop,
+    kTrackpadAreaEdgeBottom,
+};
+
+// span runs along the edge: bottom to top on a vertical edge, left to right
+// on a horizontal one, so the slugs read as English.
+static NSString *trackpadAreaEdgeThirdName(int edge, float span) {
+    BOOL high = span >= 2.0f / 3.0f;
+    BOOL low = span < 1.0f / 3.0f;
+    switch (edge) {
+        case kTrackpadAreaEdgeLeft:
+            return high ? @"Left-Edge Top-Third Click"
+                 : low ? @"Left-Edge Bottom-Third Click" : @"Left-Edge Middle-Third Click";
+        case kTrackpadAreaEdgeRight:
+            return high ? @"Right-Edge Top-Third Click"
+                 : low ? @"Right-Edge Bottom-Third Click" : @"Right-Edge Middle-Third Click";
+        case kTrackpadAreaEdgeTop:
+            return high ? @"Top-Edge Right-Third Click"
+                 : low ? @"Top-Edge Left-Third Click" : @"Top-Edge Middle-Third Click";
+        default:
+            return high ? @"Bottom-Edge Right-Third Click"
+                 : low ? @"Bottom-Edge Left-Third Click" : @"Bottom-Edge Middle-Third Click";
+    }
+}
+
+static NSString *trackpadAreaEdgeHalfName(int edge, float span) {
+    BOOL high = span >= 0.5f;
+    switch (edge) {
+        case kTrackpadAreaEdgeLeft:
+            return high ? @"Left-Edge Top-Half Click" : @"Left-Edge Bottom-Half Click";
+        case kTrackpadAreaEdgeRight:
+            return high ? @"Right-Edge Top-Half Click" : @"Right-Edge Bottom-Half Click";
+        case kTrackpadAreaEdgeTop:
+            return high ? @"Top-Edge Right-Half Click" : @"Top-Edge Left-Half Click";
+        default:
+            return high ? @"Bottom-Edge Right-Half Click" : @"Bottom-Edge Left-Half Click";
+    }
+}
+
+static NSString *trackpadAreaEdgeWholeName(int edge) {
+    switch (edge) {
+        case kTrackpadAreaEdgeLeft: return @"Left-Edge Click";
+        case kTrackpadAreaEdgeRight: return @"Right-Edge Click";
+        case kTrackpadAreaEdgeTop: return @"Top-Edge Click";
+        default: return @"Bottom-Edge Click";
+    }
+}
+
+// Resolves the most specific bound region containing a single-contact click:
+// a bound corner beats any edge region, a bound third beats a bound half
+// beats the whole edge. Where two edge bands overlap near a corner and no
+// corner is bound, the nearer edge is tried first at each span size. Returns
+// nil when no bound region contains the click, which leaves it native.
+static NSString *boundTrackpadAreaClickGesture(float x, float y) {
+    NSString *corner = trackpadAreaCornerClickName(x, y);
+    if (corner != nil && bindingForGesture(corner, TRACKPAD) != nil)
+        return corner;
+
+    int edges[2];
+    float spans[2], distances[2];
+    int edgeCount = 0;
+    if (x <= kTrackpadAreaEdgeBandDepth) {
+        edges[edgeCount] = kTrackpadAreaEdgeLeft;
+        spans[edgeCount] = y;
+        distances[edgeCount++] = x;
+    } else if (x >= 1.0f - kTrackpadAreaEdgeBandDepth) {
+        edges[edgeCount] = kTrackpadAreaEdgeRight;
+        spans[edgeCount] = y;
+        distances[edgeCount++] = 1.0f - x;
+    }
+    if (y >= 1.0f - kTrackpadAreaEdgeBandDepth) {
+        edges[edgeCount] = kTrackpadAreaEdgeTop;
+        spans[edgeCount] = x;
+        distances[edgeCount++] = 1.0f - y;
+    } else if (y <= kTrackpadAreaEdgeBandDepth) {
+        edges[edgeCount] = kTrackpadAreaEdgeBottom;
+        spans[edgeCount] = x;
+        distances[edgeCount++] = y;
+    }
+    if (edgeCount == 0)
+        return nil;
+    if (edgeCount == 2 && distances[1] < distances[0]) {
+        int edge = edges[0]; edges[0] = edges[1]; edges[1] = edge;
+        float span = spans[0]; spans[0] = spans[1]; spans[1] = span;
+    }
+
+    for (int i = 0; i < edgeCount; i++) {
+        NSString *third = trackpadAreaEdgeThirdName(edges[i], spans[i]);
+        if (bindingForGesture(third, TRACKPAD) != nil)
+            return third;
+    }
+    for (int i = 0; i < edgeCount; i++) {
+        NSString *half = trackpadAreaEdgeHalfName(edges[i], spans[i]);
+        if (bindingForGesture(half, TRACKPAD) != nil)
+            return half;
+    }
+    for (int i = 0; i < edgeCount; i++) {
+        NSString *whole = trackpadAreaEdgeWholeName(edges[i]);
+        if (bindingForGesture(whole, TRACKPAD) != nil)
+            return whole;
+    }
+    return nil;
+}
+
 #pragma mark - CGEventCallback
 
 static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon) {
@@ -4517,11 +4649,15 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
             gesture = @"Three-Finger Click";
         else if (trackpadClickFingerCount == 4)
             gesture = @"Four-Finger Click";
+        else if (trackpadClickFingerCount == 1 && pendingTrackpadAreaClickGesture != nil)
+            gesture = pendingTrackpadAreaClickGesture;
         // The configured action dispatches only when its mouse-down was
         // suppressed, and its mouse-up is swallowed with it. A click whose
         // native down passed through stays native and does not dispatch.
         if (gesture != nil && (trackpadClickReplacedNative || MGTraceIsActive()))
             dispatchCommand(gesture, device);
+        [pendingTrackpadAreaClickGesture release];
+        pendingTrackpadAreaClickGesture = nil;
         trackpadRewritingSecondaryClick = NO;
         if (trackpadClickReplacedNative)
             return NULL;
@@ -4546,11 +4682,21 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
             kGestureOwnerPhysicalClick);
         if (trackpadClickBegan)
             trackpadClicked = 1;
+        NSString *trackpadAreaClickGesture = nil;
+        float trackpadAreaClickX = 0, trackpadAreaClickY = 0;
+        if (trackpadClickBegan &&
+            MGTrackpadInteractionPendingSingleContactClickPosition(
+                &trackpadInteraction, &trackpadAreaClickX, &trackpadAreaClickY))
+            trackpadAreaClickGesture = boundTrackpadAreaClickGesture(
+                trackpadAreaClickX, trackpadAreaClickY);
+        [pendingTrackpadAreaClickGesture release];
+        pendingTrackpadAreaClickGesture = [trackpadAreaClickGesture retain];
         BOOL configuredTrackpadClick = trackpadClickBegan &&
-            MGTrackpadInteractionShouldPreservePrimaryClick(
+            (trackpadAreaClickGesture != nil ||
+             MGTrackpadInteractionShouldPreservePrimaryClick(
                 &trackpadInteraction,
                 bindingForGesture(@"Three-Finger Click", TRACKPAD) != nil,
-                bindingForGesture(@"Four-Finger Click", TRACKPAD) != nil);
+                bindingForGesture(@"Four-Finger Click", TRACKPAD) != nil));
         if (configuredTrackpadClick && type == kCGEventRightMouseDown) {
             CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, 0);
             CGEventSetType(event, kCGEventLeftMouseDown);
