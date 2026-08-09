@@ -143,12 +143,15 @@
     static NSDictionary *phrases = nil;
     if (phrases == nil) {
         phrases = [@{
-            @"Index-Fix Middle-Near-Tap": @"Hold your left finger, tap to its right",
-            @"Index-Fix Middle-Far-Tap": @"Hold your left finger, tap wide to its right",
-            @"Middle-Fix Index-Near-Tap": @"Hold your right finger, tap to its left",
-            @"Middle-Fix Index-Far-Tap": @"Hold your right finger, tap wide to its left",
-            @"One-Fix Left-Tap": @"Hold your right finger, tap to its left",
-            @"One-Fix Right-Tap": @"Hold your left finger, tap to its right",
+            // Naming the held finger's side reads as a handedness claim
+            // ("your left finger"), and the tap direction already carries the
+            // shape, so the held finger goes unsided.
+            @"Index-Fix Middle-Near-Tap": @"Hold a finger, tap to its right",
+            @"Index-Fix Middle-Far-Tap": @"Hold a finger, tap wide to its right",
+            @"Middle-Fix Index-Near-Tap": @"Hold a finger, tap to its left",
+            @"Middle-Fix Index-Far-Tap": @"Hold a finger, tap wide to its left",
+            @"One-Fix Left-Tap": @"Hold a finger, tap to its left",
+            @"One-Fix Right-Tap": @"Hold a finger, tap to its right",
             @"One-Fix One-Slide": @"Hold one finger, slide another",
             @"One-Finger Tap": @"Tap with one finger",
             @"Two-Finger Tap": @"Tap with two fingers",
