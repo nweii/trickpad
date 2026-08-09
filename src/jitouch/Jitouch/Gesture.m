@@ -4445,7 +4445,7 @@ static void multitouchDeviceRemoved(void* refCon, io_iterator_t iterator) {
 // with the origin at the bottom-left, matching the raw contact frames. The
 // regions are absolute surface positions, so dominant-hand mirroring does not
 // apply. Starter geometry; these thresholds await hardware validation.
-// The configurable trackpad-area-gesture-depth setting sets how far an edge band reaches
+// The configurable trackpad-edge-gesture-depth setting sets how far an edge band reaches
 // into the surface. Corner squares span twice that, giving a corner target
 // larger than the bands it overrides. The default stays narrow so bands sit
 // under the bezel-adjacent strip a resting hand rarely clicks.
