@@ -92,7 +92,7 @@ Slugs read edge first, then span, then action. Vertical edges divide top to bott
 | `bottom-left-corner-click` | The bottom left corner |
 | `bottom-right-corner-click` | The bottom right corner |
 
-Regions stay narrow by default so a click during ordinary pointing does not land in one by accident. `area-click-depth` under `[GENERAL]` sets how far an edge band reaches in from its edge, as a fraction of the surface; corner squares span twice that depth. On a surface wider than it is tall, the same fraction reaches physically deeper on the left and right edges than on the top and bottom, and both scale together.
+Regions stay narrow by default so a click during ordinary pointing does not land in one by accident. `trackpad-area-gesture-depth` under `[GENERAL]` sets how far an edge band reaches in from its edge, as a fraction of the surface; corner squares span twice that depth. On a surface wider than it is tall, the same fraction reaches physically deeper on the left and right edges than on the top and bottom, and both scale together.
 
 An area click fires only when the clicking finger is the only contact on the surface. Lift your palm and resting fingers for the click. This keeps a resting hand from triggering regions, at the cost of making each area click a deliberate motion. Binding many regions at once works, but neighboring regions sit close together, so a dense layout asks for conscious aim; most configurations are better served by a few well-separated regions.
 
@@ -253,7 +253,7 @@ App updates and localizations can change menu titles. Update the App Shortcut if
 | `enable-trackpad` | `true` or `false` |
 | `dominant-hand` | `left` or `right`; mirrors positional recognition for left-handed use, default `right` |
 | `tap-speed` | Seconds a tap may last, default `0.25` |
-| `area-click-depth` | Fraction of the trackpad an edge band reaches in from its edge, above 0 and below 0.5; corners span twice this; default `0.06` |
+| `trackpad-area-gesture-depth` | Fraction of the trackpad an edge band reaches in from its edge, above 0 and below 0.5; corners span twice this; default `0.06` |
 | `haptic-feedback` | `true` requests confirmation for configured trackpad gestures, default `true` |
 | `menu-bar-icon` | `trickpad`, or `sf:` followed by a name from [SF Symbols](https://developer.apple.com/sf-symbols/); default `trickpad` |
 | `experimental-mouse-click-gestures` | `true` enables posture-sensitive Magic Mouse physical-click replacements, default `false` |
