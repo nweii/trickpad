@@ -161,6 +161,26 @@ static NSArray *magicMouseGestureCatalogAuditProtocol(void) {
     return steps;
 }
 
+// Builds one repetition per step for a motion that has no recognizer. Nothing
+// is expected to dispatch, so every step records raw contact frames and a
+// human execution-quality label only.
+static NSArray *candidateGestureTraceProtocol(NSString *candidate, NSInteger repetitions) {
+    NSMutableArray *steps = [NSMutableArray array];
+    for (NSInteger repetition = 1; repetition <= repetitions; repetition++) {
+        [steps addObject:@{
+            @"id": [NSString stringWithFormat:@"candidate-r%ld", (long)repetition],
+            // The name stays out of every step field the recorder writes into an
+            // event. Only the panel heading shows it.
+            @"requested": @"candidate-gesture",
+            @"heading": candidate,
+            @"expected": @0,
+            @"instruction": [NSString stringWithFormat:
+                @"Perform the candidate motion once, the same way each time. Repetition %ld of %ld.",
+                (long)repetition, (long)repetitions]}];
+    }
+    return steps;
+}
+
 static NSArray *currentTraceProtocol(void) {
     return activeTraceProtocol ?: magicMousePhysicalClickTraceProtocol();
 }
@@ -989,7 +1009,8 @@ static NSTextField *traceText(NSRect frame, CGFloat size, BOOL bold) {
             (unsigned long)count,
             completedTracePath ?: @"Analysis is finishing…"]];
     } else {
-        [traceHeading setStringValue:[step objectForKey:@"requested"] ?: @"Trace step"];
+        [traceHeading setStringValue:[step objectForKey:@"heading"]
+            ?: [step objectForKey:@"requested"] ?: @"Trace step"];
         NSDictionary *status = MGTraceStatus();
         NSString *stateInstruction = phase == MGTraceSessionPreparing
             ? (manualCapture
@@ -1154,35 +1175,77 @@ static NSTextField *traceText(NSRect frame, CGFloat size, BOOL bold) {
     [tracePanel center];
 }
 
+// Asks for the candidate name and repetition count. Returns NO when the person
+// cancels or leaves the name empty.
+- (BOOL)askForCandidateGesture:(NSString **)candidate repetitions:(NSInteger *)repetitions {
+    NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+    [alert setMessageText:@"Record a candidate gesture"];
+    [alert setInformativeText:@"Name the motion you are prototyping and choose how many repetitions to record. No recognizer runs against it; the session records raw contact frames and your label for each repetition."];
+    [alert addButtonWithTitle:@"Start"];
+    [alert addButtonWithTitle:@"Cancel"];
+    NSView *fields = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 54)] autorelease];
+    NSTextField *nameField = [[[NSTextField alloc] initWithFrame:NSMakeRect(0, 28, 300, 24)] autorelease];
+    [[nameField cell] setPlaceholderString:@"Candidate name, such as corner-pull"];
+    NSTextField *countField = [[[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 300, 24)] autorelease];
+    [countField setStringValue:@"10"];
+    [fields addSubview:nameField]; [fields addSubview:countField];
+    [alert setAccessoryView:fields];
+    [[alert window] setInitialFirstResponder:nameField];
+    [NSApp activateIgnoringOtherApps:YES];
+    if ([alert runModal] != NSAlertFirstButtonReturn) return NO;
+    NSString *name = [[nameField stringValue] stringByTrimmingCharactersInSet:
+        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if ([name length] == 0) return NO;
+    if ([name length] > 40) name = [name substringToIndex:40];
+    NSInteger count = [countField integerValue];
+    *candidate = name;
+    *repetitions = MIN(MAX(count, 1), 60);
+    return YES;
+}
+
 - (void)startTraceSession:(id)sender {
     if (MGTraceIsActive()) return;
-    if (!enMMAll) {
+    BOOL tapCalibration = [sender tag] == 1;
+    BOOL ambientCapture = [sender tag] == 2;
+    BOOL catalogAudit = [sender tag] == 3;
+    BOOL candidateGesture = [sender tag] == 4;
+    if (!enMMAll && !candidateGesture) {
         [self reportFailure:@"Magic Mouse gestures are turned off."
                      detail:@"Turn them on in config.toml before starting a trace session. Nothing changed."];
         return;
     }
+    NSString *candidateName = nil;
+    NSInteger candidateRepetitions = 0;
+    if (candidateGesture &&
+        ![self askForCandidateGesture:&candidateName repetitions:&candidateRepetitions])
+        return;
     NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:
         [NSString stringWithFormat:@"Trickpad-Trace-%@", [[NSUUID UUID] UUIDString]]];
     NSString *problem = nil;
-    if (!MGTraceStart(path, &problem)) {
+    if (!MGTraceStartCapture(path, candidateGesture ? @"candidate-gesture-guided"
+                                                    : @"magic-mouse-guided",
+                             candidateName, &problem)) {
         [self reportFailure:@"Could not start the trace session." detail:problem];
         return;
     }
-    BOOL tapCalibration = [sender tag] == 1;
-    BOOL ambientCapture = [sender tag] == 2;
-    BOOL catalogAudit = [sender tag] == 3;
     [activeTraceProtocol release];
-    activeTraceProtocol = [(catalogAudit ? magicMouseGestureCatalogAuditProtocol() :
+    activeTraceProtocol = [(candidateGesture
+            ? candidateGestureTraceProtocol(candidateName, candidateRepetitions) :
+        catalogAudit ? magicMouseGestureCatalogAuditProtocol() :
         ambientCapture ? magicMouseAmbientGestureTraceProtocol() :
         tapCalibration ? magicMouseTapCalibrationTraceProtocol() :
         magicMousePhysicalClickTraceProtocol()) retain];
     [activeTraceProtocolTitle release];
-    activeTraceProtocolTitle = [(catalogAudit ? @"Audit gesture catalog" :
+    activeTraceProtocolTitle = [(candidateGesture
+            ? [NSString stringWithFormat:@"Candidate gesture: %@", candidateName] :
+        catalogAudit ? @"Audit gesture catalog" :
         ambientCapture ? @"Capture normal mouse use" :
         tapCalibration ? @"Magic Mouse tap calibration" :
         @"Magic Mouse physical-click trace") copy];
     [activeTraceProtocolOverview release];
-    activeTraceProtocolOverview = [(catalogAudit
+    activeTraceProtocolOverview = [(candidateGesture
+        ? [NSString stringWithFormat:@"This records the same motion %ld times on the trackpad or the Magic Mouse so a recognizer can be designed from the data. No recognizer runs against it, so nothing is detected and nothing dispatches. Perform the motion the same way each time, then label how well you executed it.\n\nUse Return, M, U, or K so the pointer can stay in the gray surface. Botched retries the same repetition; the other labels advance. Configured Trickpad actions are suppressed; native behavior remains active.", (long)candidateRepetitions] :
+        catalogAudit
         ? @"This shadow-audits every supported Magic Mouse recognizer during up to two minutes of ordinary use, including gestures absent from your configuration. It never fires actions, claims a gesture sequence, or suppresses native scrolling. Potential recognitions are listed in the exported report. Choose Stop, then Export Partial when finished."
         : ambientCapture
         ? @"This captures up to two minutes of ordinary Magic Mouse use so any unexpected configured gesture can be identified without guessing what motion caused it. Work normally after the countdown. Trickpad actions are suppressed, and the panel counts every would-be gesture dispatch. Choose Stop, then Export Partial when finished."
@@ -1190,7 +1253,8 @@ static NSTextField *traceText(NSRect frame, CGFloat size, BOOL bold) {
         ? @"This takes about 3 minutes. It compares deliberate two-finger taps, including taps near an edge, against your natural resting edge contact during ordinary clicks, scrolling, and a brief extra touch. Trickpad reports detection automatically. You only label whether your physical attempt matched the instruction.\n\nUse Return, M, U, or K so the pointer can stay in the gray surface. Botched retries the same step; the other labels advance. Configured Trickpad actions are suppressed; native mouse behavior remains active."
         : @"This takes about 4 minutes. It compares natural, deliberately held, and immediate lifts, upper and lower contact positions, then checks drag, contact-shape, scroll, tap, and rapid-repeat conflicts. Trickpad reports detection automatically. You only label whether your physical attempt matched the instruction.\n\nUse Return, M, U, or K so the pointer can stay in the gray surface. Botched retries the same step; the other labels advance. Configured Trickpad actions are suppressed; native mouse behavior remains active.") copy];
     [activeTraceObservedGesture release];
-    activeTraceObservedGesture = [((ambientCapture || catalogAudit) ? @"*" :
+    activeTraceObservedGesture = [(candidateGesture ? @"none" :
+        (ambientCapture || catalogAudit) ? @"*" :
         tapCalibration ? @"Two-Finger Tap" : nil) copy];
     [traceSession release];
     traceSession = [[MGTraceSessionModel alloc] initWithSteps:currentTraceProtocol()];
@@ -1357,6 +1421,9 @@ static NSTextField *traceText(NSRect frame, CGFloat size, BOOL bold) {
         NSMenuItem *catalog = [menu addItemWithTitle:@"Audit Gesture Catalog…"
                                                 action:@selector(startTraceSession:) keyEquivalent:@""];
         [catalog setTarget:self]; [catalog setTag:3];
+        NSMenuItem *candidate = [menu addItemWithTitle:@"Record Candidate Gesture…"
+                                                action:@selector(startTraceSession:) keyEquivalent:@""];
+        [candidate setTarget:self]; [candidate setTag:4];
         NSMenuItem *start = [menu addItemWithTitle:@"Start Physical Click Trace…"
                                             action:@selector(startTraceSession:) keyEquivalent:@""];
         [start setTarget:self];

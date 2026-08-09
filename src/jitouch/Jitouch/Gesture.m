@@ -2811,6 +2811,19 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
     trackpadNFingers = nFingers;
     int activeTrackpadContactCount = nFingers;
 
+    // Raw trackpad frames feed candidate-gesture trace sessions. Nothing here
+    // recognizes or suppresses; the recorder ignores frames when idle.
+    if (MGTraceIsActive()) {
+        MGTraceContact traceContacts[16];
+        int traceCount = MIN(nFingers, 16);
+        for (int i = 0; i < traceCount; i++) {
+            traceContacts[i] = (MGTraceContact){data[i].identifier, data[i].state,
+                data[i].px, data[i].py, data[i].size, data[i].majorAxis,
+                data[i].minorAxis, data[i].zDensity};
+        }
+        MGTraceRecordTrackpadFrame(device, timestamp, frame, traceContacts, traceCount);
+    }
+
     static int thumbId = -1;
     Finger *dataUnnormalized = (Finger *)malloc(sizeof(Finger) * nFingers);
     for (int i = 0; i < nFingers; i++) {

@@ -1,0 +1,9 @@
+{
+  "actions": "suppressed",
+  "candidate": "corner-pull",
+  "capture": "candidate-gesture-guided",
+  "device_identity": "session-ephemeral",
+  "privacy": "redacted-by-construction",
+  "schema": 1,
+  "session": "synthetic-candidate"
+}

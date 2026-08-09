@@ -79,6 +79,7 @@ int main(int argc, const char *argv[]) {
         NSMutableDictionary *firstTouch = [NSMutableDictionary dictionary];
         NSMutableDictionary *lastTouch = [NSMutableDictionary dictionary];
         NSMutableDictionary *contactFrames = [NSMutableDictionary dictionary];
+        NSMutableDictionary *peakContacts = [NSMutableDictionary dictionary];
         NSMutableDictionary *contactPersistence = [NSMutableDictionary dictionary];
         NSMutableDictionary *contactFirstSeenBySegment = [NSMutableDictionary dictionary];
         NSMutableDictionary *firstPairSpanBySegment = [NSMutableDictionary dictionary];
@@ -136,6 +137,8 @@ int main(int argc, const char *argv[]) {
                     lastTouch[segment] = time;
                 }
                 contactFrames[segment] = @([contactFrames[segment] unsignedIntegerValue] + 1);
+                if ([contacts count] > [peakContacts[segment] unsignedIntegerValue])
+                    peakContacts[segment] = @([contacts count]);
                 NSMutableDictionary *firstSeen = contactFirstSeenBySegment[segment];
                 if (firstSeen == nil) {
                     firstSeen = [NSMutableDictionary dictionary];
@@ -191,6 +194,8 @@ int main(int argc, const char *argv[]) {
             NSNumber *lastTouchTime = lastTouch[segment];
             NSMutableDictionary *contactMetrics = [@{
                 @"contact_count": @([firstSeen count]),
+                @"peak_contact_count": peakContacts[segment] ?: @0,
+                @"frames": contactFrames[segment] ?: @0,
                 @"first_pair_span": firstPairSpanBySegment[segment] ?: [NSNull null],
                 @"contact_onset_spread_ms": earliestOnset != nil && latestOnset != nil
                     ? @(([latestOnset longLongValue] - [earliestOnset longLongValue]) / 1000000.0)
@@ -235,6 +240,8 @@ int main(int argc, const char *argv[]) {
             contactFramesForJSON[[segment stringValue]] = contactFrames[segment];
         NSDictionary *analysis = @{
             @"schema": @1,
+            @"capture": [manifest objectForKey:@"capture"] ?: @"unknown",
+            @"candidate": [manifest objectForKey:@"candidate"] ?: [NSNull null],
             @"case_counts": @{@"labeled": @([labels count]), @"events": @([events count]),
                                @"human": humanCounts},
             @"cases": caseResults,

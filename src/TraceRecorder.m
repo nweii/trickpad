@@ -140,14 +140,14 @@ NSData *MGTraceDeterministicJSONLine(NSDictionary *event, NSString **problem) {
     return line;
 }
 
-static NSString *ephemeralDeviceName(const void *device) {
+static NSString *ephemeralDeviceName(const void *device, NSString *prefix) {
     MGTraceState *state = traceState();
     if (device == NULL) return nil;
-    NSString *key = [NSString stringWithFormat:@"%p", device];
+    NSString *key = [NSString stringWithFormat:@"%@:%p", prefix, device];
     os_unfair_lock_lock(&state->lock);
     NSString *name = [state->devices objectForKey:key];
     if (name == nil) {
-        name = [NSString stringWithFormat:@"mouse-%lu", (unsigned long)[state->devices count] + 1];
+        name = [NSString stringWithFormat:@"%@-%lu", prefix, (unsigned long)[state->devices count] + 1];
         [state->devices setObject:name forKey:key];
     }
     [name retain];
@@ -217,6 +217,11 @@ static void enqueue(NSString *source, NSString *event, NSString *device,
 }
 
 BOOL MGTraceStart(NSString *path, NSString **problem) {
+    return MGTraceStartCapture(path, @"magic-mouse-guided", nil, problem);
+}
+
+BOOL MGTraceStartCapture(NSString *path, NSString *capture, NSString *candidate,
+                         NSString **problem) {
     MGTraceState *state = traceState();
     if (problem != NULL) *problem = nil;
     os_unfair_lock_lock(&state->lock);
@@ -245,14 +250,17 @@ BOOL MGTraceStart(NSString *path, NSString **problem) {
         return NO;
     }
     NSString *newSession = [[NSUUID UUID] UUIDString];
-    NSDictionary *manifest = @{
+    NSMutableDictionary *manifest = [NSMutableDictionary dictionaryWithDictionary:@{
         @"schema": @1,
         @"session": newSession,
-        @"capture": @"magic-mouse-guided",
+        @"capture": capture ?: @"magic-mouse-guided",
         @"actions": @"suppressed",
         @"device_identity": @"session-ephemeral",
         @"privacy": @"redacted-by-construction",
-    };
+    }];
+    // The candidate name is the one field a person types. It stays in the
+    // manifest and never reaches an event envelope.
+    if ([candidate length] > 0) [manifest setObject:candidate forKey:@"candidate"];
     NSData *manifestData = [NSJSONSerialization dataWithJSONObject:manifest
                                                            options:NSJSONWritingPrettyPrinted | NSJSONWritingSortedKeys
                                                              error:&error];
@@ -448,9 +456,9 @@ void MGTraceStop(void) {
     [data writeToFile:[path stringByAppendingPathComponent:@"labels.json"] options:NSDataWritingAtomic error:nil];
 }
 
-void MGTraceRecordMouseFrame(const void *device, double hardwareTimestamp,
-                             int frame, const MGTraceContact *contacts,
-                             int contactCount) {
+static void recordFrame(NSString *devicePrefix, const void *device,
+                        double hardwareTimestamp, int frame,
+                        const MGTraceContact *contacts, int contactCount) {
     if (!MGTraceIsCapturing()) return;
     NSMutableArray *values = [NSMutableArray arrayWithCapacity:MAX(contactCount, 0)];
     for (int i = 0; i < contactCount; i++) {
@@ -459,7 +467,7 @@ void MGTraceRecordMouseFrame(const void *device, double hardwareTimestamp,
                             @"major": @(contacts[i].majorAxis), @"minor": @(contacts[i].minorAxis),
                             @"density": @(contacts[i].density)}];
     }
-    enqueue(@"touch", @"frame", ephemeralDeviceName(device),
+    enqueue(@"touch", @"frame", ephemeralDeviceName(device, devicePrefix),
             @{@"hardware_t": @(hardwareTimestamp), @"frame": @(frame), @"contacts": values});
 
     MGTraceState *state = traceState();
@@ -498,6 +506,18 @@ void MGTraceRecordMouseFrame(const void *device, double hardwareTimestamp,
         if (closesSegment)
             enqueue(@"guide", @"capture-window-closed", nil, @{});
     });
+}
+
+void MGTraceRecordMouseFrame(const void *device, double hardwareTimestamp,
+                             int frame, const MGTraceContact *contacts,
+                             int contactCount) {
+    recordFrame(@"mouse", device, hardwareTimestamp, frame, contacts, contactCount);
+}
+
+void MGTraceRecordTrackpadFrame(const void *device, double hardwareTimestamp,
+                                int frame, const MGTraceContact *contacts,
+                                int contactCount) {
+    recordFrame(@"trackpad", device, hardwareTimestamp, frame, contacts, contactCount);
 }
 
 void MGTraceRecordFilterDecision(int identifier, NSString *reason, BOOL kept,
