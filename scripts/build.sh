@@ -3,6 +3,8 @@ set -euo pipefail
 
 APP_NAME="Trickpad"
 BUNDLE_ID="fyi.thirdwind.trickpad"
+APP_VERSION="0.8.1"
+APP_BUILD_NUMBER="16"
 MIN_MACOS_VERSION="11.0"
 ARCHITECTURES=(x86_64 arm64)
 ROOT="${0:A:h:h}"
@@ -35,6 +37,27 @@ xcrun actool "$ICON_BUILD_SOURCE" \
   --notices \
   --errors >/dev/null
 
+# An unreleased build reports the last shipped version number, so it carries
+# the commit it was built from. A build made exactly at the version's clean
+# tag carries no stamp, keeping releases pristine. A trailing + marks
+# uncommitted changes.
+BUILD_STAMP=""
+if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  head_commit="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
+  tag_commit="$(git -C "$ROOT" rev-parse "v$APP_VERSION^{commit}" 2>/dev/null || true)"
+  if [[ -n "$head_commit" ]]; then
+    if [[ "$tag_commit" != "$head_commit" ]] || ! git -C "$ROOT" diff --quiet HEAD 2>/dev/null; then
+      BUILD_STAMP="$(git -C "$ROOT" rev-parse --short HEAD)"
+      git -C "$ROOT" diff --quiet HEAD 2>/dev/null || BUILD_STAMP="$BUILD_STAMP+"
+    fi
+  fi
+fi
+STAMP_KEYS=""
+if [[ -n "$BUILD_STAMP" ]]; then
+  STAMP_KEYS="  <key>TrickpadBuildStamp</key>
+  <string>$BUILD_STAMP</string>"
+fi
+
 cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -59,9 +82,10 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.8.1</string>
+  <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
-  <string>16</string>
+  <string>$APP_BUILD_NUMBER</string>
+$STAMP_KEYS
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_MACOS_VERSION</string>
   <key>LSUIElement</key>

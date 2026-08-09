@@ -611,6 +611,10 @@ static BOOL runLaunchctl(NSArray *arguments) {
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://thirdwind.fyi/trickpad/download"]];
 }
 
+- (void)openDocs:(id)sender {
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://thirdwind.fyi/trickpad/docs"]];
+}
+
 - (void)openAccessibilitySettings:(id)sender {
     NSURL *url = [NSURL URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"];
     [[NSWorkspace sharedWorkspace] openURL:url];
@@ -756,6 +760,10 @@ static NSArray *configFileLines(void) {
         return;
 
     NSMenu *sub = [[[NSMenu alloc] initWithTitle:@"Current Gestures"] autorelease];
+    // Binding rows carry no action, and automatic validation would gray them
+    // out. They stay enabled so the text reads at full contrast; clicking one
+    // does nothing. Section headers and the empty row opt out individually.
+    [sub setAutoenablesItems:NO];
     NSArray *configLines = configFileLines();
 
     if (lastConfigRejected || [lastConfigProblems count] > 0) {
@@ -816,7 +824,6 @@ static NSArray *configFileLines(void) {
         [header setEnabled:NO];
         for (NSArray *line in lines) {
             NSMenuItem *row = [sub addItemWithTitle:line[0] action:NULL keyEquivalent:@""];
-            [row setEnabled:NO];
             [row setIndentationLevel:1];
             // The user's own note from the binding's line, the way they wrote
             // it. The dimmed suffix keeps the row scannable; the tooltip
@@ -835,20 +842,20 @@ static NSArray *configFileLines(void) {
                 }
                 // Parentheses at full menu size separate the user's note from
                 // the binding while skimming; shrunken text read as noise, and
-                // color alone cannot carry the boundary. The explicit colors
-                // keep a commented row matching its disabled neighbors instead
-                // of rendering at full strength.
+                // color alone cannot carry the boundary. The binding renders
+                // at full label strength like its neighbors; the dimmed note
+                // marks where the user's own words begin.
                 NSMutableAttributedString *title = [[[NSMutableAttributedString alloc]
                     initWithString:[NSString stringWithFormat:@"%@  (%@)", line[0], shown]]
                     autorelease];
                 NSUInteger mainLength = [(NSString *)line[0] length];
                 [title addAttributes:@{
                         NSFontAttributeName: [NSFont menuFontOfSize:0],
-                        NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
+                        NSForegroundColorAttributeName: [NSColor labelColor],
                     } range:NSMakeRange(0, mainLength)];
                 [title addAttributes:@{
                         NSFontAttributeName: [NSFont menuFontOfSize:0],
-                        NSForegroundColorAttributeName: [NSColor tertiaryLabelColor],
+                        NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
                     } range:NSMakeRange(mainLength,
                                         [[title string] length] - mainLength)];
                 [row setAttributedTitle:title];
@@ -867,6 +874,10 @@ static NSArray *configFileLines(void) {
 - (NSString *)debugInformation {
     NSString *version = [[NSBundle mainBundle]
         objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"unknown";
+    NSString *stamp = [[NSBundle mainBundle]
+        objectForInfoDictionaryKey:@"TrickpadBuildStamp"];
+    if (stamp != nil)
+        version = [NSString stringWithFormat:@"%@ (%@)", version, stamp];
     NSString *configPath = [Config resolvedPath] ?: @"missing";
     return [NSString stringWithFormat:
         @"Trickpad %@\nmacOS %@\nAccessibility: %@\nConfiguration: %@\n"
@@ -1642,7 +1653,7 @@ static NSArray *agentCandidates(void) {
         NSMenuItem *hint = [menu addItemWithTitle:@"Edit Settings..." action:@selector(preferences:) keyEquivalent:@""];
         [hint setTarget:self];
 
-        NSMenuItem *docs = [menu addItemWithTitle:@"Read the Setup Guide..." action:@selector(about:) keyEquivalent:@""];
+        NSMenuItem *docs = [menu addItemWithTitle:@"Read the Setup Guide" action:@selector(about:) keyEquivalent:@""];
         [docs setTarget:self];
     }
 }
@@ -1696,15 +1707,26 @@ static NSArray *agentCandidates(void) {
 
     NSMenu *aboutMenu = [[[NSMenu alloc] initWithTitle:@"About Trickpad"] autorelease];
     NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+    // An unreleased build reports the last shipped version number, so the
+    // build stamp names the commit it actually came from.
+    NSString *stamp = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"TrickpadBuildStamp"];
     NSMenuItem *versionItem = [aboutMenu addItemWithTitle:
-        [NSString stringWithFormat:@"Version %@", version ?: @"unknown"]
+        stamp != nil
+            ? [NSString stringWithFormat:@"Version %@ (%@)", version ?: @"unknown", stamp]
+            : [NSString stringWithFormat:@"Version %@", version ?: @"unknown"]
                                                   action:NULL keyEquivalent:@""];
     [versionItem setEnabled:NO];
-    NSMenuItem *downloadItem = [aboutMenu addItemWithTitle:@"Get Latest Version..."
+    // No ellipsis on rows that only open a page: the mark means the command
+    // needs further input before it completes, not that it leaves the app.
+    NSMenuItem *docsItem = [aboutMenu addItemWithTitle:@"Open Docs"
+                                                action:@selector(openDocs:)
+                                         keyEquivalent:@""];
+    [docsItem setTarget:self];
+    NSMenuItem *downloadItem = [aboutMenu addItemWithTitle:@"Get Latest Version"
                                                     action:@selector(getLatestVersion:)
                                              keyEquivalent:@""];
     [downloadItem setTarget:self];
-    NSMenuItem *websiteItem = [aboutMenu addItemWithTitle:@"Website..." action:@selector(about:) keyEquivalent:@""];
+    NSMenuItem *websiteItem = [aboutMenu addItemWithTitle:@"Website" action:@selector(about:) keyEquivalent:@""];
     [websiteItem setTarget:self];
 
     NSMenuItem *aboutItem = [theMenu addItemWithTitle:@"About Trickpad" action:NULL keyEquivalent:@""];

@@ -1,0 +1,3 @@
+# Configured physical clicks replace the native click on both devices
+
+The project's standing constraint is add-never-replace: a binding extends what the hardware does. Physical multi-finger click gestures are the deliberate exception on both devices, not only the Magic Mouse. A user who binds three-finger-click wants their action instead of a click, not alongside one, so a confidently recognized configured click replaces the native click; ambiguous clicks and drags stay native. Trackpad clicks originally let the native click through while also firing the action, which made the two devices inconsistent and delivered a behavior nobody configuring the gesture wanted.

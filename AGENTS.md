@@ -76,11 +76,13 @@ About opens a submenu carrying the version, read from the running bundle, plus a
 - Reload Settings (⌘R), which rereads the file into the running engine. Key equivalents, including ⌘Q on Quit, fire while the menu is open. Rows carry no icons, which would sit unevenly beside the Open at Login checkmark.
 - Open at Login, a checkbox running `install-login-agent.sh` or `uninstall-login-agent.sh` with `PLIST_ONLY` set, so the file changes without launchd terminating the running process. It sits after the separator with the app-lifecycle rows, not among the configuration actions.
 - Diagnostics, which can copy a state summary, open the last 15 minutes of logs, or enable verbose logging for the current session. An internal preference can also reveal the guided Magic Mouse trace session described below.
-- About Trickpad, whose submenu shows the running version and opens the stable product-owned website and latest-version retrieval page, then Quit Trickpad.
+- About Trickpad, whose submenu shows the running version and opens the product-owned documentation, latest-version retrieval, and website pages, then Quit Trickpad. Menu rows that only open a page carry no ellipsis; the mark is reserved for commands needing further input, so Edit Settings keeps it and the outbound links do not.
 
 ## Releasing
 
-The version lives in one place: `CFBundleShortVersionString` in `scripts/build.sh`. The menu bar header reads it from the running bundle, so it cannot drift from what is installed.
+The version lives in one place: `APP_VERSION` in `scripts/build.sh`, which becomes `CFBundleShortVersionString`. The menu bar header reads it from the running bundle, so it cannot drift from what is installed.
+
+A build made anywhere other than the clean commit tagged `v$APP_VERSION` carries a `TrickpadBuildStamp` naming its short commit hash, with a trailing `+` for uncommitted changes. About and Copy Debug Info show it as "Version X.Y.Z (abc1234)", so an unreleased build identifies itself even though the version number has not bumped yet. Release builds at the tag carry no stamp.
 
 Semantic versioning, read against the configuration file rather than the code, because the config is the only interface anyone depends on. Before 1.0, a minor release may intentionally change that alpha interface and must carry a migration note. After 1.0:
 
@@ -91,7 +93,7 @@ Semantic versioning, read against the configuration file rather than the code, b
 To cut a release:
 
 ```bash
-# bump CFBundleShortVersionString and CFBundleVersion in scripts/build.sh
+# bump APP_VERSION and APP_BUILD_NUMBER in scripts/build.sh
 ./scripts/build.sh && ./scripts/check.sh
 ./scripts/package.sh
 git commit -am "Release X.Y.Z"
