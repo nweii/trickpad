@@ -55,7 +55,7 @@ The trackpad recognizes a hold-and-slide in one direction only, so it has one sl
 | `index-to-pinky` | Brush your fingers across in sequence, index first |
 | `pinky-to-index` | Brush your fingers across in sequence, pinky first |
 
-On both devices, the native click continues and the configured action fires on release. A drag keeps its native events and does not fire the configured click action.
+On both devices, a confidently recognized configured click replaces the native click: the bound action fires on release and the click does not reach the application. An ambiguous click, such as one with a resting palm, stays native and does not fire the bound action. A drag keeps its native events and does not fire the configured click action.
 
 One continuous touch sequence can run one kind of configured gesture. A swipe or hold gesture may repeat while it owns the sequence, but a physical click, tap, or different gesture will not also run until every finger lifts.
 

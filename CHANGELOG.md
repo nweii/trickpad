@@ -12,6 +12,12 @@
 
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Make a configured trackpad `three-finger-click` or `four-finger-click` replace the native click. The bound action runs and the click does not reach the application. Before, the click and the action both occurred. A click that becomes a drag stays a native drag and does not run the action. This matches the Magic Mouse click gestures.
+
 ## 0.8.1
 
 Released 2026-08-07.

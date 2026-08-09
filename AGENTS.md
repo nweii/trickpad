@@ -241,7 +241,7 @@ Synthetic fixtures under `fixtures/trace/` exercise click correlation, contact f
 
 ## Standing constraints
 
-- **Add, never replace.** A binding extends what the hardware does. Anything System Settings owns — tap-to-click, secondary click, the built-in swipes — keeps behaving as the user configured it. Experimental Magic Mouse physical clicks are the one explicit exception: a confidently recognized configured click replaces the normal primary click. Ambiguous clicks remain native and do not dispatch the binding.
+- **Add, never replace.** A binding extends what the hardware does. Anything System Settings owns — tap-to-click, secondary click, the built-in swipes — keeps behaving as the user configured it. Physical multi-finger click gestures are the one explicit exception on both devices, per `docs/adr/0001-configured-physical-clicks-replace-the-native-click.md`: a confidently recognized configured click replaces the native click. Ambiguous clicks and drags remain native and do not dispatch the binding.
 - **Check both conflict surfaces before binding.** macOS claims some motions, listed in `GESTURES.md`. The user's own hotkeys claim some chords, and a Caps Lock remapped to Cmd+Alt+Ctrl is a common one worth asking about.
 - **Hold gestures carry anything consequential.** macOS does not claim the hold-one-tap-one shape. On a Magic Mouse, its discrete tap contacts still use fingertip-quality filtering because a narrow resting edge contact can imitate the held finger.
 

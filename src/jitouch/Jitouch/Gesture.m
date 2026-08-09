@@ -183,6 +183,27 @@ static void replayPendingMagicMousePrimaryDown(void) {
     clearPendingMagicMouseClick();
 }
 
+// A configured trackpad physical click replaces the native click: the
+// suppressed mouse-down is held here so a drag can restore the native
+// sequence, mirroring the Magic Mouse pending click above.
+static CGEventRef pendingTrackpadPrimaryDown = NULL;
+
+static void clearPendingTrackpadClick(void) {
+    if (pendingTrackpadPrimaryDown != NULL) {
+        CFRelease(pendingTrackpadPrimaryDown);
+        pendingTrackpadPrimaryDown = NULL;
+    }
+}
+
+static void replayPendingTrackpadPrimaryDown(void) {
+    if (pendingTrackpadPrimaryDown == NULL) return;
+    CGEventSetIntegerValueField(pendingTrackpadPrimaryDown,
+                               kCGEventSourceUserData,
+                               kTrickpadReplayedMouseEvent);
+    CGEventPost(kCGSessionEventTap, pendingTrackpadPrimaryDown);
+    clearPendingTrackpadClick();
+}
+
 enum {
     kGestureOwnerPhysicalClick = 1,
     kGestureOwnerTwoFingerTap,
@@ -341,6 +362,7 @@ static bool familyIsMagicTrackpad(int familyID) {
 static void turnOffTrackpad() {
     trackpadNFingers = 0;
     MGTrackpadInteractionInitialize(&trackpadInteraction);
+    clearPendingTrackpadClick();
 }
 
 static void turnOffMagicMouse() {
@@ -4475,6 +4497,9 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
 
     if (type == kCGEventLeftMouseDragged || type == kCGEventRightMouseDragged) {
         MGTrackpadInteractionRecordPhysicalDrag(&trackpadInteraction);
+        // A suppressed trackpad click that becomes a drag keeps its native
+        // events: restore the held mouse-down before the drag passes through.
+        replayPendingTrackpadPrimaryDown();
         MGMouseClickInteractionRecordDrag(&magicMouseClickInteraction,
             (int)CGEventGetIntegerValueField(event, kCGMouseEventDeltaX),
             (int)CGEventGetIntegerValueField(event, kCGMouseEventDeltaY));
@@ -4482,6 +4507,8 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
 
     if ((type == kCGEventLeftMouseUp || type == kCGEventRightMouseUp) &&
         MGTrackpadInteractionHasPhysicalClick(&trackpadInteraction)) {
+        BOOL trackpadClickReplacedNative = pendingTrackpadPrimaryDown != NULL;
+        clearPendingTrackpadClick();
         int trackpadClickFingerCount =
             MGTrackpadInteractionFinishPhysicalClick(&trackpadInteraction);
         NSString *gesture = nil;
@@ -4490,9 +4517,14 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
             gesture = @"Three-Finger Click";
         else if (trackpadClickFingerCount == 4)
             gesture = @"Four-Finger Click";
-        if (gesture != nil)
+        // The configured action dispatches only when its mouse-down was
+        // suppressed, and its mouse-up is swallowed with it. A click whose
+        // native down passed through stays native and does not dispatch.
+        if (gesture != nil && (trackpadClickReplacedNative || MGTraceIsActive()))
             dispatchCommand(gesture, device);
         trackpadRewritingSecondaryClick = NO;
+        if (trackpadClickReplacedNative)
+            return NULL;
     }
 
     // A click and a tap are the same contacts, so the fingers that performed a
@@ -4514,11 +4546,12 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
             kGestureOwnerPhysicalClick);
         if (trackpadClickBegan)
             trackpadClicked = 1;
-        if (trackpadClickBegan && type == kCGEventRightMouseDown &&
+        BOOL configuredTrackpadClick = trackpadClickBegan &&
             MGTrackpadInteractionShouldPreservePrimaryClick(
                 &trackpadInteraction,
                 bindingForGesture(@"Three-Finger Click", TRACKPAD) != nil,
-                bindingForGesture(@"Four-Finger Click", TRACKPAD) != nil)) {
+                bindingForGesture(@"Four-Finger Click", TRACKPAD) != nil);
+        if (configuredTrackpadClick && type == kCGEventRightMouseDown) {
             CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, 0);
             CGEventSetType(event, kCGEventLeftMouseDown);
             type = kCGEventLeftMouseDown;
@@ -4532,6 +4565,15 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
         if (simulating) {   //simulating should be reset when mouseup, but sometimes mouseup doesn't get called
             simulating = 0; //so we have to reset it manually
             clearPendingMagicMouseClick();
+        }
+        // A confidently recognized configured trackpad click replaces the
+        // native click: suppress its mouse-down and hold a copy so a drag
+        // can restore the native sequence. An ambiguous click never begins
+        // a physical click here, so it passes through untouched.
+        clearPendingTrackpadClick();
+        if (configuredTrackpadClick && !MGTraceIsActive()) {
+            pendingTrackpadPrimaryDown = CGEventCreateCopy(event);
+            return NULL;
         }
         NSString *gesture = nil;
         int device = 0;
