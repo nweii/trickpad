@@ -39,6 +39,8 @@ void MGTrackpadInteractionObserveContacts(MGTrackpadInteraction *interaction,
                                           const MGTrackpadContact *contacts,
                                           int contactCount,
                                           double timestamp);
+int MGTrackpadInteractionFingertipScaleContactCount(const MGTrackpadContact *contacts,
+                                                    int contactCount);
 BOOL MGTrackpadInteractionContactsAreEligible(const float *majorAxes,
                                               int contactCount);
 BOOL MGTrackpadInteractionContactsFormHoldTapPair(float firstX,

@@ -2961,9 +2961,14 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
         }
         MGTrackpadInteractionObserveContacts(&trackpadInteraction, interactionContacts,
                                              interactionContactCount, timestamp);
+        // A resting palm reaches this callback as an ordinary contact, so the
+        // swipe family counts fingertip-scale contacts: two fingers plus a
+        // palm heel must scroll, not arm three-finger scroll suppression.
         MGTrackpadInteractionObserveBoundScrollFamily(
-            &trackpadInteraction, interactionContactCount, 3,
-            hasThreeFingerSwipeBinding(TRACKPAD));
+            &trackpadInteraction,
+            MGTrackpadInteractionFingertipScaleContactCount(interactionContacts,
+                                                            interactionContactCount),
+            3, hasThreeFingerSwipeBinding(TRACKPAD));
         BOOL contactsFormTapGroup = MGTrackpadInteractionContactsFormTapGroup(
             interactionContacts, interactionContactCount);
 

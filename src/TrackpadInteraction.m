@@ -25,6 +25,18 @@ static BOOL contactsContainPalmPatchCluster(const MGTrackpadContact *contacts,
     return NO;
 }
 
+// Counts contacts at fingertip scale, so a resting palm inflates no
+// finger-count decision that reads this instead of the raw count.
+int MGTrackpadInteractionFingertipScaleContactCount(const MGTrackpadContact *contacts,
+                                                    int contactCount) {
+    int fingertips = 0;
+    for (int i = 0; i < contactCount; i++) {
+        if (contacts[i].majorAxis <= kTrackpadBroadContactMajorAxis)
+            fingertips++;
+    }
+    return fingertips;
+}
+
 BOOL MGTrackpadInteractionContactsAreEligible(const float *majorAxes,
                                               int contactCount) {
     for (int i = 0; i < contactCount; i++) {
