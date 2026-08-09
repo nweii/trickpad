@@ -1299,17 +1299,23 @@ static BOOL hasThreeFingerSwipeBinding(int device) {
 // could be mistaken for its scrolling. A trackpad scrolls with two fingers, so
 // three and four qualify; a Magic Mouse scrolls with one, so two and three do.
 // One-finger mouse swipes keep their own suppression in their recognizer.
+// Each family passes a resolver rather than a resolved answer, so the
+// window-server round trip happens only on the frame where that family's
+// contact count is actually present.
 static void observeBoundSwipeFamilies(int device, int activeContactCount) {
     NSArray *counts = device == TRACKPAD ? @[@"Three", @"Four"] : @[@"Two", @"Three"];
     int required[2] = {device == TRACKPAD ? 3 : 2, device == TRACKPAD ? 4 : 3};
     for (NSUInteger i = 0; i < [counts count]; i++) {
-        BOOL bound = hasSwipeBindingForCount(counts[i], device);
+        NSString *count = counts[i];
+        BOOL (^resolveBinding)(void) = ^BOOL{
+            return hasSwipeBindingForCount(count, device);
+        };
         if (device == TRACKPAD)
             MGTrackpadInteractionObserveBoundScrollFamily(&trackpadInteraction,
-                activeContactCount, required[i], bound);
+                activeContactCount, required[i], resolveBinding);
         else
             MGGestureSequenceObserveBoundScrollFamily(&magicMouseSequence,
-                activeContactCount, required[i], bound);
+                activeContactCount, required[i], resolveBinding);
     }
 }
 
@@ -3618,18 +3624,24 @@ static void gestureMagicMouseSwipeThreeFingers(Finger *data, int nFingers, doubl
     static int lastNFingers;
     int step = 0;
 
-    BOOL hasBinding = hasThreeFingerSwipeBinding(MAGICMOUSE);
+    if (thumbPresent) {
+        Finger tmp = data[thumbPresent - 1];
+        data[thumbPresent - 1] = data[--nFingers];
+        data[nFingers] = tmp;
+    }
+
+    // Resolving the binding costs a window-server round trip, so ask only when
+    // a third finger arrives and hold the answer while it stays down.
+    static BOOL hasBinding = NO;
+    static int contactCountAtLastResolve = 0;
+    if (nFingers == 3 && contactCountAtLastResolve != 3)
+        hasBinding = hasThreeFingerSwipeBinding(MAGICMOUSE);
+    contactCountAtLastResolve = nFingers;
     if (!hasBinding && !MGTraceAuditsGestureCatalog()) {
         step = 0;
         trigger = 0;
         lastNFingers = 0;
         return;
-    }
-
-    if (thumbPresent) {
-        Finger tmp = data[thumbPresent - 1];
-        data[thumbPresent - 1] = data[--nFingers];
-        data[nFingers] = tmp;
     }
 
     if (lastNFingers != 3 && nFingers == 3) {

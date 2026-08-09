@@ -253,11 +253,11 @@ BOOL MGTrackpadInteractionClaimTap(MGTrackpadInteraction *interaction,
 void MGTrackpadInteractionObserveBoundScrollFamily(MGTrackpadInteraction *interaction,
                                                    int activeContactCount,
                                                    int requiredContactCount,
-                                                   BOOL hasBinding) {
+                                                   BOOL (^resolveBinding)(void)) {
     MGGestureSequenceObserveBoundScrollFamily(&interaction->sequence,
                                               activeContactCount,
                                               requiredContactCount,
-                                              hasBinding);
+                                              resolveBinding);
 }
 
 BOOL MGTrackpadInteractionSuppressesNativeScroll(const MGTrackpadInteraction *interaction) {
