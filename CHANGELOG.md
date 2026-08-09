@@ -16,7 +16,7 @@
 
 ### Added
 
-- Add trackpad area clicks. A physical click with one finger in a named region of the surface runs a bound action. The regions are the four edges, their halves and thirds, and the four corners. A click in a bound region replaces the native click. A click in a region with no binding stays a normal click. When bound regions overlap, the most specific bound region wins. The region sizes are first values and await tests on real hardware.
+- Add trackpad area clicks. A physical click with one finger in a named region of the surface runs a bound action. The regions are the four edges, their halves and thirds, and the four corners. A click in a bound region replaces the native click. A click in a region with no binding stays a normal click. When bound regions overlap, the most specific bound region wins. Regions are narrow by default. The `area-click-depth` setting adjusts how far they reach in from the edge.
 
 ### Changed
 

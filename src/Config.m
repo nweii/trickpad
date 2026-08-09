@@ -800,7 +800,7 @@ static NSDictionary *parseBinding(NSString *rawValue) {
 static NSSet *knownSettingNames(void) {
     static NSSet *s = nil;
     if (s == nil) {
-        s = [[NSSet setWithArray:@[@"config-version", @"dominant-hand", @"menu-bar-icon", @"enable-mouse", @"enable-trackpad", @"tap-speed",
+        s = [[NSSet setWithArray:@[@"config-version", @"dominant-hand", @"menu-bar-icon", @"enable-mouse", @"enable-trackpad", @"tap-speed", @"area-click-depth",
                                    @"haptic-feedback", @"verbose-logging",
                                    @"experimental-mouse-click-gestures"]] retain];
     }
@@ -923,7 +923,7 @@ static void appendTOMLTable(NSMutableString *output, NSInteger *currentLine,
             BOOL wrongType = ([booleans containsObject:key] && value.type != TOML_BOOLEAN) ||
                 ([key isEqualToString:@"config-version"] && value.type != TOML_INT64) ||
                 (([key isEqualToString:@"dominant-hand"] || [key isEqualToString:@"menu-bar-icon"]) && value.type != TOML_STRING) ||
-                ([key isEqualToString:@"tap-speed"] &&
+                (([key isEqualToString:@"tap-speed"] || [key isEqualToString:@"area-click-depth"]) &&
                  value.type != TOML_INT64 && value.type != TOML_FP64);
             if (wrongType)
                 rendered = @"\"<wrong TOML type>\"";
@@ -1355,6 +1355,13 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
                 report(line, @"tap-speed must be a positive number of seconds");
                 continue;
             }
+            if ([key isEqualToString:@"area-click-depth"]) {
+                double depth = 0;
+                if (!parsePositiveNumber(value, &depth) || depth >= 0.5) {
+                    report(line, @"area-click-depth must be a fraction of the surface above 0 and below 0.5");
+                    continue;
+                }
+            }
             if ([key isEqualToString:@"dominant-hand"] &&
                 ![@[@"left", @"right"] containsObject:[[stripQuotes(value) lowercaseString]
                                                          stringByTrimmingCharactersInSet:
@@ -1487,6 +1494,7 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
     return @{
         @"enAll": @1,
         @"ClickSpeed": @([str(@"tap-speed", @"0.25") floatValue]),
+        @"AreaClickDepth": @([str(@"area-click-depth", @"0.06") floatValue]),
         @"Sensitivity": @4.6666,
         @"ShowIcon": @1,
         @"BindingCount": @([activeBindingKeys count]),

@@ -92,7 +92,7 @@ Slugs read edge first, then span, then action. Vertical edges divide top to bott
 | `bottom-left-corner-click` | The bottom left corner |
 | `bottom-right-corner-click` | The bottom right corner |
 
-The edge bands and corner squares use starter sizes that still await validation on real hardware, so how far a region reaches into the surface can change.
+Regions stay narrow by default so a click during ordinary pointing does not land in one by accident. `area-click-depth` under `[GENERAL]` sets how far an edge band reaches in from its edge, as a fraction of the surface; corner squares span twice that depth.
 
 On both devices, a confidently recognized configured click replaces the native click: the bound action fires on release and the click does not reach the application. An ambiguous click, such as one with a resting palm, stays native and does not fire the bound action. A drag keeps its native events and does not fire the configured click action.
 
@@ -251,6 +251,7 @@ App updates and localizations can change menu titles. Update the App Shortcut if
 | `enable-trackpad` | `true` or `false` |
 | `dominant-hand` | `left` or `right`; mirrors positional recognition for left-handed use, default `right` |
 | `tap-speed` | Seconds a tap may last, default `0.25` |
+| `area-click-depth` | Fraction of the trackpad an edge band reaches in from its edge, above 0 and below 0.5; corners span twice this; default `0.06` |
 | `haptic-feedback` | `true` requests confirmation for configured trackpad gestures, default `true` |
 | `menu-bar-icon` | `trickpad`, or `sf:` followed by a name from [SF Symbols](https://developer.apple.com/sf-symbols/); default `trickpad` |
 | `experimental-mouse-click-gestures` | `true` enables posture-sensitive Magic Mouse physical-click replacements, default `false` |

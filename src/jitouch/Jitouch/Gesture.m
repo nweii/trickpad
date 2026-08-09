@@ -4440,8 +4440,12 @@ static void multitouchDeviceRemoved(void* refCon, io_iterator_t iterator) {
 // with the origin at the bottom-left, matching the raw contact frames. The
 // regions are absolute surface positions, so dominant-hand mirroring does not
 // apply. Starter geometry; these thresholds await hardware validation.
-static const float kTrackpadAreaEdgeBandDepth = 0.15f; // how far an edge band reaches into the surface
-static const float kTrackpadAreaCornerSize = 0.25f;    // side length of each corner square
+// The configurable area-click-depth setting sets how far an edge band reaches
+// into the surface. Corner squares span twice that, giving a corner target
+// larger than the bands it overrides. The default stays narrow so bands sit
+// under the bezel-adjacent strip a resting hand rarely clicks.
+#define kTrackpadAreaEdgeBandDepth (areaClickDepth)
+#define kTrackpadAreaCornerSize (areaClickDepth * 2.0f)
 
 static NSString *trackpadAreaCornerClickName(float x, float y) {
     BOOL left = x <= kTrackpadAreaCornerSize;

@@ -19,6 +19,7 @@ extern NSMutableDictionary *recognitionMap;
 
 //General
 extern float clickSpeed;
+extern float areaClickDepth;
 extern float stvt;
 extern int enAll;
 extern int hapticFeedback;

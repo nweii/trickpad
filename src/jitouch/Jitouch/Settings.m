@@ -27,6 +27,7 @@ NSMutableDictionary *recognitionMap;
 
 //General
 float clickSpeed;
+float areaClickDepth;
 float stvt;
 int enAll;
 int hapticFeedback;
@@ -172,6 +173,7 @@ static int notSynchronize;
     //General
     [Settings setKey:@"enAll" withInt:1];
     [Settings setKey:@"ClickSpeed" withFloat:0.25];
+    [Settings setKey:@"AreaClickDepth" withFloat:0.06];
     [Settings setKey:@"Sensitivity" withFloat:4.6666];
     [Settings setKey:@"ShowIcon" withInt:1];
     [Settings setKey:@"HapticFeedback" withInt:1];
@@ -215,6 +217,9 @@ static int notSynchronize;
     //General
     enAll = [[settings objectForKey:@"enAll"] intValue];
     clickSpeed = [[settings objectForKey:@"ClickSpeed"] floatValue];
+    areaClickDepth = [[settings objectForKey:@"AreaClickDepth"] floatValue];
+    if (areaClickDepth <= 0.0f || areaClickDepth >= 0.5f)
+        areaClickDepth = 0.06f;
     stvt = [[settings objectForKey:@"Sensitivity"] floatValue];
     hapticFeedback = [[settings objectForKey:@"HapticFeedback"] intValue];
     logLevel = [[settings objectForKey:@"LogLevel"] intValue];
