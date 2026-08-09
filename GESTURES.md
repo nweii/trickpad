@@ -92,7 +92,9 @@ Slugs read edge first, then span, then action. Vertical edges divide top to bott
 | `bottom-left-corner-click` | The bottom left corner |
 | `bottom-right-corner-click` | The bottom right corner |
 
-Regions stay narrow by default so a click during ordinary pointing does not land in one by accident. `area-click-depth` under `[GENERAL]` sets how far an edge band reaches in from its edge, as a fraction of the surface; corner squares span twice that depth.
+Regions stay narrow by default so a click during ordinary pointing does not land in one by accident. `area-click-depth` under `[GENERAL]` sets how far an edge band reaches in from its edge, as a fraction of the surface; corner squares span twice that depth. On a surface wider than it is tall, the same fraction reaches physically deeper on the left and right edges than on the top and bottom, and both scale together.
+
+An area click fires only when the clicking finger is the only contact on the surface. Lift your palm and resting fingers for the click. This keeps a resting hand from triggering regions, at the cost of making each area click a deliberate motion. Binding many regions at once works, but neighboring regions sit close together, so a dense layout asks for conscious aim; most configurations are better served by a few well-separated regions.
 
 On both devices, a confidently recognized configured click replaces the native click: the bound action fires on release and the click does not reach the application. An ambiguous click, such as one with a resting palm, stays native and does not fire the bound action. A drag keeps its native events and does not fire the configured click action.
 
