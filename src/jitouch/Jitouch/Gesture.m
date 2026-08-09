@@ -1018,8 +1018,10 @@ static void playSystemSound(NSString *name) {
 }
 
 // One shared synthesizer, interrupted the way a sound restarts, so a repeat is
-// heard as its own utterance rather than swallowed by the previous one.
-static void speakText(NSString *text) {
+// heard as its own utterance rather than swallowed by the previous one. When a
+// sound plays on the same dispatch, the words wait for it through the
+// utterance's own pre-delay, so interrupting the speech also drops the wait.
+static void speakText(NSString *text, NSString *precedingSoundName) {
     if ([text length] == 0)
         return;
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -1043,6 +1045,13 @@ static void speakText(NSString *text) {
             initWithString:text] autorelease];
         if (voice != nil)
             [utterance setVoice:voice];
+        if ([precedingSoundName length] > 0) {
+            NSSound *preceding = [NSSound soundNamed:precedingSoundName];
+            // A long sound tail reads as lag once the attack has confirmed
+            // the gesture, so the wait is bounded rather than literal.
+            if (preceding != nil)
+                [utterance setPreUtteranceDelay:MIN([preceding duration], 1.5)];
+        }
         [synthesizer speakUtterance:utterance];
     });
 }
@@ -1052,7 +1061,8 @@ static void speakText(NSString *text) {
 // and never delay the action they accompany.
 static void confirmBindingDispatch(NSDictionary *binding, int device) {
     playSystemSound([binding objectForKey:@"ConfirmSound"]);
-    speakText([binding objectForKey:@"ConfirmSpeech"]);
+    speakText([binding objectForKey:@"ConfirmSpeech"],
+              [binding objectForKey:@"ConfirmSound"]);
 }
 
 // AppKit chooses the available actuator and may suppress feedback when the
@@ -1543,7 +1553,7 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                     // dispatch thread, so the main queue starts it and returns.
                     playSystemSound([commandDict objectForKey:@"PlaySound"]);
                 } else if ([commandDict objectForKey:@"SpeakText"]) {
-                    speakText([commandDict objectForKey:@"SpeakText"]);
+                    speakText([commandDict objectForKey:@"SpeakText"], nil);
                 } else if ([commandDict objectForKey:@"OpenURL"]) {
                     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
                     NSString *configuredURL = [commandDict objectForKey:@"OpenURL"];

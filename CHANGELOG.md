@@ -20,6 +20,7 @@
 
 ### Changed
 
+- Play a binding's `sound` before its `say` words when a binding sets both. Before, the sound and the speech started together.
 - Make a configured trackpad `three-finger-click` or `four-finger-click` replace the native click. The bound action runs and the click does not reach the application. Before, the click and the action both occurred. A click that becomes a drag stays a native drag and does not run the action. This matches the Magic Mouse click gestures.
 
 ## 0.8.1

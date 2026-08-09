@@ -131,7 +131,7 @@ An application-specific block may omit `action` to inherit the global action:
 
 ### Hearing a gesture fire
 
-`sound` plays a macOS system sound and `say` speaks any words when the gesture fires, alongside whatever the binding already does:
+`sound` plays a macOS system sound and `say` speaks any words when the gesture fires, alongside whatever the binding already does. A binding carrying both plays the sound first and speaks after it:
 
     three-finger-tap = { action = "cmd+shift+4", sound = "Glass" }
     three-finger-click = { action = "right-ctrl+space", say = "dictation" }
