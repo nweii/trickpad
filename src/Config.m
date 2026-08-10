@@ -200,6 +200,65 @@
     return [slugs objectForKey:candidate] != nil ? candidate : nil;
 }
 
+// The whole gesture vocabulary accepts its words in any order, canonicalized
+// here at parse time when the exact lookup misses, so everything downstream
+// sees only canonical names. Three families share a word multiset and cannot
+// be named by a bag of words alone: the edge-region family uses the adjacency
+// rule in canonicalAreaClickSlug:, hold-tap names read each direction beside
+// its "hold" or "tap", and brush names are ordered by "to", so only their
+// canonical spellings load. Every other documented name has a unique word
+// multiset, which ConfigCheck asserts, so a bag matching exactly one slug
+// resolves to it; anything still ambiguous or matching nothing returns nil.
++ (NSString *)canonicalSlug:(NSString *)slug inSlugs:(NSDictionary *)slugs {
+    NSString *area = [Config canonicalAreaClickSlug:slug inSlugs:slugs];
+    if (area != nil)
+        return area;
+
+    NSArray *tokens = [slug componentsSeparatedByString:@"-"];
+    NSArray *bag = [tokens sortedArrayUsingSelector:@selector(compare:)];
+
+    if ([bag isEqualToArray:@[@"hold", @"left", @"right", @"tap"]]) {
+        // Each direction pairs with the anchor word beside it. A direction
+        // beside both anchors takes whichever the other direction leaves,
+        // and a direction beside neither leaves the ordering ambiguous.
+        NSString *held = nil;
+        NSString *tapped = nil;
+        for (NSString *direction in @[@"left", @"right"]) {
+            NSUInteger i = [tokens indexOfObject:direction];
+            BOOL nearHold = (i > 0 && [[tokens objectAtIndex:i - 1] isEqualToString:@"hold"]) ||
+                (i + 1 < [tokens count] && [[tokens objectAtIndex:i + 1] isEqualToString:@"hold"]);
+            BOOL nearTap = (i > 0 && [[tokens objectAtIndex:i - 1] isEqualToString:@"tap"]) ||
+                (i + 1 < [tokens count] && [[tokens objectAtIndex:i + 1] isEqualToString:@"tap"]);
+            if (nearHold && !nearTap)
+                held = direction;
+            else if (nearTap && !nearHold)
+                tapped = direction;
+            else if (!nearHold && !nearTap)
+                return nil;
+        }
+        if (held == nil && tapped != nil)
+            held = [tapped isEqualToString:@"left"] ? @"right" : @"left";
+        else if (tapped == nil && held != nil)
+            tapped = [held isEqualToString:@"left"] ? @"right" : @"left";
+        if (held == nil || tapped == nil)
+            return nil;
+        NSString *candidate = [NSString stringWithFormat:@"hold-%@-tap-%@", held, tapped];
+        return [slugs objectForKey:candidate] != nil ? candidate : nil;
+    }
+
+    NSString *match = nil;
+    for (NSString *candidate in slugs) {
+        NSArray *candidateBag = [[candidate componentsSeparatedByString:@"-"]
+                                 sortedArrayUsingSelector:@selector(compare:)];
+        if ([bag isEqualToArray:candidateBag]) {
+            if (match != nil)
+                return nil;
+            match = candidate;
+        }
+    }
+    return match;
+}
+
 + (NSString *)canonicalGestureName:(NSString *)raw inSlugs:(NSDictionary *)slugs {
     for (NSString *slug in slugs) {
         NSArray *engineNames = [slugs objectForKey:slug];
@@ -1396,10 +1455,10 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
                 ? [Config mouseGestureSlugs] : [Config trackpadGestureSlugs];
             NSArray *engineNames = [slugs objectForKey:key];
             if (engineNames == nil) {
-                // A reordered area-click name canonicalizes here, so the
+                // A reordered gesture name canonicalizes here, so the
                 // declaration key, engine names, and every downstream surface
                 // carry only the canonical spelling.
-                NSString *canonical = [Config canonicalAreaClickSlug:key inSlugs:slugs];
+                NSString *canonical = [Config canonicalSlug:key inSlugs:slugs];
                 if (canonical != nil) {
                     key = canonical;
                     engineNames = [slugs objectForKey:key];

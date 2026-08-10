@@ -47,6 +47,11 @@
 // Ambiguous orderings and non-area-click names return nil.
 + (NSString *)canonicalAreaClickSlug:(NSString *)slug inSlugs:(NSDictionary *)slugs;
 
+// Canonicalizes a reordered gesture name from any family to the slug `slugs`
+// documents, trying the area-click rule first and a unique bag-of-words match
+// otherwise. Ambiguous orderings and unknown word sets return nil.
++ (NSString *)canonicalSlug:(NSString *)slug inSlugs:(NSDictionary *)slugs;
+
 // Returns the first engine name for the public slug containing raw, so aliases
 // can be presented as one configured gesture.
 + (NSString *)canonicalGestureName:(NSString *)raw inSlugs:(NSDictionary *)slugs;

@@ -612,8 +612,87 @@ int main(void) {
                      @"nil", canonical);
         }
 
+        // The generic canonicalizer resolves a bag of words to a slug only
+        // when exactly one slug matches, so its safety rests on no two
+        // canonical slugs of a device sharing a word multiset. The edge
+        // family shares multisets by design and is owned by the adjacency
+        // rule above; hold-tap names carry their own beside-the-anchor rule;
+        // brush names are ordered by "to" and load only as written. Assert
+        // the uniqueness for everything else rather than trusting it.
+        for (NSDictionary *slugs in @[[Config mouseGestureSlugs], [Config trackpadGestureSlugs]]) {
+            NSMutableDictionary *bags = [NSMutableDictionary dictionary];
+            for (NSString *slug in slugs) {
+                NSArray *words = [slug componentsSeparatedByString:@"-"];
+                if ([words containsObject:@"edge"] || [words containsObject:@"to"] ||
+                    ([words containsObject:@"hold"] && [words containsObject:@"tap"]))
+                    continue;
+                NSString *bag = [[words sortedArrayUsingSelector:@selector(compare:)]
+                                 componentsJoinedByString:@"-"];
+                if ([bags objectForKey:bag] != nil)
+                    fail([@"gesture slugs share a word multiset: " stringByAppendingString:slug],
+                         @"unique word multisets", [bags objectForKey:bag]);
+                [bags setObject:slug forKey:bag];
+            }
+        }
+
+        // Every family reorders through the one canonicalizer, on both
+        // devices. Area-click inputs pass through the adjacency rule.
+        NSDictionary *mouseReorderings = @{
+            @"swipe-up-three-finger": @"three-finger-swipe-up",   // directional swipe
+            @"swipe-one-finger": @"one-finger-swipe",             // bare swipe
+            @"tap-three-finger": @"three-finger-tap",             // tap
+            @"tap-front-right": @"front-right-tap",               // positional tap
+            @"click-two-finger": @"two-finger-click",             // physical click
+            @"tap-right-hold-left": @"hold-left-tap-right",       // hold-tap
+            @"left-hold-right-tap": @"hold-left-tap-right",       // hold-tap, prefix order
+        };
+        for (NSString *input in mouseReorderings) {
+            NSString *canonical = [Config canonicalSlug:input
+                inSlugs:[Config mouseGestureSlugs]];
+            if (![canonical isEqualToString:[mouseReorderings objectForKey:input]])
+                fail([@"reordered mouse name canonicalizes: " stringByAppendingString:input],
+                     [mouseReorderings objectForKey:input], canonical ?: @"nil");
+        }
+        NSDictionary *trackpadReorderings = @{
+            @"swipe-down-four-finger": @"four-finger-swipe-down", // directional swipe
+            @"tap-five-finger": @"five-finger-tap",               // tap
+            @"click-four-finger": @"four-finger-click",           // physical click
+            @"slide-hold": @"hold-slide",                         // hold-slide
+            @"tap-left-hold-right": @"hold-right-tap-left",       // hold-tap
+            @"click-corner-top-right": @"top-right-corner-click", // area click
+        };
+        for (NSString *input in trackpadReorderings) {
+            NSString *canonical = [Config canonicalSlug:input
+                inSlugs:[Config trackpadGestureSlugs]];
+            if (![canonical isEqualToString:[trackpadReorderings objectForKey:input]])
+                fail([@"reordered trackpad name canonicalizes: " stringByAppendingString:input],
+                     [trackpadReorderings objectForKey:input], canonical ?: @"nil");
+        }
+        for (NSString *rejected in @[
+            @"three-finger-flick",     // word bag matching no slug
+            @"swipe-up-four-finger",   // trackpad-only bag on the mouse
+            @"tap-hold-left-right",    // no direction beside an anchor: ambiguous
+            @"to-index-pinky",         // brush order carries meaning; only canonical loads
+        ]) {
+            NSString *canonical = [Config canonicalSlug:rejected
+                inSlugs:[Config mouseGestureSlugs]];
+            if (canonical != nil)
+                fail([@"gesture reordering rejects: " stringByAppendingString:rejected],
+                     @"nil", canonical);
+        }
+        if ([Config canonicalSlug:@"to-pinky-index"
+              inSlugs:[Config trackpadGestureSlugs]] != nil)
+            fail(@"reordered brush name rejects", @"nil", @"a brush slug");
+
         // Through the parser, a reordered name loads under the canonical
         // engine name, so the menu and reports display only canonical names.
+        s = parse(@"[mouse]\nswipe-up-three-finger = space\ntap-three-finger = tab\n");
+        g = bindingFor(s, @"MagicMouseCommands", @"Three-Swipe-Up");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 49)
+            fail(@"reordered swipe name loads canonically", @49, [g objectForKey:@"KeyCode"]);
+        g = bindingFor(s, @"MagicMouseCommands", @"Three-Finger Tap");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 48)
+            fail(@"reordered tap name loads canonically", @48, [g objectForKey:@"KeyCode"]);
         s = parse(@"[trackpad]\ntop-half-left-edge-click = space\n"
                   @"corner-click-top-right = tab\n");
         g = bindingFor(s, @"TrackpadCommands", @"Left-Edge Top-Half Click");
