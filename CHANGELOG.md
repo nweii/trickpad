@@ -12,7 +12,9 @@
 
 # Changelog
 
-## Unreleased
+## 0.9.0
+
+Released 2026-08-10.
 
 ### Added
 
@@ -42,6 +44,8 @@
 - Lower the work Trickpad does while fingers rest on a device. Before, it asked macOS which application was in front many times per second. It now asks again only after the settings reload or a different application comes forward.
 - Suppress scrolling during swipes with at least three fingers on trackpad and two fingers on mouse. Before, only three-finger swipes held back the scroll their fingers would otherwise make.
 - Prevent a resting palm from blocking scrolling. Before, a palm touching the trackpad at scroll start counted toward a configured three-finger swipe, and normal scrolling stopped.
+
+This is a backward-compatible minor release. Existing version 3 configuration files keep working. A configured trackpad multi-finger click now replaces the native click instead of adding to it.
 
 ## 0.8.1
 
