@@ -68,6 +68,8 @@
             @"five-finger-tap": @[@"Five-Finger Tap"],
             @"three-finger-click": @[@"Three-Finger Click"],
             @"four-finger-click": @[@"Four-Finger Click"],
+            @"edge-click": @[@"Any-Edge Click"],
+            @"corner-click": @[@"Any-Corner Click"],
             @"left-edge-click": @[@"Left-Edge Click"],
             @"right-edge-click": @[@"Right-Edge Click"],
             @"top-edge-click": @[@"Top-Edge Click"],
@@ -192,6 +194,8 @@
             @"Four-Finger Click": @"Click with four fingers",
             // Area-click rows front-load the edge and separate the span with
             // a middle dot, so a column of similar bindings aligns and scans.
+            @"Any-Edge Click": @"Click along any edge",
+            @"Any-Corner Click": @"Click any corner",
             @"Left-Edge Click": @"Click left edge",
             @"Right-Edge Click": @"Click right edge",
             @"Top-Edge Click": @"Click top edge",

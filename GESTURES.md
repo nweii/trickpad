@@ -66,7 +66,9 @@ Bare swipe names bind every direction of a finger count, and directional names w
 
 ### Area clicks
 
-An area click is a physical click with one finger that lands in a named region of the trackpad surface. A click in a region with no binding stays a normal native click. When bound regions overlap, the most specific bound region wins: a bound corner beats any edge region, a bound third beats a bound half, and a bound half beats the whole edge.
+An area click is a physical click with one finger that lands in a named region of the trackpad surface. A click in a region with no binding stays a normal native click. When bound regions overlap, the most specific bound region wins: a bound named corner beats `corner-click`, either beats any edge region, a bound third beats a bound half, a bound half beats the whole edge, and `edge-click` comes last.
+
+`corner-click` binds all four corners to one action, and `edge-click` binds a click anywhere in any edge band. A named region overrides the bare name for its own spot, and an `"off"` on either form works in an application table.
 
 Slugs read edge first, then span, then action. Vertical edges divide top to bottom; horizontal edges divide left to right.
 
@@ -76,6 +78,8 @@ An area click fires only when the clicking finger is the only contact on the sur
 
 | Write this | Part |
 |---|---|
+| `edge-click` | Anywhere in any edge band |
+| `corner-click` | Any of the four corners |
 | `left-edge-click` | Anywhere along the left edge |
 | `right-edge-click` | Anywhere along the right edge |
 | `top-edge-click` | Anywhere along the top edge |

@@ -4548,14 +4548,17 @@ static NSString *trackpadAreaEdgeWholeName(int edge) {
 }
 
 // Resolves the most specific bound region containing a single-contact click:
-// a bound corner beats any edge region, a bound third beats a bound half
-// beats the whole edge. Where two edge bands overlap near a corner and no
-// corner is bound, the nearer edge is tried first at each span size. Returns
-// nil when no bound region contains the click, which leaves it native.
+// a bound named corner, then the any-corner name, beats any edge region; a
+// bound third beats a bound half beats the whole edge, and the any-edge name
+// comes last. Where two edge bands overlap near a corner and no corner is
+// bound, the nearer edge is tried first at each span size. Returns nil when
+// no bound region contains the click, which leaves it native.
 static NSString *boundTrackpadAreaClickGesture(float x, float y) {
     NSString *corner = trackpadAreaCornerClickName(x, y);
     if (corner != nil && bindingForGesture(corner, TRACKPAD) != nil)
         return corner;
+    if (corner != nil && bindingForGesture(@"Any-Corner Click", TRACKPAD) != nil)
+        return @"Any-Corner Click";
 
     int edges[2];
     float spans[2], distances[2];
@@ -4600,6 +4603,8 @@ static NSString *boundTrackpadAreaClickGesture(float x, float y) {
         if (bindingForGesture(whole, TRACKPAD) != nil)
             return whole;
     }
+    if (bindingForGesture(@"Any-Edge Click", TRACKPAD) != nil)
+        return @"Any-Edge Click";
     return nil;
 }
 

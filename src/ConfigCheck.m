@@ -534,6 +534,20 @@ int main(void) {
             }
         }
 
+        // The bare area-click slugs load under one engine name each, which the
+        // region cascade tries after the named regions of the same kind.
+        s = parse(@"[trackpad]\ncorner-click = escape\nedge-click = tab\n"
+                  @"top-left-corner-click = space\n");
+        g = bindingFor(s, @"TrackpadCommands", @"Any-Corner Click");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 53)
+            fail(@"corner-click binds the any-corner name", @53, [g objectForKey:@"KeyCode"]);
+        g = bindingFor(s, @"TrackpadCommands", @"Any-Edge Click");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 48)
+            fail(@"edge-click binds the any-edge name", @48, [g objectForKey:@"KeyCode"]);
+        g = bindingFor(s, @"TrackpadCommands", @"Top-Left-Corner Click");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 49)
+            fail(@"named corner binding stays its own entry", @49, [g objectForKey:@"KeyCode"]);
+
         s = parse(@"[trackpad]\nthree-finger-tap { action = \"escape\", defer = true }\n"
                   @"[trackpad \"Safari\"]\nthree-finger-tap { defer = false }\n");
         g = bindingForApplication(s, @"TrackpadCommands", @"Safari", @"Three-Finger Tap");
@@ -1083,6 +1097,29 @@ int main(void) {
                 [engine rangeOfString:@"resolvedBindingForGesture"] .location == NSNotFound)
                 fail(@"app scopes resolve by display name or bundle identifier",
                      @"shared application binding resolver", @"missing");
+
+            // The area-click cascade resolves most specific first: named
+            // corner, the any-corner name, named thirds, halves, whole edges,
+            // then the any-edge name. Source order carries that precedence.
+            NSString *areaCascade = section(engine,
+                @"static NSString *boundTrackpadAreaClickGesture",
+                @"#pragma mark - CGEventCallback");
+            NSArray *cascadeOrder = @[@"return corner;",
+                                      @"@\"Any-Corner Click\"",
+                                      @"trackpadAreaEdgeThirdName",
+                                      @"trackpadAreaEdgeHalfName",
+                                      @"trackpadAreaEdgeWholeName",
+                                      @"@\"Any-Edge Click\""];
+            NSUInteger previousLocation = 0;
+            for (NSString *step in cascadeOrder) {
+                NSRange found = [areaCascade rangeOfString:step];
+                if (found.location == NSNotFound || found.location < previousLocation) {
+                    fail(@"area-click cascade keeps most-specific-first order",
+                         [cascadeOrder componentsJoinedByString:@" before "], step);
+                    break;
+                }
+                previousLocation = found.location;
+            }
 
             // The family fallback runs only when no entry names the direction,
             // so an explicit directional "off" keeps excluding the direction.
