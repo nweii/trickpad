@@ -28,7 +28,6 @@
 ### Changed
 
 - Make trackpad multi-finger click gestures consume the native click, so the click and the action do not both fire. This matches the Magic Mouse click gestures.
-- Give a trackpad physical click that is bound to `middle-click` a full middle-button press. The button goes down with the click and comes up when the click ends. Movement during the click sends a middle-button drag. Before, the click sent only a quick middle click. A tap that is bound to `middle-click` still sends a quick middle click.
 - Make the Magic Mouse `two-finger-click` and `three-finger-click` gestures standard. They load without the `experimental-mouse-click-gestures` setting. The setting is no longer needed. A configuration file that sets it keeps loading.
 - Play a binding's `sound` before its `say` words when a binding sets both. Before, the sound and the speech started together.
 - Make the gesture list easier to scan. Rows show at full strength, and the device names use the system section-header style.
