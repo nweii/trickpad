@@ -17,9 +17,6 @@ Gestures that hold one finger still are named by where the fingers sit, not by w
 | `one-finger-tap` | Tap with one finger |
 | `two-finger-tap` | Tap with two fingers |
 | `three-finger-tap` | Tap with three fingers |
-| `one-finger-double-tap` | Tap twice with one finger |
-| `two-finger-double-tap` | Tap twice with two fingers |
-| `three-finger-double-tap` | Tap twice with three fingers |
 | `front-right-tap` | Tap the front right of the surface |
 | `two-finger-click` | Physically click with two fingers touching; replaces the normal click |
 | `three-finger-click` | Physically click with three fingers touching; replaces the normal click |
@@ -52,10 +49,6 @@ The trackpad recognizes a hold-and-slide in one direction only, so it has one sl
 | `three-finger-tap` | Tap with three fingers |
 | `four-finger-tap` | Tap with four fingers |
 | `five-finger-tap` | Tap with five fingers together |
-| `two-finger-double-tap` | Tap twice with two fingers |
-| `three-finger-double-tap` | Tap twice with three fingers |
-| `four-finger-double-tap` | Tap twice with four fingers |
-| `five-finger-double-tap` | Tap twice with five fingers |
 | `three-finger-click` | Physically click with three fingers touching |
 | `four-finger-click` | Physically click with four fingers touching |
 | `three-finger-swipe` | Swipe with three fingers, any direction |
@@ -168,24 +161,7 @@ Set `defer = true` when the first tap also begins a double-tap gesture in macOS 
 
 Trickpad waits through the Mac's double-click interval before sending the single-tap action. A second matching tap on the same device cancels it. This preserves the double-tap gesture at the cost of latency on the single tap.
 
-`defer` works only with single-tap gestures. A swipe, slide, hold, or double tap using it is reported and skipped.
-
-### Double taps
-
-A `<count>-finger-double-tap` name runs when you tap twice with that finger count inside the Mac's double-click interval:
-
-    three-finger-double-tap = "cmd+shift+5"
-
-Bind the double tap alone and the single tap of that finger count keeps doing whatever it did before, with no added wait.
-
-To bind both the single tap and its own double tap, set `defer = true` on the single tap:
-
-    three-finger-tap = { action = "escape", defer = true }
-    three-finger-double-tap = "cmd+shift+5"
-
-The single tap then waits through the double-click interval, and a second tap inside that interval sends the double-tap action instead. Without `defer`, the single tap sends its action on each of the two taps and the double tap sends its own action as well.
-
-Triple taps are not available.
+`defer` works only with tap gestures. A swipe, slide, or hold using it is reported and skipped.
 
 ## What a gesture can send
 

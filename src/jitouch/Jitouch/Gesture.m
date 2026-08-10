@@ -1123,13 +1123,27 @@ static void playInternalGestureDispatchTone(void) {
 static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                       NSString *matchedApplication);
 
-// The work one binding performs, without the feedback that confirms it. A
-// deferred binding raises its own feedback here, when the wait ends rather than
-// when the gesture was recognized.
-static dispatch_block_t bindingAction(NSString *gesture, int device, NSDictionary *binding,
-                                      NSString *matchedApplication, BOOL confirmsWhenRun) {
-    return [[^{
-        if (confirmsWhenRun) {
+static void dispatchCommand(NSString *gesture, int device) {
+    NSString *matchedApplication = nil;
+    NSDictionary *binding = bindingForGestureWithMatch(gesture, device, &matchedApplication);
+    if (binding == nil)
+        return;
+    if (device == MAGICMOUSE && MGTraceSuppressesActions()) {
+        NSString *scope = [matchedApplication isEqualToString:@"All Applications"]
+            ? @"global" : @"application";
+        NSString *kind = ![[binding objectForKey:@"Enable"] boolValue] ? @"off" :
+            [binding objectForKey:@"ScriptPath"] != nil ? @"script" :
+            [binding objectForKey:@"OpenURL"] != nil ? @"url" :
+            [binding objectForKey:@"PlaySound"] != nil ? @"sound" :
+            [binding objectForKey:@"SpeakText"] != nil ? @"speech" :
+            [[binding objectForKey:@"IsAction"] boolValue] ? @"built-in" : @"keystroke";
+        MGTraceRecordDispatch(gesture, scope, kind, @"suppressed-for-trace");
+        return;
+    }
+    BOOL deferred = [[binding objectForKey:@"Defer"] boolValue];
+    NSString *gestureKey = [NSString stringWithFormat:@"%d:%@", device, gesture];
+    dispatch_block_t action = ^{
+        if (deferred && binding != nil) {
             requestHapticFeedbackForBinding(binding, device);
             confirmBindingDispatch(binding, device);
         }
@@ -1139,78 +1153,19 @@ static dispatch_block_t bindingAction(NSString *gesture, int device, NSDictionar
         doCommand(gesture, device, binding, matchedApplication);
         NSTimeInterval timeInterval = -[start timeIntervalSinceNow];
         if (device >= 0 && device < sizeof(deviceTypeName) / sizeof(deviceTypeName[0]) && logLevel >= LOG_LEVEL_INFO) NSLog(@"Gesture \"%@\" for %@ took %f s", gesture, deviceTypeName[device], timeInterval);
-    } copy] autorelease];
-}
-
-// Confirms and runs a binding at once, with the feedback raised on the calling
-// thread so it stays as close to recognition as able.
-static void dispatchBindingNow(NSString *gesture, int device, NSDictionary *binding,
-                               NSString *matchedApplication) {
-    requestHapticFeedbackForBinding(binding, device);
-    confirmBindingDispatch(binding, device);
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0),
-                   bindingAction(gesture, device, binding, matchedApplication, NO));
-}
-
-static void dispatchCommand(NSString *gesture, int device) {
-    NSString *matchedApplication = nil;
-    NSDictionary *binding = bindingForGestureWithMatch(gesture, device, &matchedApplication);
-    // A double tap is reached only by repeating its single tap, so the single
-    // tap's dispatch resolves both bindings and decides between them.
-    NSString *doubleGesture = [Config doubleTapGestureName:gesture];
-    NSString *doubleApplication = nil;
-    NSDictionary *doubleBinding = doubleGesture == nil ? nil
-        : bindingForGestureWithMatch(doubleGesture, device, &doubleApplication);
-    if (binding == nil && doubleBinding == nil)
-        return;
-    if (device == MAGICMOUSE && MGTraceSuppressesActions()) {
-        NSDictionary *traced = binding ?: doubleBinding;
-        NSString *scope = [(binding != nil ? matchedApplication : doubleApplication)
-                           isEqualToString:@"All Applications"] ? @"global" : @"application";
-        NSString *kind = ![[traced objectForKey:@"Enable"] boolValue] ? @"off" :
-            [traced objectForKey:@"ScriptPath"] != nil ? @"script" :
-            [traced objectForKey:@"OpenURL"] != nil ? @"url" :
-            [traced objectForKey:@"PlaySound"] != nil ? @"sound" :
-            [traced objectForKey:@"SpeakText"] != nil ? @"speech" :
-            [[traced objectForKey:@"IsAction"] boolValue] ? @"built-in" : @"keystroke";
-        MGTraceRecordDispatch(binding != nil ? gesture : doubleGesture,
-                              scope, kind, @"suppressed-for-trace");
-        return;
-    }
-    BOOL deferred = [[binding objectForKey:@"Defer"] boolValue];
-    NSString *gestureKey = [NSString stringWithFormat:@"%d:%@", device, gesture];
-
-    // One pending window per gesture serves both purposes. A deferred single
-    // tap waits inside it, and a repeat inside it dispatches the double tap.
-    // With only the double tap bound the window delays nothing, so the gesture
-    // that is not configured costs no latency.
-    if (deferred || doubleBinding != nil) {
-        dispatch_block_t pending = deferred
-            ? bindingAction(gesture, device, binding, matchedApplication, YES) : nil;
-        dispatch_block_t repeated = doubleBinding == nil ? nil : ^{
-            dispatchBindingNow(doubleGesture, device, doubleBinding, doubleApplication);
-        };
+    };
+    if (deferred) {
         [deferredGestureDispatcher() handleGestureKey:gestureKey
                                                 delay:[NSEvent doubleClickInterval]
-                                               action:pending
-                                               repeat:repeated];
-        if (!deferred && binding != nil)
-            dispatchBindingNow(gesture, device, binding, matchedApplication);
-        return;
+                                               action:action];
+    } else {
+        [deferredGestureDispatcher() cancelGestureKey:gestureKey];
+        if (binding != nil) {
+            requestHapticFeedbackForBinding(binding, device);
+            confirmBindingDispatch(binding, device);
+        }
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), action);
     }
-
-    [deferredGestureDispatcher() cancelGestureKey:gestureKey];
-    dispatchBindingNow(gesture, device, binding, matchedApplication);
-}
-
-// A tap whose only binding is its double tap is still worth recognizing: the
-// double tap is reached by repeating the single tap and has no recognizer of
-// its own.
-static BOOL gestureIsBound(NSString *gesture, int device) {
-    if (bindingForGesture(gesture, device) != nil)
-        return YES;
-    NSString *doubleGesture = [Config doubleTapGestureName:gesture];
-    return doubleGesture != nil && bindingForGesture(doubleGesture, device) != nil;
 }
 
 // A bound recognizer owns its device's contact sequence before dispatch. The
@@ -1220,7 +1175,7 @@ static BOOL dispatchExclusiveCommand(NSString *gesture, int device, NSUInteger o
         MGTraceRecordCandidate(gesture, @"shadow-recognized", @"catalog-audit");
         return NO;
     }
-    if (!gestureIsBound(gesture, device)) {
+    if (bindingForGesture(gesture, device) == nil) {
         if (device == MAGICMOUSE) MGTraceRecordCandidate(gesture, @"canceled", @"unconfigured");
         return NO;
     }
@@ -1244,7 +1199,7 @@ static BOOL dispatchExclusiveTapCommand(NSString *gesture, int device, NSUIntege
         MGTraceRecordCandidate(gesture, @"shadow-recognized", @"catalog-audit");
         return NO;
     }
-    if (!gestureIsBound(gesture, device)) {
+    if (bindingForGesture(gesture, device) == nil) {
         if (device == MAGICMOUSE) MGTraceRecordCandidate(gesture, @"canceled", @"unconfigured");
         return NO;
     }
@@ -1264,7 +1219,7 @@ static BOOL dispatchExclusiveTapCommand(NSString *gesture, int device, NSUIntege
 }
 
 static BOOL dispatchExclusivePalmSafeCommand(NSString *gesture, int device, NSUInteger owner) {
-    if (!gestureIsBound(gesture, device))
+    if (bindingForGesture(gesture, device) == nil)
         return NO;
     BOOL claimed = device == TRACKPAD
         ? MGTrackpadInteractionClaimPalmSafeGesture(&trackpadInteraction, owner)

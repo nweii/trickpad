@@ -36,9 +36,6 @@
             @"one-finger-tap": @[@"One-Finger Tap"],
             @"two-finger-tap": @[@"Two-Finger Tap"],
             @"three-finger-tap": @[@"Three-Finger Tap"],
-            @"one-finger-double-tap": @[@"One-Finger Double-Tap"],
-            @"two-finger-double-tap": @[@"Two-Finger Double-Tap"],
-            @"three-finger-double-tap": @[@"Three-Finger Double-Tap"],
             @"two-finger-click": @[@"Two-Finger Click"],
             @"three-finger-click": @[@"Three-Finger Click"],
             @"front-right-tap": @[@"Right-Front Tap"],
@@ -69,10 +66,6 @@
             @"three-finger-tap": @[@"Three-Finger Tap"],
             @"four-finger-tap": @[@"Four-Finger Tap"],
             @"five-finger-tap": @[@"Five-Finger Tap"],
-            @"two-finger-double-tap": @[@"Two-Finger Double-Tap"],
-            @"three-finger-double-tap": @[@"Three-Finger Double-Tap"],
-            @"four-finger-double-tap": @[@"Four-Finger Double-Tap"],
-            @"five-finger-double-tap": @[@"Five-Finger Double-Tap"],
             @"three-finger-click": @[@"Three-Finger Click"],
             @"four-finger-click": @[@"Four-Finger Click"],
             @"edge-click": @[@"Any-Edge Click"],
@@ -299,24 +292,6 @@
     return [families objectForKey:engineName];
 }
 
-// The double tap a repeat of this tap reaches, or nil when a tap does not pair
-// with one. A double tap has no recognizer: the single tap's recognizer runs
-// twice, and the second run inside the Mac's double-click interval dispatches
-// this name instead.
-+ (NSString *)doubleTapGestureName:(NSString *)engineName {
-    static NSDictionary *doubles = nil;
-    if (doubles == nil) {
-        doubles = [@{
-            @"One-Finger Tap": @"One-Finger Double-Tap",
-            @"Two-Finger Tap": @"Two-Finger Double-Tap",
-            @"Three-Finger Tap": @"Three-Finger Double-Tap",
-            @"Four-Finger Tap": @"Four-Finger Double-Tap",
-            @"Five-Finger Tap": @"Five-Finger Double-Tap",
-        } retain];
-    }
-    return [doubles objectForKey:engineName];
-}
-
 // Built-in engine commands, keyed by the slug the configuration uses. The value
 // is the exact string dispatchCommand compares against in Gesture.m.
 + (NSDictionary *)actionNames {
@@ -358,11 +333,6 @@
             @"Three-Finger Tap": @"Tap with three fingers",
             @"Four-Finger Tap": @"Tap with four fingers",
             @"Five-Finger Tap": @"Tap with five fingers",
-            @"One-Finger Double-Tap": @"Tap twice with one finger",
-            @"Two-Finger Double-Tap": @"Tap twice with two fingers",
-            @"Three-Finger Double-Tap": @"Tap twice with three fingers",
-            @"Four-Finger Double-Tap": @"Tap twice with four fingers",
-            @"Five-Finger Double-Tap": @"Tap twice with five fingers",
             @"Two-Finger Click": @"Click with two fingers",
             @"Three-Finger Click": @"Click with three fingers",
             @"Four-Finger Click": @"Click with four fingers",
@@ -1498,9 +1468,8 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
                 report(line, [NSString stringWithFormat:@"no %@ gesture named \"%@\"", device, key]);
                 continue;
             }
-            if (expandedDefer != nil &&
-                (![key hasSuffix:@"-tap"] || [key hasSuffix:@"-double-tap"])) {
-                report(line, @"defer is available only for single-tap gestures");
+            if (expandedDefer != nil && ![key hasSuffix:@"-tap"]) {
+                report(line, @"defer is available only for tap gestures");
                 continue;
             }
             if (expandedHaptic != nil && [device isEqualToString:@"mouse"]) {

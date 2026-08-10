@@ -16,7 +16,6 @@
 
 ### Added
 
-- Add double-tap gesture names on both devices. The Magic Mouse has `one-finger-double-tap`, `two-finger-double-tap`, and `three-finger-double-tap`. The trackpad has `two-finger-double-tap` through `five-finger-double-tap`. The action runs on two taps of that finger count inside the Mac double-click interval. A double tap that is bound alone adds no delay to the single tap. To use a single tap and its own double tap together, set `defer = true` on the single tap. Triple taps are not available.
 - Add bare swipe names such as `three-finger-swipe`. A bare name binds every direction of that finger count to one action. A directional name such as `three-finger-swipe-left` stays more specific and wins for its own direction.
 - Add the bare `corner-click` and `edge-click` names. `corner-click` binds all four corners to one action. `edge-click` binds a click anywhere in any edge band. A named region stays more specific and wins for its own spot.
 - Add trackpad area clicks. A physical click with one finger in a named region of the surface runs a bound action. The regions are the four edges, their halves and thirds, and the four corners. A click in a bound region replaces the native click. A click in a region with no binding stays a normal click. When bound regions overlap, the most specific bound region wins. Regions are narrow by default. The `trackpad-edge-gesture-depth` setting adjusts how far they reach in from the edge.
