@@ -70,7 +70,7 @@ An area click is a physical click with one finger that lands in a named region o
 
 `corner-click` binds all four corners to one action, and `edge-click` binds a click anywhere in any edge band. A named region overrides the bare name for its own spot, and an `"off"` on either form works in an application table.
 
-Slugs read edge first, then span, then action. Vertical edges divide top to bottom; horizontal edges divide left to right.
+Slugs read edge first, then span, then action. Vertical edges divide top to bottom; horizontal edges divide left to right. The words of an area-click name can come in any order, so `top-half-left-edge-click` and `corner-click-top-right` load as their canonical names.
 
 Regions stay narrow by default so a click during ordinary pointing does not land in one by accident. `trackpad-edge-gesture-depth` under `[GENERAL]` sets how far an edge band reaches in from its edge, as a fraction of the surface; corner squares span twice that depth. On a surface wider than it is tall, the same fraction reaches physically deeper on the left and right edges than on the top and bottom, and both scale together.
 

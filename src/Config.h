@@ -42,6 +42,11 @@
 + (NSDictionary *)mouseGestureSlugs;
 + (NSDictionary *)trackpadGestureSlugs;
 
+// Canonicalizes a reordered area-click name (edge regions, corners, and the
+// bare edge-click and corner-click forms) to the slug `slugs` documents.
+// Ambiguous orderings and non-area-click names return nil.
++ (NSString *)canonicalAreaClickSlug:(NSString *)slug inSlugs:(NSDictionary *)slugs;
+
 // Returns the first engine name for the public slug containing raw, so aliases
 // can be presented as one configured gesture.
 + (NSString *)canonicalGestureName:(NSString *)raw inSlugs:(NSDictionary *)slugs;

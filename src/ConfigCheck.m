@@ -548,6 +548,83 @@ int main(void) {
         if ([[g objectForKey:@"KeyCode"] intValue] != 49)
             fail(@"named corner binding stays its own entry", @49, [g objectForKey:@"KeyCode"]);
 
+        // Area-click names accept their words in any order. The pure
+        // canonicalizer resolves each reordering to the documented slug, uses
+        // adjacency to split the edge-region word-multiset trap, and returns
+        // nil for orderings that stay ambiguous or name nothing.
+        NSDictionary *reorderings = @{
+            // Bare and single-direction forms, every region shape.
+            @"click-edge": @"edge-click",
+            @"click-corner": @"corner-click",
+            @"edge-left-click": @"left-edge-click",
+            @"click-top-edge": @"top-edge-click",
+            // Corner directions are one vertical and one horizontal word, so
+            // the bag alone decides.
+            @"corner-click-top-right": @"top-right-corner-click",
+            @"left-bottom-corner-click": @"bottom-left-corner-click",
+            @"click-corner-right-bottom": @"bottom-right-corner-click",
+            // Edge halves, including the issue's example.
+            @"top-half-left-edge-click": @"left-edge-top-half-click",
+            @"click-right-edge-bottom-half": @"right-edge-bottom-half-click",
+            // The trap pair shares a word multiset; adjacency to "edge"
+            // resolves each side to a different canonical name.
+            @"bottom-half-right-edge-click": @"right-edge-bottom-half-click",
+            @"right-half-bottom-edge-click": @"bottom-edge-right-half-click",
+            // Edge thirds. "middle" can never be the edge, so the direction on
+            // the other side of "edge" claims the slot.
+            @"middle-third-left-edge-click": @"left-edge-middle-third-click",
+            @"middle-edge-top-third-click": @"top-edge-middle-third-click",
+            @"third-bottom-edge-right-click": @"bottom-edge-right-third-click",
+            // Canonical names pass through unchanged.
+            @"left-edge-top-half-click": @"left-edge-top-half-click",
+            @"top-edge-left-half-click": @"top-edge-left-half-click",
+            @"top-right-corner-click": @"top-right-corner-click",
+        };
+        for (NSString *input in reorderings) {
+            NSString *canonical = [Config canonicalAreaClickSlug:input
+                inSlugs:[Config trackpadGestureSlugs]];
+            if (![canonical isEqualToString:[reorderings objectForKey:input]])
+                fail([@"reordered area-click canonicalizes: " stringByAppendingString:input],
+                     [reorderings objectForKey:input], canonical ?: @"nil");
+        }
+        for (NSString *rejected in @[
+            @"edge-half-top-left-click",   // no direction beside "edge": ambiguous
+            @"left-left-edge-click",       // repeated word
+            @"middle-edge-click",          // middle is never an edge
+            @"top-left-edge-click",        // two directions without a size
+            @"three-finger-tap",           // not an area click
+            @"top-half-left-corner-click", // sizes belong to edges only
+        ]) {
+            NSString *canonical = [Config canonicalAreaClickSlug:rejected
+                inSlugs:[Config trackpadGestureSlugs]];
+            if (canonical != nil)
+                fail([@"area-click reordering rejects: " stringByAppendingString:rejected],
+                     @"nil", canonical);
+        }
+
+        // Through the parser, a reordered name loads under the canonical
+        // engine name, so the menu and reports display only canonical names.
+        s = parse(@"[trackpad]\ntop-half-left-edge-click = space\n"
+                  @"corner-click-top-right = tab\n");
+        g = bindingFor(s, @"TrackpadCommands", @"Left-Edge Top-Half Click");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 49)
+            fail(@"reordered edge-region name loads canonically", @49, [g objectForKey:@"KeyCode"]);
+        g = bindingFor(s, @"TrackpadCommands", @"Top-Right-Corner Click");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 48)
+            fail(@"reordered corner name loads canonically", @48, [g objectForKey:@"KeyCode"]);
+
+        // An ordering that stays ambiguous is skipped with the normal report.
+        NSArray *ambiguousProblems = nil;
+        s = parseWithProblems(@"[trackpad]\nedge-half-top-left-click = space\n",
+                              &ambiguousProblems);
+        if ([ambiguousProblems count] != 1 ||
+            bindingFor(s, @"TrackpadCommands", @"Left-Edge Top-Half Click") != nil ||
+            bindingFor(s, @"TrackpadCommands", @"Top-Edge Left-Half Click") != nil)
+            fail(@"ambiguous area-click ordering is skipped with a report",
+                 @"one problem and no binding",
+                 [NSString stringWithFormat:@"%lu problems",
+                  (unsigned long)[ambiguousProblems count]]);
+
         s = parse(@"[trackpad]\nthree-finger-tap { action = \"escape\", defer = true }\n"
                   @"[trackpad \"Safari\"]\nthree-finger-tap { defer = false }\n");
         g = bindingForApplication(s, @"TrackpadCommands", @"Safari", @"Three-Finger Tap");

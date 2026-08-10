@@ -115,6 +115,91 @@
     return m;
 }
 
+// Area-click names read naturally in several orders, so a reordering of a
+// documented name is accepted and canonicalized here, at parse time, before
+// anything downstream sees it. The edge-region family is ambiguous as a bag of
+// words (left-edge-top-half-click and top-edge-left-half-click share a word
+// multiset), so the direction word attached to "edge" names the edge and the
+// remaining direction and size words form the part. An ordering that leaves no
+// direction attached to "edge" stays ambiguous and returns nil, as does any
+// word set that is not an area-click name in `slugs`.
++ (NSString *)canonicalAreaClickSlug:(NSString *)slug inSlugs:(NSDictionary *)slugs {
+    NSArray *tokens = [slug componentsSeparatedByString:@"-"];
+    NSSet *directions = [NSSet setWithArray:@[@"left", @"right", @"top", @"bottom", @"middle"]];
+    NSSet *sizes = [NSSet setWithArray:@[@"half", @"third"]];
+
+    NSString *shape = nil;      // "edge" or "corner"
+    NSString *size = nil;
+    NSMutableArray *found = [NSMutableArray array];
+    NSUInteger clicks = 0;
+    NSUInteger edgeIndex = NSNotFound;
+    for (NSUInteger i = 0; i < [tokens count]; i++) {
+        NSString *token = [tokens objectAtIndex:i];
+        if ([token isEqualToString:@"click"]) {
+            clicks++;
+        } else if ([token isEqualToString:@"edge"] || [token isEqualToString:@"corner"]) {
+            if (shape != nil)
+                return nil;
+            shape = token;
+            edgeIndex = i;
+        } else if ([sizes containsObject:token]) {
+            if (size != nil)
+                return nil;
+            size = token;
+        } else if ([directions containsObject:token]) {
+            if ([found containsObject:token])
+                return nil;
+            [found addObject:token];
+        } else {
+            return nil;
+        }
+    }
+    if (clicks != 1 || shape == nil)
+        return nil;
+
+    NSString *candidate = nil;
+    if ([shape isEqualToString:@"corner"]) {
+        if (size == nil && [found count] == 0) {
+            candidate = @"corner-click";
+        } else if (size == nil && [found count] == 2) {
+            // Corners have one vertical and one horizontal word; canonical
+            // order puts the vertical first, so the bag alone decides.
+            NSString *vertical = [found containsObject:@"top"] ? @"top" :
+                ([found containsObject:@"bottom"] ? @"bottom" : nil);
+            NSString *horizontal = [found containsObject:@"left"] ? @"left" :
+                ([found containsObject:@"right"] ? @"right" : nil);
+            if (vertical == nil || horizontal == nil)
+                return nil;
+            candidate = [NSString stringWithFormat:@"%@-%@-corner-click", vertical, horizontal];
+        } else {
+            return nil;
+        }
+    } else if (size == nil && [found count] <= 1) {
+        candidate = [found count] == 0 ? @"edge-click" :
+            [NSString stringWithFormat:@"%@-edge-click", [found firstObject]];
+    } else if (size != nil && [found count] == 2) {
+        // Adjacency decides the edge: the direction word beside "edge", the
+        // preceding one first the way the canonical names read. "middle" is
+        // never an edge, so it cannot claim the slot.
+        NSString *edgeDirection = nil;
+        NSString *before = edgeIndex > 0 ? [tokens objectAtIndex:edgeIndex - 1] : nil;
+        NSString *after = edgeIndex + 1 < [tokens count] ? [tokens objectAtIndex:edgeIndex + 1] : nil;
+        if ([found containsObject:before] && ![before isEqualToString:@"middle"])
+            edgeDirection = before;
+        else if ([found containsObject:after] && ![after isEqualToString:@"middle"])
+            edgeDirection = after;
+        if (edgeDirection == nil)
+            return nil;
+        NSString *partDirection = [[found firstObject] isEqualToString:edgeDirection]
+            ? [found lastObject] : [found firstObject];
+        candidate = [NSString stringWithFormat:@"%@-edge-%@-%@-click",
+                     edgeDirection, partDirection, size];
+    } else {
+        return nil;
+    }
+    return [slugs objectForKey:candidate] != nil ? candidate : nil;
+}
+
 + (NSString *)canonicalGestureName:(NSString *)raw inSlugs:(NSDictionary *)slugs {
     for (NSString *slug in slugs) {
         NSArray *engineNames = [slugs objectForKey:slug];
@@ -1307,6 +1392,16 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
             NSDictionary *slugs = [device isEqualToString:@"mouse"]
                 ? [Config mouseGestureSlugs] : [Config trackpadGestureSlugs];
             NSArray *engineNames = [slugs objectForKey:key];
+            if (engineNames == nil) {
+                // A reordered area-click name canonicalizes here, so the
+                // declaration key, engine names, and every downstream surface
+                // carry only the canonical spelling.
+                NSString *canonical = [Config canonicalAreaClickSlug:key inSlugs:slugs];
+                if (canonical != nil) {
+                    key = canonical;
+                    engineNames = [slugs objectForKey:key];
+                }
+            }
             if (engineNames == nil) {
                 report(line, [NSString stringWithFormat:@"no %@ gesture named \"%@\"", device, key]);
                 continue;
