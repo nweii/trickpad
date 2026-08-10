@@ -114,18 +114,6 @@ clang \
   -o "$CONTACT_ONSET_TRACKER_OUT" 2>/dev/null
 "$CONTACT_ONSET_TRACKER_OUT"
 
-MIDDLE_BUTTON_LIFECYCLE_OUT="$(mktemp -d)/middlebuttonlifecyclecheck"
-clang \
-  -fobjc-exceptions \
-  -fno-objc-arc \
-  -I"$ROOT/src" \
-  -isysroot "$SDKROOT" \
-  -framework Foundation \
-  "$ROOT/src/MiddleButtonLifecycle.m" \
-  "$ROOT/src/MiddleButtonLifecycleCheck.m" \
-  -o "$MIDDLE_BUTTON_LIFECYCLE_OUT" 2>/dev/null
-"$MIDDLE_BUTTON_LIFECYCLE_OUT"
-
 MOUSE_CLICK_INTERACTION_OUT="$(mktemp -d)/mouseclickinteractioncheck"
 clang \
   -fobjc-exceptions \

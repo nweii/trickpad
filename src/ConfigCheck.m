@@ -1218,44 +1218,6 @@ int main(void) {
                          required, @"missing");
             }
 
-            // A physical click bound to the middle button presses it for the
-            // length of the press on both devices, and the press ends on the
-            // release, on an interrupted release, and on every reset.
-            for (NSString *required in @[
-                @"MGMiddleButtonLifecycleBegin(&middleButtonLifecycle, TRACKPAD)",
-                @"MGMiddleButtonLifecycleBegin(&middleButtonLifecycle, device)",
-                @"MGMiddleButtonLifecycleCommandHoldsButton",
-                @"trackpadClickHeldMiddleButton",
-                @"MGMiddleButtonLifecycleEnd(&middleButtonLifecycle)",
-                @"releaseHeldMiddleButton();",
-                @"kCGEventOtherMouseDragged",
-            ]) {
-                if ([clickCallback rangeOfString:required].location == NSNotFound)
-                    fail(@"physical click callback holds the middle button for its press",
-                         required, @"missing");
-            }
-            for (NSString *reset in @[@"static void turnOffTrackpad", @"static void turnOffMagicMouse"]) {
-                NSString *body = section(engine, reset, @"\n}\n");
-                if (body == nil || [body rangeOfString:@"releaseHeldMiddleButton();"].location == NSNotFound)
-                    fail(@"a reset releases a held middle button", reset, @"no release");
-            }
-
-            // A tap bound to the middle button stays momentary: the action
-            // dispatch presses and releases in one step and holds nothing.
-            NSString *dispatchBody = section(engine, @"NSString *matchedApplication) {",
-                                             @"\nstatic void setCursorWindowAtMouse");
-            if (dispatchBody == nil)
-                fail(@"the action dispatcher is readable", @"dispatchCommand body", @"missing");
-            else {
-                if ([dispatchBody rangeOfString:@"kCGEventOtherMouseDown"].location == NSNotFound ||
-                    [dispatchBody rangeOfString:@"kCGEventOtherMouseUp"].location == NSNotFound)
-                    fail(@"a middle-click action dispatch stays momentary",
-                         @"a middle-button down and up", @"missing");
-                if ([dispatchBody rangeOfString:@"MGMiddleButtonLifecycleBegin"].location != NSNotFound)
-                    fail(@"a middle-click action dispatch stays momentary",
-                         @"no held press", @"the dispatcher holds the button");
-            }
-
             if ([engine rangeOfString:@"trackpadHasTwoFingers"].location != NSNotFound)
                 fail(@"native trackpad dragging is not suppressed by legacy contact flags",
                      @"no trackpadHasTwoFingers gate", @"legacy gate remains");

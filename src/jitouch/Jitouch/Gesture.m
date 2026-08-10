@@ -29,7 +29,6 @@
 #import "ContactTapRecognizer.h"
 #import "DeferredGestureDispatcher.h"
 #import "GestureSequence.h"
-#import "MiddleButtonLifecycle.h"
 #import "MouseClickInteraction.h"
 #import "MouseContactFilter.h"
 #import "ContactOnsetTracker.h"
@@ -66,6 +65,7 @@ static const int magicTrackpadFamilyIDs[] = {
 #define HS(a)  ((a * 7907 + 7883) % 4493)
 #define CFSafeRelease(a) if (a)CFRelease(a);
 
+#define MIDDLEBUTTONDOWN 1
 #define LEFTBUTTONDOWN 2
 #define RIGHTBUTTONDOWN 3
 #define COMMANDANDLEFTBUTTONDOWN 4
@@ -144,10 +144,6 @@ static int middleClickFlag, magicMouseTwoFingerFlag, magicMouseThreeFingerFlag;
 static int trackpadNFingers, trackpadClicked;
 static MGTrackpadInteraction trackpadInteraction = {0};
 static MGMouseClickInteraction magicMouseClickInteraction = {0};
-// Both devices press the middle button through this one lifecycle, so a press
-// started by either produces a single down, the drags it holds through, and a
-// single up.
-static MGMiddleButtonLifecycle middleButtonLifecycle = {0};
 static MGContactOnsetTracker magicMouseContactOnsets = {0};
 static int lastLoggedMagicMouseClickContactCount = -1;
 static BOOL trackpadRewritingSecondaryClick = NO;
@@ -169,30 +165,6 @@ static int trigger = 0;
 static const useconds_t kMagicMouseClickClassificationWaitMicroseconds = 20000;
 static const useconds_t kMagicMouseClickClassificationPollMicroseconds = 500;
 static const int64_t kTrickpadReplayedMouseEvent = 0x545249434b504144;
-
-// A gesture that presses the middle button without an event of its own to
-// rewrite presses and releases it at the cursor.
-static void postMiddleButtonEvent(CGEventType type) {
-    CGEventRef ourEvent = CGEventCreate(NULL);
-    CGPoint location = CGEventGetLocation(ourEvent);
-    CFRelease(ourEvent);
-    CGEventRef eventRef = CGEventCreateMouseEvent(NULL, type, location,
-                                                  kCGMouseButtonCenter);
-    CGEventSetIntegerValueField(eventRef, kCGMouseEventButtonNumber, 2);
-    // The tap watches middle-button events, so mark this one as ours and let it
-    // pass back through untouched.
-    CGEventSetIntegerValueField(eventRef, kCGEventSourceUserData,
-                                kTrickpadReplayedMouseEvent);
-    CGEventPost(kCGSessionEventTap, eventRef);
-    CFRelease(eventRef);
-}
-
-// Every path that abandons a press releases the button, so a reset, a wake, an
-// interrupted release, or an ambiguous gesture cannot leave it down.
-static void releaseHeldMiddleButton(void) {
-    if (MGMiddleButtonLifecycleEnd(&middleButtonLifecycle))
-        postMiddleButtonEvent(kCGEventOtherMouseUp);
-}
 
 static void clearPendingMagicMouseClick(void) {
     if (pendingMagicMousePrimaryDown != NULL) {
@@ -320,7 +292,7 @@ static GestureWindow *gestureWindow;
 
 static Gesture *me;
 
-static int simulating;
+static int simulating, simulatingByDevice;
 
 static NSMutableDictionary *sizeHistoryDict;
 
@@ -395,7 +367,6 @@ static bool familyIsMagicTrackpad(int familyID) {
 static void turnOffTrackpad() {
     trackpadNFingers = 0;
     MGTrackpadInteractionInitialize(&trackpadInteraction);
-    releaseHeldMiddleButton();
     clearPendingTrackpadClick();
     [pendingTrackpadAreaClickGesture release];
     pendingTrackpadAreaClickGesture = nil;
@@ -405,7 +376,6 @@ static void turnOffMagicMouse() {
     middleClickFlag = 0;
     magicMouseTwoFingerFlag = 0;
     magicMouseThreeFingerFlag = 0;
-    releaseHeldMiddleButton();
     simulating = 0;
     disableHorizontalScroll = 0;
     quickTabSwitching = 0;
@@ -4039,9 +4009,9 @@ static void gestureMagicMouseTwoFixOneSlide(Finger *data, int nFingers, double t
 // Besides identifying the thumb that click counting excludes, this recognizer
 // carries a dispatch path of its own that no configuration slug reaches: the
 // engine name "Thumb" is absent from mouseGestureSlugs, so its action branches
-// are dormant. Keep them. They press the middle button for as long as the thumb
-// rests, through the shared held-button lifecycle, and a binding that exposes
-// the gesture needs them intact.
+// are dormant. Keep them. They hold the engine's only held middle-button
+// lifecycle (down, drag, up), which the momentary click paths cannot produce,
+// and a binding that exposes it needs them intact.
 static int gestureMagicMouseThumb(const Finger *data, int nFingers) {
     static int type = 0;
     int tb = 0;
@@ -4070,11 +4040,18 @@ static int gestureMagicMouseThumb(const Finger *data, int nFingers) {
                         type = 1;
                         quickTabSwitching = 1;
                     }
-                } else if (MGMiddleButtonLifecycleCommandHoldsButton(
-                               commandForGesture(@"Thumb", MAGICMOUSE))) {
+                } else if ([commandForGesture(@"Thumb", MAGICMOUSE) isEqualToString:@"Middle Click"]) {
                     type = 1;
-                    if (MGMiddleButtonLifecycleBegin(&middleButtonLifecycle, MAGICMOUSE))
-                        postMiddleButtonEvent(kCGEventOtherMouseDown);
+                    simulating = MIDDLEBUTTONDOWN;
+                    simulatingByDevice = MAGICMOUSE;
+
+                    CGEventRef ourEvent = CGEventCreate(NULL);
+                    CGPoint location = CGEventGetLocation(ourEvent);
+                    CFRelease(ourEvent);
+                    CGEventRef eventRef = CGEventCreateMouseEvent(NULL, kCGEventOtherMouseDown, location, kCGMouseButtonCenter);
+                    CGEventSetIntegerValueField(eventRef, kCGMouseEventButtonNumber, 2);
+                    CGEventPost(kCGSessionEventTap, eventRef);
+                    CFRelease(eventRef);
                 } else {
                     type = 1;
                     dispatchExclusiveCommand(@"Thumb", MAGICMOUSE, kGestureOwnerThumb);
@@ -4088,7 +4065,16 @@ static int gestureMagicMouseThumb(const Finger *data, int nFingers) {
             type = 0;
             quickTabSwitching = 0;
 
-            releaseHeldMiddleButton();
+            if ([commandForGesture(@"Thumb", MAGICMOUSE) isEqualToString:@"Middle Click"]) {
+                CGEventRef ourEvent = CGEventCreate(NULL);
+                CGPoint location = CGEventGetLocation(ourEvent);
+                CFRelease(ourEvent);
+                CGEventRef eventRef = CGEventCreateMouseEvent(NULL, kCGEventOtherMouseUp, location, kCGMouseButtonCenter);
+                CGEventSetIntegerValueField(eventRef, kCGMouseEventButtonNumber, 2);
+                CGEventPost(kCGSessionEventTap, eventRef);
+                CFRelease(eventRef);
+                simulating = 0;
+            }
         }
     } else if (type == 1) {
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
@@ -4097,7 +4083,16 @@ static int gestureMagicMouseThumb(const Finger *data, int nFingers) {
         type = 0;
         quickTabSwitching = 0;
 
-        releaseHeldMiddleButton();
+        if ([commandForGesture(@"Thumb", MAGICMOUSE) isEqualToString:@"Middle Click"]) {
+            CGEventRef ourEvent = CGEventCreate(NULL);
+            CGPoint location = CGEventGetLocation(ourEvent);
+            CFRelease(ourEvent);
+            CGEventRef eventRef = CGEventCreateMouseEvent(NULL, kCGEventOtherMouseUp, location, kCGMouseButtonCenter);
+            CGEventSetIntegerValueField(eventRef, kCGMouseEventButtonNumber, 2);
+            CGEventPost(kCGSessionEventTap, eventRef);
+            CFRelease(eventRef);
+            simulating = 0;
+        }
     }
     return ret;
 }
@@ -4756,11 +4751,6 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
     if ((type == kCGEventLeftMouseUp || type == kCGEventRightMouseUp) &&
         MGTrackpadInteractionHasPhysicalClick(&trackpadInteraction)) {
         BOOL trackpadClickReplacedNative = pendingTrackpadPrimaryDown != NULL;
-        // A click that pressed the middle button has already delivered its
-        // action, and the release below ends that press. Dispatching here too
-        // would act twice on one click.
-        BOOL trackpadClickHeldMiddleButton =
-            MGMiddleButtonLifecycleHoldingDevice(&middleButtonLifecycle) == TRACKPAD;
         clearPendingTrackpadClick();
         int trackpadClickFingerCount =
             MGTrackpadInteractionFinishPhysicalClick(&trackpadInteraction);
@@ -4775,8 +4765,7 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
         // The configured action dispatches only when its mouse-down was
         // suppressed, and its mouse-up is swallowed with it. A click whose
         // native down passed through stays native and does not dispatch.
-        if (gesture != nil && !trackpadClickHeldMiddleButton &&
-            (trackpadClickReplacedNative || MGTraceIsActive()))
+        if (gesture != nil && (trackpadClickReplacedNative || MGTraceIsActive()))
             dispatchCommand(gesture, device);
         [pendingTrackpadAreaClickGesture release];
         pendingTrackpadAreaClickGesture = nil;
@@ -4813,23 +4802,12 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
                 trackpadAreaClickX, trackpadAreaClickY);
         [pendingTrackpadAreaClickGesture release];
         pendingTrackpadAreaClickGesture = [trackpadAreaClickGesture retain];
-        // The click's own gesture is known at mouse-down, because its finger
-        // count and position are, and its action decides whether the press
-        // holds a button or dispatches on release.
-        NSString *configuredTrackpadClickGesture = nil;
-        if (trackpadClickBegan) {
-            if (trackpadAreaClickGesture != nil)
-                configuredTrackpadClickGesture = trackpadAreaClickGesture;
-            else if (MGTrackpadInteractionShouldPreservePrimaryClick(
-                        &trackpadInteraction,
-                        bindingForGesture(@"Three-Finger Click", TRACKPAD) != nil, NO))
-                configuredTrackpadClickGesture = @"Three-Finger Click";
-            else if (MGTrackpadInteractionShouldPreservePrimaryClick(
-                        &trackpadInteraction, NO,
-                        bindingForGesture(@"Four-Finger Click", TRACKPAD) != nil))
-                configuredTrackpadClickGesture = @"Four-Finger Click";
-        }
-        BOOL configuredTrackpadClick = configuredTrackpadClickGesture != nil;
+        BOOL configuredTrackpadClick = trackpadClickBegan &&
+            (trackpadAreaClickGesture != nil ||
+             MGTrackpadInteractionShouldPreservePrimaryClick(
+                &trackpadInteraction,
+                bindingForGesture(@"Three-Finger Click", TRACKPAD) != nil,
+                bindingForGesture(@"Four-Finger Click", TRACKPAD) != nil));
         if (configuredTrackpadClick && type == kCGEventRightMouseDown) {
             CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, 0);
             CGEventSetType(event, kCGEventLeftMouseDown);
@@ -4841,9 +4819,6 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
             cancelRecognition = 1;
             return NULL;
         }
-        // A press whose release never arrived is abandoned here, and its button
-        // is released first so the next click cannot land on a held button.
-        releaseHeldMiddleButton();
         if (simulating) {   //simulating should be reset when mouseup, but sometimes mouseup doesn't get called
             simulating = 0; //so we have to reset it manually
             clearPendingMagicMouseClick();
@@ -4854,18 +4829,6 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
         // a physical click here, so it passes through untouched.
         clearPendingTrackpadClick();
         if (configuredTrackpadClick && !MGTraceIsActive()) {
-            // A click bound to the middle button presses it for as long as the
-            // button is held, so the application receives the drag between the
-            // down and the up. This is the same held-button lifecycle the Magic
-            // Mouse uses: the native down becomes the middle down, and the
-            // drags and release that follow are rewritten below.
-            if (MGMiddleButtonLifecycleCommandHoldsButton(
-                    commandForGesture(configuredTrackpadClickGesture, TRACKPAD)) &&
-                MGMiddleButtonLifecycleBegin(&middleButtonLifecycle, TRACKPAD)) {
-                CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, 2);
-                CGEventSetType(event, kCGEventOtherMouseDown);
-                return event;
-            }
             pendingTrackpadPrimaryDown = CGEventCreateCopy(event);
             return NULL;
         }
@@ -4903,8 +4866,9 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
                     dispatchCommand(gesture, device);
                 else
                     MGTraceRecordDispatch(gesture, @"none", @"none", @"suppressed-for-trace");
-            } else if (MGMiddleButtonLifecycleCommandHoldsButton(command) &&
-                       MGMiddleButtonLifecycleBegin(&middleButtonLifecycle, device)) {
+            } else if ([command isEqualToString:@"Middle Click"]) {
+                simulating = MIDDLEBUTTONDOWN;
+                simulatingByDevice = device;
                 CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, 2);
                 CGEventSetType(event, kCGEventOtherMouseDown);
             } else if ([command isEqualToString:@"Left Click"]) {
@@ -4956,9 +4920,10 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
         dispatchMagicMousePhysicalClickForContactCount(
             lateMagicMouseClickContactCount);
 
-        if (MGMiddleButtonLifecycleEnd(&middleButtonLifecycle)) {
+        if (simulating == MIDDLEBUTTONDOWN) {
             CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, 2);
             CGEventSetType(event, kCGEventOtherMouseUp);
+            simulating = 0;
             if (logLevel >= LOG_LEVEL_DEBUG) NSLog(@"Simulated MiddleMouseUp");
         } else if (simulating == LEFTBUTTONDOWN) {
             CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, 0);
@@ -5017,13 +4982,12 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
             CGEventSetIntegerValueField(event, kCGScrollWheelEventPointDeltaAxis2, 0);
             CGEventSetIntegerValueField(event, kCGScrollWheelEventFixedPtDeltaAxis2, 0);
         }
-        else if ((trackpadNFingers == 3 || trackpadNFingers == 4) &&
-                 MGMiddleButtonLifecycleIsHeld(&middleButtonLifecycle))
+        else if ((trackpadNFingers == 3 || trackpadNFingers == 4) && simulating == MIDDLEBUTTONDOWN)
             return NULL;
     } else if (type == kCGEventMouseMoved) {
         if (quickTabSwitching) {
             selectSafariTab();
-        } else if (MGMiddleButtonLifecycleIsHeld(&middleButtonLifecycle)) {
+        } else if (simulating == MIDDLEBUTTONDOWN) {
             CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, 2);
             CGEventSetType(event, kCGEventOtherMouseDragged);
         }
@@ -5036,7 +5000,7 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
                 return event;
             }
             return NULL;
-        } else if (MGMiddleButtonLifecycleIsHeld(&middleButtonLifecycle)) {
+        } else if (simulating == MIDDLEBUTTONDOWN) {
             CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, 2);
             CGEventSetType(event, kCGEventOtherMouseDragged);
         }
@@ -5082,8 +5046,7 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
             if (nType == mouseDown) {
                 return NULL;
             } else if ((nType == mouseDrag) &&
-                       ((!simulating && !MGMiddleButtonLifecycleIsHeld(&middleButtonLifecycle)) ||
-                        (MGMiddleButtonLifecycleHoldingDevice(&middleButtonLifecycle) == MAGICMOUSE)))
+                       (!simulating || (simulating == MIDDLEBUTTONDOWN && simulatingByDevice != TRACKPAD)))
             {
                 CGPoint tmp = CGEventGetLocation(event);
 

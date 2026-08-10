@@ -118,7 +118,7 @@ An area click fires only when the clicking finger is the only contact on the sur
 | `bottom-left-corner-click` | The bottom left corner |
 | `bottom-right-corner-click` | The bottom right corner |
 
-On both devices, a confidently recognized configured click replaces the native click: the bound action fires on release and the click does not reach the application. An ambiguous click, such as one with a resting palm, stays native and does not fire the bound action. A drag keeps its native events and does not fire the configured click action. A click bound to `middle-click` is different: it presses the middle button when you click, sends a middle-button drag if you move, and releases the button when you let go.
+On both devices, a confidently recognized configured click replaces the native click: the bound action fires on release and the click does not reach the application. An ambiguous click, such as one with a resting palm, stays native and does not fire the bound action. A drag keeps its native events and does not fire the configured click action.
 
 One continuous touch sequence can run one kind of configured gesture. A swipe or hold gesture may repeat while it owns the sequence, but a physical click, tap, or different gesture will not also run until every finger lifts.
 
@@ -221,7 +221,7 @@ Fn cannot be sent. It is a HID usage rather than an ordinary key event, so no ge
 
 `mission-control`, `app-expose`, `show-desktop`, and `app-switcher` ask macOS for those views directly rather than sending their keyboard shortcuts. An application cannot intercept them, and they work whether or not the matching shortcut is enabled in System Settings.
 
-`middle-click` posts a real middle-button event, which gives a Magic Mouse a button it does not otherwise have. A physical click bound to it holds the middle button down for as long as you hold the click, so moving during the click sends a middle-button drag and the button releases when you let go. A tap bound to it sends one press and release.
+`middle-click` posts a real middle-button event, which gives a Magic Mouse a button it does not otherwise have.
 
 ### URL bindings and app deep links
 
