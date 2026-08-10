@@ -325,6 +325,9 @@
         m = [@{
             @"middle-click": @"Middle Click",
             @"mission-control": @"Mission Control",
+            @"app-expose": @"Application Windows",
+            @"show-desktop": @"Show Desktop",
+            @"app-switcher": @"Application Switcher",
             @"next-tab": @"Next Tab",
             @"previous-tab": @"Previous Tab",
             @"new-tab": @"New Tab",

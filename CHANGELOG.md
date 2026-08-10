@@ -21,6 +21,7 @@
 - Add double-tap gesture names on both devices. The Magic Mouse has `one-finger-double-tap`, `two-finger-double-tap`, and `three-finger-double-tap`. The trackpad has `two-finger-double-tap` through `five-finger-double-tap`. The action runs on two taps of that finger count inside the Mac double-click interval. A double tap that is bound alone adds no delay to the single tap. To use a single tap and its own double tap together, set `defer = true` on the single tap. Triple taps are not available.
 - Add bare swipe names such as `three-finger-swipe`. A bare name binds every direction of that finger count to one action. A directional name such as `three-finger-swipe-left` stays more specific and wins for its own direction.
 - Accept the words of a gesture name in any order, on both devices. For example, `swipe-up-three-finger` loads as `three-finger-swipe-up`. The menu and reports show the canonical name.
+- Add the `app-expose`, `show-desktop`, and `app-switcher` actions, beside the existing `mission-control`. Each asks macOS for that view directly. No application can intercept them, and they work whether or not the matching keyboard shortcut is enabled.
 - Add an Open Docs item to the About menu. It opens the documentation site.
 - Show the build commit beside the version in About and in Copy Debug Info for a build that is not a tagged release.
 
@@ -36,6 +37,7 @@
 
 ### Fixed
 
+- Send keystrokes the way the keyboard does, so a binding for a macOS shortcut such as Mission Control reaches macOS. Before, an application could receive that chord first.
 - Lower the work Trickpad does while fingers rest on a device. Before, it asked macOS which application was in front many times per second. It now asks again only after the settings reload or a different application comes forward.
 - Stop a resting palm from blocking scrolling. Before, a palm touching the trackpad at scroll start counted toward a configured three-finger swipe, and normal scrolling stopped.
 

@@ -217,7 +217,9 @@ Fn cannot be sent. It is a HID usage rather than an ordinary key event, so no ge
 
 ### Actions
 
-`middle-click` `mission-control` `next-tab` `previous-tab` `new-tab` `close-tab` `reopen-tab` `maximize` `minimize`
+`middle-click` `mission-control` `app-expose` `show-desktop` `app-switcher` `next-tab` `previous-tab` `new-tab` `close-tab` `reopen-tab` `maximize` `minimize`
+
+`mission-control`, `app-expose`, `show-desktop`, and `app-switcher` ask macOS for those views directly rather than sending their keyboard shortcuts. An application cannot intercept them, and they work whether or not the matching shortcut is enabled in System Settings.
 
 `middle-click` posts a real middle-button event, which gives a Magic Mouse a button it does not otherwise have. A physical click bound to it holds the middle button down for as long as you hold the click, so moving during the click sends a middle-button drag and the button releases when you let go. A tap bound to it sends one press and release.
 

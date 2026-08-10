@@ -29,6 +29,7 @@ If the user wants ideas, find a few concrete options that fit their workflow:
 - Check an app's configurable shortcuts, automation hooks, documented URL schemes, deep links, and installed extensions.
 - Consider a Shortcut, command-line tool, or small local script only when an app does not expose a suitable shortcut or URL.
 - Prefer a built-in action, keyboard shortcut, or app deep link over a custom script.
+- `mission-control`, `app-expose`, `show-desktop`, and `app-switcher` ask macOS for those views directly instead of sending a keyboard shortcut, so no application can intercept them and they work whether or not the matching shortcut is enabled. Prefer them over the equivalent chord.
 - Consider existing bindings, comfort and repeatability, mnemonic fit, and how consequential the action is.
 - When a consequential action (submit, save, delete, send, or anything similar) is headed for a gesture that misfires more easily — taps especially — raise the risk with the user and suggest a hold gesture as the safer default, then respect their choice. What counts as consequential depends on the user, their apps, and their other bindings, so ask rather than refuse.
 - Use an application-specific binding when a gesture makes sense in one app or would conflict elsewhere.
