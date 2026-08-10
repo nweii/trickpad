@@ -154,7 +154,7 @@ The file is TOML, parsed by the vendored `tomlc17` parser pinned under `third_pa
 
 `[MOUSE."Application"]` and `[TRACKPAD."Application"]` limit the bindings below them to one application. The quoted selector may be its display name or exact bundle identifier. Application bindings override the device-global binding for the same gesture. `"off"` excludes a global binding in that application.
 
-An expanded binding is a TOML inline table: `gesture = { action = "escape", haptic = false }`. `action` is required globally and may be omitted in an application scope to inherit the global action. `defer` is valid only for tap gestures. `haptic` is valid only for trackpad bindings and overrides `haptic-feedback` for that binding.
+An expanded binding is a TOML inline table: `gesture = { action = "escape", haptic = false }`. `action` is required globally and may be omitted in an application scope to inherit the global action. `defer` is valid only for single-tap gestures. `haptic` is valid only for trackpad bindings and overrides `haptic-feedback` for that binding.
 
 `config-version` identifies the file format and is currently `3`. A missing version means the current format while the project is in alpha. An unsupported value rejects the entire reload so another format cannot be partially reinterpreted.
 
@@ -172,6 +172,8 @@ Reload validates substitution names, filters, braces, empty date formats, unmatc
 Use **URL binding** for the configuration capability. An **app deep link** is a URL binding that opens a specific place or action in an app. A **URL scheme** is the protocol name at the start, such as `raycast`, `obsidian`, or `things`. Do not use URI in user-facing copy; it adds no useful distinction here.
 
 Unknown schema keys are skipped and reported after TOML parsing succeeds.
+
+A `<count>-finger-double-tap` slug has no recognizer. The single tap's recognizer runs twice, and `dispatchCommand` opens one pending window per gesture through `MGDeferredGestureDispatcher`: a repeat inside `[NSEvent doubleClickInterval]` drops any pending single action and dispatches the double-tap binding instead. `Config doubleTapGestureName:` is the one map from a tap to its double, and the sequence dispatchers treat a tap whose only binding is its double tap as bound. A double tap bound alone delays nothing, since the window carries no pending action. A single tap that must coexist with its own double tap needs `defer = true`, the same option that already lets it coexist with a double tap macOS claims. Triple taps do not exist.
 
 `mouseGestureSlugs` and `trackpadGestureSlugs` hold the gesture vocabulary. One slug may bind several engine names that differ only by how far apart two fingers land. The two devices keep separate tables, enable flags, and vocabularies, so a binding on one does not reach the other.
 
