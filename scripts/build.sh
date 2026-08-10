@@ -3,8 +3,8 @@ set -euo pipefail
 
 APP_NAME="Trickpad"
 BUNDLE_ID="fyi.thirdwind.trickpad"
-APP_VERSION="0.8.1"
-APP_BUILD_NUMBER="16"
+APP_VERSION="0.9.0"
+APP_BUILD_NUMBER="17"
 MIN_MACOS_VERSION="11.0"
 ARCHITECTURES=(x86_64 arm64)
 ROOT="${0:A:h:h}"

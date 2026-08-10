@@ -23,7 +23,7 @@
 ### Changed
 
 - Play a binding's `sound` before its `say` words when a binding sets both. Before, the sound and the speech started together.
-- Make a configured trackpad `three-finger-click` or `four-finger-click` replace the native click. The bound action runs and the click does not reach the application. Before, the click and the action both occurred. A click that becomes a drag stays a native drag and does not run the action. This matches the Magic Mouse click gestures.
+- Make a configured trackpad `three-finger-click` or `four-finger-click` replace the native click. The bound action runs and the click does not reach the application. Before, the click and the action both occurred. Hold the click down and move to get a normal drag, and the action does not run. The Magic Mouse click gestures behave the same way.
 - Make the gesture list easier to read. Rows show at full strength, and the device names use the system section-header style.
 - Describe hold gestures without a side for the held finger. The list now reads "Hold a finger, tap to its right".
 - Remove the ellipsis from menu items that only open a page.
