@@ -114,6 +114,19 @@ MGSystemGestureClaim MGSystemGestureClaimForValue(NSNumber *value) {
     return [value integerValue] == 0 ? MGSystemGestureClaimFree : MGSystemGestureClaimTaken;
 }
 
+// A directional swipe slug's bare family slug, or nil for any other shape.
+// "four-finger-swipe-down" -> "four-finger-swipe".
+static NSString *MGSwipeFamilySlug(NSString *slug) {
+    for (NSString *direction in @[@"-left", @"-right", @"-up", @"-down"]) {
+        if ([slug hasSuffix:direction]) {
+            NSString *family = [slug substringToIndex:
+                [slug length] - [direction length]];
+            return [family hasSuffix:@"-swipe"] ? family : nil;
+        }
+    }
+    return nil;
+}
+
 NSArray *MGSystemGestureConflicts(NSSet *configuredMouseSlugs,
                                   NSSet *configuredTrackpadSlugs,
                                   NSNumber *(^valueForKey)(NSString *domains, NSString *key)) {
@@ -152,31 +165,45 @@ NSArray *MGSystemGestureConflicts(NSSet *configuredMouseSlugs,
         NSString *shared = entry.startsWithBoundTap
             ? [motion stringByAppendingString:@", which opens with your single tap"]
             : motion;
+        // %s decodes bytes in the legacy system encoding, which mangles any
+        // accented setting name, so the C strings convert through UTF-8.
         NSString *bullet = entry.setting != NULL
-            ? [NSString stringWithFormat:@"%s\n    macOS: %@", entry.setting, shared]
+            ? [NSString stringWithFormat:@"%@\n    macOS: %@",
+               [NSString stringWithUTF8String:entry.setting], shared]
             : [NSString stringWithFormat:@"macOS: %@", shared];
         NSMutableSet *seenSlugs = [NSMutableSet set];
         for (NSString *slug in [[NSString stringWithUTF8String:entry.slugs]
                                 componentsSeparatedByString:@","]) {
-            if (![configured containsObject:slug] || [seenSlugs containsObject:slug])
+            // A bare swipe family binds every direction of its family, so a
+            // claim on one direction concerns it too. Deriving the family name
+            // here keeps new directional slugs covered without a table edit.
+            NSString *matched = nil;
+            if ([configured containsObject:slug]) {
+                matched = slug;
+            } else {
+                NSString *family = MGSwipeFamilySlug(slug);
+                if (family != nil && [configured containsObject:family])
+                    matched = family;
+            }
+            if (matched == nil || [seenSlugs containsObject:matched])
                 continue;
-            [seenSlugs addObject:slug];
-            NSString *binding = [NSString stringWithFormat:@"%@ %@", device, slug];
+            [seenSlugs addObject:matched];
+            NSString *binding = [NSString stringWithFormat:@"%@ %@", device, matched];
             if ([bulletsByBinding objectForKey:binding] == nil) {
                 [order addObject:binding];
                 [bulletsByBinding setObject:[NSMutableArray array] forKey:binding];
             }
             [[bulletsByBinding objectForKey:binding] addObject:
-                [NSString stringWithFormat:@"  • %@\n    Change it in System Settings > %s",
-                 bullet, entry.location]];
+                [NSString stringWithFormat:@"  • %@\n    Change it in System Settings > %@",
+                 bullet, [NSString stringWithUTF8String:entry.location]]];
         }
     }
 
     NSMutableArray *warnings = [NSMutableArray array];
     for (NSString *binding in order) {
         [warnings addObject:[NSString stringWithFormat:
-            @"Your %@ binding shares its trigger with:\n%@", binding,
-            [[bulletsByBinding objectForKey:binding] componentsJoinedByString:@"\n"]]];
+            @"Your %@ binding shares its trigger with:\n\n%@", binding,
+            [[bulletsByBinding objectForKey:binding] componentsJoinedByString:@"\n\n"]]];
     }
     return warnings;
 }

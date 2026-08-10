@@ -59,6 +59,19 @@ int main(int argc, const char *argv[]) {
             ^NSNumber *(NSString *domains, NSString *key) { return nil; });
         require([unwritten count] == 0, @"an unwritten preference must not invent a warning");
 
+        // A bare swipe family binds every direction, so a claim on one
+        // direction concerns it even though the family slug itself never
+        // appears in the claim table.
+        NSSet *bareFourSwipe = [NSSet setWithObject:@"four-finger-swipe"];
+        NSArray *family = MGSystemGestureConflicts(none, bareFourSwipe,
+            ^NSNumber *(NSString *domains, NSString *key) {
+                return [key isEqualToString:@"TrackpadFourFingerVertSwipeGesture"] ? @2 : nil;
+            });
+        require([family count] == 1,
+                @"a claimed direction must warn a bare family binding, once");
+        require(warnsAbout(family, @"Trackpad four-finger-swipe"),
+                @"the family warning must name the slug that is actually bound");
+
         NSArray *unbound = MGSystemGestureConflicts(none, none,
             ^NSNumber *(NSString *domains, NSString *key) { return @3; });
         require([unbound count] == 0, @"a claimed motion nobody bound must not warn");
