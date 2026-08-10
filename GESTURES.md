@@ -95,6 +95,7 @@ An area click fires only when the clicking finger is the only contact on the sur
 | `top-right-corner-click` | The top right corner |
 | `bottom-left-corner-click` | The bottom left corner |
 | `bottom-right-corner-click` | The bottom right corner |
+
 On both devices, a confidently recognized configured click replaces the native click: the bound action fires on release and the click does not reach the application. An ambiguous click, such as one with a resting palm, stays native and does not fire the bound action. A drag keeps its native events and does not fire the configured click action.
 
 One continuous touch sequence can run one kind of configured gesture. A swipe or hold gesture may repeat while it owns the sequence, but a physical click, tap, or different gesture will not also run until every finger lifts.
