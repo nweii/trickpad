@@ -840,8 +840,14 @@ static NSArray *configFileLines(void) {
             [sub addItem:[NSMenuItem separatorItem]];
         any = YES;
 
-        NSMenuItem *header = [sub addItemWithTitle:pair[0] action:NULL keyEquivalent:@""];
-        [header setEnabled:NO];
+        // The system section-header style separates the device groups the way
+        // other menu bar apps do; older releases fall back to a disabled row.
+        if (@available(macOS 14.0, *)) {
+            [sub addItem:[NSMenuItem sectionHeaderWithTitle:pair[0]]];
+        } else {
+            NSMenuItem *header = [sub addItemWithTitle:pair[0] action:NULL keyEquivalent:@""];
+            [header setEnabled:NO];
+        }
         for (NSArray *line in lines) {
             NSMenuItem *row = [sub addItemWithTitle:line[0] action:NULL keyEquivalent:@""];
             [row setIndentationLevel:1];
