@@ -765,6 +765,63 @@ static NSString *commentForBindingLine(NSArray *configLines, NSString *device,
     return nil;
 }
 
+// Where a skipped line belongs in the Current Gestures list, from its problem
+// report ("line N:  text\n          reason"). Recorded line numbers can drift
+// from the file, so placement demands the file still show a matching
+// binding-shaped line at that number inside a device section; a problem that
+// fails the match stays behind the details row rather than landing on the
+// wrong group. Returns nil, or @{@"Device", @"Title", @"Reason"}.
+static NSDictionary *skippedLinePlacement(NSString *problem, NSArray *configLines) {
+    if (![problem hasPrefix:@"line "])
+        return nil;
+    NSRange newline = [problem rangeOfString:@"\n"];
+    NSRange colon = [problem rangeOfString:@":  "];
+    if (newline.location == NSNotFound || colon.location == NSNotFound ||
+        colon.location > newline.location)
+        return nil;
+    NSInteger lineNumber = [[problem substringWithRange:
+        NSMakeRange(5, colon.location - 5)] integerValue];
+    NSCharacterSet *whitespace = [NSCharacterSet whitespaceCharacterSet];
+    NSString *text = [[problem substringWithRange:
+        NSMakeRange(colon.location + 3, newline.location - colon.location - 3)]
+        stringByTrimmingCharactersInSet:whitespace];
+    NSString *reason = [[problem substringFromIndex:newline.location + 1]
+        stringByTrimmingCharactersInSet:whitespace];
+    if (lineNumber < 1 || (NSUInteger)lineNumber > [configLines count])
+        return nil;
+
+    // A binding line names a key before = or {; section headers and prose from
+    // the structural checks do not qualify.
+    if ([text hasPrefix:@"["])
+        return nil;
+    NSUInteger keyEnd = NSNotFound;
+    for (NSUInteger i = 0; i < [text length]; i++) {
+        unichar c = [text characterAtIndex:i];
+        if (c == '=' || c == '{' || [whitespace characterIsMember:c]) { keyEnd = i; break; }
+    }
+    if (keyEnd == NSNotFound || keyEnd == 0)
+        return nil;
+    NSString *key = [text substringToIndex:keyEnd];
+    NSString *fileLine = [configLines[(NSUInteger)lineNumber - 1]
+        stringByTrimmingCharactersInSet:whitespace];
+    if (![fileLine hasPrefix:key])
+        return nil;
+
+    for (NSInteger i = lineNumber - 1; i >= 0; i--) {
+        NSString *line = [configLines[(NSUInteger)i]
+            stringByTrimmingCharactersInSet:whitespace];
+        if (![line hasPrefix:@"["])
+            continue;
+        NSString *header = [[line substringFromIndex:1] uppercaseString];
+        if ([header hasPrefix:@"MOUSE"])
+            return @{@"Device": @"Mouse", @"Title": text, @"Reason": reason};
+        if ([header hasPrefix:@"TRACKPAD"])
+            return @{@"Device": @"Trackpad", @"Title": text, @"Reason": reason};
+        return nil;
+    }
+    return nil;
+}
+
 static NSArray *configFileLines(void) {
     NSString *path = [Config resolvedPath];
     NSString *text = path != nil
@@ -802,6 +859,25 @@ static NSArray *configFileLines(void) {
                          @[@"Trackpad", trackpadCommands ?: @[], [Config trackpadGestureSlugs]]];
     BOOL any = NO;
 
+    // Skipped binding lines join their device group dimmed so the gap shows
+    // where the user expects the binding. A rejected reload keeps the previous
+    // configuration's bindings on screen, so its problems, which describe the
+    // rejected file, stay behind the details row alone.
+    NSMutableDictionary *skippedByDevice = [NSMutableDictionary dictionary];
+    if (!lastConfigRejected) {
+        for (NSString *problem in lastConfigProblems) {
+            NSDictionary *placed = skippedLinePlacement(problem, configLines);
+            if (placed == nil)
+                continue;
+            NSMutableArray *rows = [skippedByDevice objectForKey:placed[@"Device"]];
+            if (rows == nil) {
+                rows = [NSMutableArray array];
+                [skippedByDevice setObject:rows forKey:placed[@"Device"]];
+            }
+            [rows addObject:placed];
+        }
+    }
+
     for (NSArray *pair in sources) {
         NSMutableArray *lines = [NSMutableArray array];
         for (NSDictionary *app in pair[1]) {
@@ -833,7 +909,8 @@ static NSArray *configFileLines(void) {
             }
             [lines addObjectsFromArray:appLines];
         }
-        if ([lines count] == 0)
+        NSArray *skipped = [skippedByDevice objectForKey:pair[0]] ?: @[];
+        if ([lines count] == 0 && [skipped count] == 0)
             continue;
 
         if (any)
@@ -886,6 +963,21 @@ static NSArray *configFileLines(void) {
                                         [[title string] length] - mainLength)];
                 [row setAttributedTitle:title];
             }
+        }
+        // The whole row dims where a note only dims its parenthetical, so a
+        // skipped line reads as absent rather than active; the reason it was
+        // skipped rides on the tooltip.
+        for (NSDictionary *placed in skipped) {
+            NSMenuItem *row = [sub addItemWithTitle:placed[@"Title"] action:NULL keyEquivalent:@""];
+            [row setIndentationLevel:1];
+            [row setToolTip:placed[@"Reason"]];
+            NSAttributedString *title = [[[NSAttributedString alloc]
+                initWithString:placed[@"Title"]
+                    attributes:@{
+                        NSFontAttributeName: [NSFont menuFontOfSize:0],
+                        NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
+                    }] autorelease];
+            [row setAttributedTitle:title];
         }
     }
 
