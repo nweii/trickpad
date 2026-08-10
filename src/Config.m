@@ -39,6 +39,9 @@
             @"two-finger-click": @[@"Two-Finger Click"],
             @"three-finger-click": @[@"Three-Finger Click"],
             @"front-right-tap": @[@"Right-Front Tap"],
+            @"one-finger-swipe": @[@"One-Swipe-Any"],
+            @"two-finger-swipe": @[@"Two-Swipe-Any"],
+            @"three-finger-swipe": @[@"Three-Swipe-Any"],
             @"one-finger-swipe-left": @[@"One-Swipe-Left"],
             @"one-finger-swipe-right": @[@"One-Swipe-Right"],
             @"two-finger-swipe-left": @[@"Two-Swipe-Left"],
@@ -93,6 +96,8 @@
             @"top-right-corner-click": @[@"Top-Right-Corner Click"],
             @"bottom-left-corner-click": @[@"Bottom-Left-Corner Click"],
             @"bottom-right-corner-click": @[@"Bottom-Right-Corner Click"],
+            @"three-finger-swipe": @[@"Three-Swipe-Any"],
+            @"four-finger-swipe": @[@"Four-Swipe-Any"],
             @"three-finger-swipe-left": @[@"Three-Swipe-Left"],
             @"three-finger-swipe-right": @[@"Three-Swipe-Right"],
             @"three-finger-swipe-up": @[@"Three-Swipe-Up"],
@@ -115,6 +120,30 @@
             return [engineNames firstObject];
     }
     return raw;
+}
+
+// A bare swipe slug binds every direction of its family through one engine
+// name. Dispatch tries the recognized direction first, then this family name,
+// so a directional binding overrides the bare one for its own direction.
++ (NSString *)directionlessGestureName:(NSString *)engineName {
+    static NSDictionary *families = nil;
+    if (families == nil) {
+        families = [@{
+            @"One-Swipe-Left": @"One-Swipe-Any",
+            @"One-Swipe-Right": @"One-Swipe-Any",
+            @"Two-Swipe-Left": @"Two-Swipe-Any",
+            @"Two-Swipe-Right": @"Two-Swipe-Any",
+            @"Three-Swipe-Left": @"Three-Swipe-Any",
+            @"Three-Swipe-Right": @"Three-Swipe-Any",
+            @"Three-Swipe-Up": @"Three-Swipe-Any",
+            @"Three-Swipe-Down": @"Three-Swipe-Any",
+            @"Four-Swipe-Left": @"Four-Swipe-Any",
+            @"Four-Swipe-Right": @"Four-Swipe-Any",
+            @"Four-Swipe-Up": @"Four-Swipe-Any",
+            @"Four-Swipe-Down": @"Four-Swipe-Any",
+        } retain];
+    }
+    return [families objectForKey:engineName];
 }
 
 // Built-in engine commands, keyed by the slug the configuration uses. The value
@@ -192,6 +221,10 @@
             @"Bottom-Left-Corner Click": @"Click bottom left corner",
             @"Bottom-Right-Corner Click": @"Click bottom right corner",
             @"Right-Front Tap": @"Tap the front right of the mouse",
+            @"One-Swipe-Any": @"Swipe with one finger, any direction",
+            @"Two-Swipe-Any": @"Swipe with two fingers, any direction",
+            @"Three-Swipe-Any": @"Swipe with three fingers, any direction",
+            @"Four-Swipe-Any": @"Swipe with four fingers, any direction",
             @"One-Swipe-Left": @"Swipe left with one finger",
             @"One-Swipe-Right": @"Swipe right with one finger",
             @"Two-Swipe-Left": @"Swipe left with two fingers",

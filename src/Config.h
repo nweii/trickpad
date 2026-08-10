@@ -46,6 +46,10 @@
 // can be presented as one configured gesture.
 + (NSString *)canonicalGestureName:(NSString *)raw inSlugs:(NSDictionary *)slugs;
 
+// The directionless family name a directional swipe falls back to at dispatch
+// when no binding names its own direction. Returns nil for any other gesture.
++ (NSString *)directionlessGestureName:(NSString *)engineName;
+
 // Every action slug the configuration accepts, mapped to the engine command
 // string it dispatches.
 + (NSDictionary *)actionNames;

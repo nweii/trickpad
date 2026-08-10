@@ -490,6 +490,50 @@ int main(void) {
             fail(@"app property override preserves a global exclusion",
                  @"disabled binding", g ?: @"missing");
 
+        // A bare swipe slug loads under its family engine name beside any
+        // directional binding, so dispatch can prefer the direction and fall
+        // back to the family.
+        s = parse(@"[trackpad]\nthree-finger-swipe = escape\n"
+                  @"three-finger-swipe-left = tab\n"
+                  @"[mouse]\ntwo-finger-swipe = escape\n");
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Swipe-Any");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 53)
+            fail(@"bare swipe slug binds the family name", @53, [g objectForKey:@"KeyCode"]);
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Swipe-Left");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 48)
+            fail(@"directional swipe binding stays its own entry", @48, [g objectForKey:@"KeyCode"]);
+        if (bindingFor(s, @"TrackpadCommands", @"Three-Swipe-Right") != nil)
+            fail(@"bare swipe slug does not expand into directional names",
+                 @"no directional entry", @"an entry");
+        if (bindingFor(s, @"MagicMouseCommands", @"Two-Swipe-Any") == nil)
+            fail(@"mouse bare swipe slug binds its family name", @"a binding", @"missing");
+
+        // Dispatch resolves the recognized direction first and consults this
+        // mapping only when no binding names it. Every directional swipe in
+        // the vocabulary must reach a family name its own device also exposes.
+        if (![[Config directionlessGestureName:@"One-Swipe-Left"] isEqualToString:@"One-Swipe-Any"] ||
+            ![[Config directionlessGestureName:@"Two-Swipe-Right"] isEqualToString:@"Two-Swipe-Any"] ||
+            ![[Config directionlessGestureName:@"Three-Swipe-Up"] isEqualToString:@"Three-Swipe-Any"] ||
+            ![[Config directionlessGestureName:@"Four-Swipe-Down"] isEqualToString:@"Four-Swipe-Any"])
+            fail(@"directional swipes map to their family name",
+                 @"the -Swipe-Any name for the finger count", @"a different mapping");
+        if ([Config directionlessGestureName:@"Three-Swipe-Any"] != nil ||
+            [Config directionlessGestureName:@"Top-Left-Corner Click"] != nil ||
+            [Config directionlessGestureName:@"Two-Finger Tap"] != nil)
+            fail(@"family fallback applies only to directional swipes",
+                 @"nil", @"a family name");
+        for (NSDictionary *slugs in @[[Config mouseGestureSlugs], [Config trackpadGestureSlugs]]) {
+            NSMutableSet *deviceEngineNames = [NSMutableSet set];
+            for (NSString *slug in slugs)
+                [deviceEngineNames addObjectsFromArray:[slugs objectForKey:slug]];
+            for (NSString *engineName in deviceEngineNames) {
+                NSString *family = [Config directionlessGestureName:engineName];
+                if (family != nil && ![deviceEngineNames containsObject:family])
+                    fail([@"family fallback is bindable for " stringByAppendingString:engineName],
+                         family, @"absent from the device vocabulary");
+            }
+        }
+
         s = parse(@"[trackpad]\nthree-finger-tap { action = \"escape\", defer = true }\n"
                   @"[trackpad \"Safari\"]\nthree-finger-tap { defer = false }\n");
         g = bindingForApplication(s, @"TrackpadCommands", @"Safari", @"Three-Finger Tap");
@@ -901,9 +945,17 @@ int main(void) {
                             [engine rangeOfString:[NSString stringWithFormat:@"@\"%@\"", engineName]].location != NSNotFound &&
                             [engine rangeOfString:@"pendingTrackpadAreaClickGesture"].location != NSNotFound &&
                             [engine rangeOfString:@"dispatchCommand(gesture, device)"].location != NSNotFound;
+                        // Family names have no recognizer of their own: the
+                        // directional recognizer dispatches, and the binding
+                        // lookup falls back to the family name it maps to.
+                        BOOL swipeFamily = [engineName hasSuffix:@"-Swipe-Any"] &&
+                            [Config directionlessGestureName:
+                                [engineName stringByReplacingOccurrencesOfString:@"-Any"
+                                                                      withString:@"-Left"]] != nil &&
+                            [engine rangeOfString:@"directionlessGestureName"].location != NSNotFound;
                         BOOL dispatched = [engine rangeOfString:exclusiveDispatch].location != NSNotFound ||
                             [engine rangeOfString:exclusiveTapDispatch].location != NSNotFound;
-                        if (!dispatched && !physicalClick && !areaClick)
+                        if (!dispatched && !physicalClick && !areaClick && !swipeFamily)
                             fail([NSString stringWithFormat:@"%@ %@ has an exclusive recognizer dispatch", constant, slug],
                                  [NSString stringWithFormat:@"%@ or %@", exclusiveDispatch, exclusiveTapDispatch], @"missing");
                     }
@@ -1031,6 +1083,18 @@ int main(void) {
                 [engine rangeOfString:@"resolvedBindingForGesture"] .location == NSNotFound)
                 fail(@"app scopes resolve by display name or bundle identifier",
                      @"shared application binding resolver", @"missing");
+
+            // The family fallback runs only when no entry names the direction,
+            // so an explicit directional "off" keeps excluding the direction.
+            NSString *resolver = section(engine,
+                @"static NSDictionary *bindingForGestureWithMatch",
+                @"static NSDictionary *bindingForGesture(");
+            for (NSString *required in @[@"directionlessGestureName:gesture",
+                                         @"binding != nil || declared"]) {
+                if ([resolver rangeOfString:required].location == NSNotFound)
+                    fail(@"binding lookup falls back to the swipe family name",
+                         required, @"missing");
+            }
         }
 
         if (failures == 0) {

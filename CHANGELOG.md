@@ -16,6 +16,7 @@
 
 ### Added
 
+- Add bare swipe names such as `three-finger-swipe`. A bare name binds every direction of that finger count to one action. A directional name such as `three-finger-swipe-left` stays more specific and wins for its own direction.
 - Add trackpad area clicks. A physical click with one finger in a named region of the surface runs a bound action. The regions are the four edges, their halves and thirds, and the four corners. A click in a bound region replaces the native click. A click in a region with no binding stays a normal click. When bound regions overlap, the most specific bound region wins. Regions are narrow by default. The `trackpad-edge-gesture-depth` setting adjusts how far they reach in from the edge.
 - Add an Open Docs item to the About menu. It opens the documentation site.
 - Show the build commit beside the version in About and in Copy Debug Info for a build that is not a tagged release.

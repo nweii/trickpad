@@ -751,17 +751,22 @@ static NSArray *applicationCandidatesForGestureLookup(void) {
     return applications;
 }
 
+// declared reports whether any configuration entry named the gesture at all,
+// so a caller can tell an explicit "off" apart from an absent binding.
 static NSDictionary *resolvedBindingForGesture(NSString *gesture,
                                                NSDictionary *commandMap,
                                                NSArray *applications,
                                                BOOL includeUnassigned,
-                                               NSString **matchedApplication) {
+                                               NSString **matchedApplication,
+                                               BOOL *declared) {
     for (NSString *application in applications) {
         NSDictionary *applicationBindings = [commandMap objectForKey:application];
         NSDictionary *binding = [applicationBindings objectForKey:gesture];
         if (binding != nil) {
             if (matchedApplication != NULL)
                 *matchedApplication = application;
+            if (declared != NULL)
+                *declared = YES;
             return [[binding objectForKey:@"Enable"] boolValue] ? binding : nil;
         }
         if (includeUnassigned) {
@@ -769,6 +774,8 @@ static NSDictionary *resolvedBindingForGesture(NSString *gesture,
             if (binding != nil) {
                 if (matchedApplication != NULL)
                     *matchedApplication = application;
+                if (declared != NULL)
+                    *declared = YES;
                 return [[binding objectForKey:@"Enable"] boolValue] ? binding : nil;
             }
         }
@@ -777,6 +784,8 @@ static NSDictionary *resolvedBindingForGesture(NSString *gesture,
     NSDictionary *binding = [[commandMap objectForKey:@"All Applications"] objectForKey:gesture];
     if (binding != nil && matchedApplication != NULL)
         *matchedApplication = @"All Applications";
+    if (binding != nil && declared != NULL)
+        *declared = YES;
     return binding && [[binding objectForKey:@"Enable"] boolValue] ? binding : nil;
 }
 
@@ -972,13 +981,24 @@ static BOOL isMouseOnEmptySpace() {
     return ret;
 }
 
+// The most specific bound name wins: a directional swipe binding, wherever it
+// is scoped, takes its direction before the bare family binding is consulted.
+// An explicit "off" on the directional name also stops the family fallback.
 static NSDictionary *bindingForGestureWithMatch(NSString *gesture, int device,
                                                 NSString **matchedApplication) {
     NSArray *applications = applicationCandidatesForGestureLookup();
     NSDictionary *commandMap = device == TRACKPAD ? trackpadMap :
         device == MAGICMOUSE ? magicMouseMap : recognitionMap;
-    return resolvedBindingForGesture(gesture, commandMap, applications, NO,
-                                     matchedApplication);
+    BOOL declared = NO;
+    NSDictionary *binding = resolvedBindingForGesture(gesture, commandMap, applications, NO,
+                                                      matchedApplication, &declared);
+    if (binding != nil || declared)
+        return binding;
+    NSString *family = [Config directionlessGestureName:gesture];
+    if (family == nil)
+        return nil;
+    return resolvedBindingForGesture(family, commandMap, applications, NO,
+                                     matchedApplication, NULL);
 }
 
 static NSDictionary *bindingForGesture(NSString *gesture, int device) {

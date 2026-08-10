@@ -18,14 +18,19 @@ Gestures that hold one finger still are named by where the fingers sit, not by w
 | `front-right-tap` | Tap the front right of the surface |
 | `two-finger-click` | Experimental: physically click with two fingers touching; replaces the normal click |
 | `three-finger-click` | Experimental: physically click with three fingers touching; replaces the normal click |
+| `one-finger-swipe` | Swipe with one finger, either direction |
 | `one-finger-swipe-left` | Swipe left with one finger |
 | `one-finger-swipe-right` | Swipe right with one finger |
+| `two-finger-swipe` | Swipe with two fingers, either direction |
 | `two-finger-swipe-left` | Swipe left with two fingers |
 | `two-finger-swipe-right` | Swipe right with two fingers |
+| `three-finger-swipe` | Swipe with three fingers, any direction |
 | `three-finger-swipe-left` | Swipe left with three fingers |
 | `three-finger-swipe-right` | Swipe right with three fingers |
 | `three-finger-swipe-up` | Swipe up with three fingers |
 | `three-finger-swipe-down` | Swipe down with three fingers |
+
+A bare swipe name such as `three-finger-swipe` binds every direction of that finger count to one action. A directional name is more specific and wins for its own direction. An `"off"` on either name works the same way in an application table: it excludes one direction or the whole family there.
 
 Physical clicks ignore narrow contacts at either side and palm contacts at the rear. Counted fingertips must form one connected cluster; a recognized thumb does not count toward the gesture. They are disabled by default while recognition is calibrated across natural grips and hardware. Set `experimental-mouse-click-gestures = true` under `[GENERAL]` to opt in.
 
@@ -44,16 +49,20 @@ The trackpad recognizes a hold-and-slide in one direction only, so it has one sl
 | `five-finger-tap` | Tap with five fingers together |
 | `three-finger-click` | Physically click with three fingers touching |
 | `four-finger-click` | Physically click with four fingers touching |
+| `three-finger-swipe` | Swipe with three fingers, any direction |
 | `three-finger-swipe-left` | Swipe left with three fingers |
 | `three-finger-swipe-right` | Swipe right with three fingers |
 | `three-finger-swipe-up` | Swipe up with three fingers |
 | `three-finger-swipe-down` | Swipe down with three fingers |
+| `four-finger-swipe` | Swipe with four fingers, any direction |
 | `four-finger-swipe-left` | Swipe left with four fingers |
 | `four-finger-swipe-right` | Swipe right with four fingers |
 | `four-finger-swipe-up` | Swipe up with four fingers |
 | `four-finger-swipe-down` | Swipe down with four fingers |
 | `index-to-pinky` | Brush your fingers across in sequence, index first |
 | `pinky-to-index` | Brush your fingers across in sequence, pinky first |
+
+Bare swipe names bind every direction of a finger count, and directional names win for their own direction, as in the Magic Mouse table above.
 
 ### Area clicks
 
