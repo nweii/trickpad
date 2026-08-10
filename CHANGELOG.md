@@ -16,21 +16,21 @@
 
 ### Added
 
+- Add trackpad area clicks. A physical click with one finger in a named region of the surface runs a bound action. The regions are the four edges, their halves and thirds, and the four corners. A click in a bound region replaces the native click. A click in a region with no binding stays a normal click. When bound regions overlap, the most specific bound region wins. Regions are narrow by default. The `trackpad-edge-gesture-depth` setting adjusts how far they reach in from the edge.
+- Support clicking in any edge or corner with `edge-click` and `corner-click`, without naming an edge section or a corner. A named region stays more specific and wins for its own spot.
 - Add double-tap gesture names on both devices. The Magic Mouse has `one-finger-double-tap`, `two-finger-double-tap`, and `three-finger-double-tap`. The trackpad has `two-finger-double-tap` through `five-finger-double-tap`. The action runs on two taps of that finger count inside the Mac double-click interval. A double tap that is bound alone adds no delay to the single tap. To use a single tap and its own double tap together, set `defer = true` on the single tap. Triple taps are not available.
 - Add bare swipe names such as `three-finger-swipe`. A bare name binds every direction of that finger count to one action. A directional name such as `three-finger-swipe-left` stays more specific and wins for its own direction.
-- Add the bare `corner-click` and `edge-click` names. `corner-click` binds all four corners to one action. `edge-click` binds a click anywhere in any edge band. A named region stays more specific and wins for its own spot.
-- Add trackpad area clicks. A physical click with one finger in a named region of the surface runs a bound action. The regions are the four edges, their halves and thirds, and the four corners. A click in a bound region replaces the native click. A click in a region with no binding stays a normal click. When bound regions overlap, the most specific bound region wins. Regions are narrow by default. The `trackpad-edge-gesture-depth` setting adjusts how far they reach in from the edge.
 - Accept the words of a gesture name in any order, on both devices. For example, `swipe-up-three-finger` loads as `three-finger-swipe-up`. The menu and reports show the canonical name.
 - Add an Open Docs item to the About menu. It opens the documentation site.
 - Show the build commit beside the version in About and in Copy Debug Info for a build that is not a tagged release.
 
 ### Changed
 
+- Make trackpad multi-finger click gestures consume the native click, so the click and the action do not both fire. This matches the Magic Mouse click gestures.
+- Give a trackpad physical click that is bound to `middle-click` a full middle-button press. The button goes down with the click and comes up when the click ends. Movement during the click sends a middle-button drag. Before, the click sent only a quick middle click. A tap that is bound to `middle-click` still sends a quick middle click.
 - Make the Magic Mouse `two-finger-click` and `three-finger-click` gestures standard. They load without the `experimental-mouse-click-gestures` setting. The setting is no longer needed. A configuration file that sets it keeps loading.
 - Play a binding's `sound` before its `say` words when a binding sets both. Before, the sound and the speech started together.
-- Make a configured trackpad `three-finger-click` or `four-finger-click` replace the native click. The bound action runs and the click does not reach the application. Before, the click and the action both occurred. Hold the click down and move to get a normal drag, and the action does not run. The Magic Mouse click gestures behave the same way.
-- Give a trackpad physical click that is bound to `middle-click` a full middle-button press. The button goes down with the click and comes up when the click ends. Movement during the click sends a middle-button drag. Before, the click sent only a quick middle click. A tap that is bound to `middle-click` still sends a quick middle click.
-- Make the gesture list easier to read. Rows show at full strength, and the device names use the system section-header style.
+- Make the gesture list easier to scan. Rows show at full strength, and the device names use the system section-header style.
 - Describe hold gestures without a side for the held finger. The list now reads "Hold a finger, tap to its right".
 - Remove the ellipsis from menu items that only open a page.
 
