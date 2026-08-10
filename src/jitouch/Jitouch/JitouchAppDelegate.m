@@ -917,14 +917,17 @@ static NSArray *configFileLines(void) {
             [sub addItem:[NSMenuItem separatorItem]];
         any = YES;
 
-        // The system section-header style separates the device groups the way
-        // other menu bar apps do; older releases fall back to a disabled row.
-        if (@available(macOS 14.0, *)) {
-            [sub addItem:[NSMenuItem sectionHeaderWithTitle:pair[0]]];
-        } else {
-            NSMenuItem *header = [sub addItemWithTitle:pair[0] action:NULL keyEquivalent:@""];
-            [header setEnabled:NO];
-        }
+        // Device groups head their sections in bold at full label strength,
+        // inert like the rows below; the system section-header style renders
+        // smaller and faded than this list wants.
+        NSMenuItem *header = [sub addItemWithTitle:pair[0] action:NULL keyEquivalent:@""];
+        [header setEnabled:NO];
+        [header setAttributedTitle:[[[NSAttributedString alloc]
+            initWithString:pair[0]
+                attributes:@{
+                    NSFontAttributeName: [NSFont boldSystemFontOfSize:[NSFont systemFontSize]],
+                    NSForegroundColorAttributeName: [NSColor labelColor],
+                }] autorelease]];
         for (NSArray *line in lines) {
             NSMenuItem *row = [sub addItemWithTitle:line[0] action:NULL keyEquivalent:@""];
             [row setIndentationLevel:1];
@@ -1880,6 +1883,14 @@ static NSArray *agentCandidates(void) {
             ? [NSString stringWithFormat:@"Version %@ (%@)", version ?: @"unknown", stamp]
             : [NSString stringWithFormat:@"Version %@", version ?: @"unknown"]
                                                   action:NULL keyEquivalent:@""];
+    // Bold marks the row as identity rather than action; the secondary color
+    // keeps it quieter than the commands around it.
+    [versionItem setAttributedTitle:[[[NSAttributedString alloc]
+        initWithString:[versionItem title]
+            attributes:@{
+                NSFontAttributeName: [NSFont boldSystemFontOfSize:[NSFont systemFontSize]],
+                NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
+            }] autorelease]];
     [versionItem setEnabled:NO];
     // No ellipsis on rows that only open a page: the mark means the command
     // needs further input before it completes, not that it leaves the app.
