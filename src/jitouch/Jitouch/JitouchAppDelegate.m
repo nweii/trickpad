@@ -19,6 +19,8 @@
 #import "KeyUtility.h"
 #import "TraceRecorder.h"
 #import "TraceSessionModel.h"
+
+static NSMenuItem *MGMenuSectionHeader(NSString *title);
 #include <pwd.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -917,17 +919,7 @@ static NSArray *configFileLines(void) {
             [sub addItem:[NSMenuItem separatorItem]];
         any = YES;
 
-        // Device groups head their sections in bold at full label strength,
-        // inert like the rows below; the system section-header style renders
-        // smaller and faded than this list wants.
-        NSMenuItem *header = [sub addItemWithTitle:pair[0] action:NULL keyEquivalent:@""];
-        [header setEnabled:NO];
-        [header setAttributedTitle:[[[NSAttributedString alloc]
-            initWithString:pair[0]
-                attributes:@{
-                    NSFontAttributeName: [NSFont boldSystemFontOfSize:[NSFont systemFontSize]],
-                    NSForegroundColorAttributeName: [NSColor labelColor],
-                }] autorelease]];
+        [sub addItem:MGMenuSectionHeader(pair[0])];
         for (NSArray *line in lines) {
             NSMenuItem *row = [sub addItemWithTitle:line[0] action:NULL keyEquivalent:@""];
             [row setIndentationLevel:1];
@@ -1826,6 +1818,24 @@ static NSArray *agentCandidates(void) {
     }
 }
 
+// The one heading style for inert label rows in these menus: the system menu
+// section header, with a small bold faded row standing in before macOS 14.
+static NSMenuItem *MGMenuSectionHeader(NSString *title) {
+    if (@available(macOS 14.0, *))
+        return [NSMenuItem sectionHeaderWithTitle:title];
+    NSMenuItem *header = [[[NSMenuItem alloc] initWithTitle:title
+                                                     action:NULL
+                                              keyEquivalent:@""] autorelease];
+    [header setEnabled:NO];
+    [header setAttributedTitle:[[[NSAttributedString alloc]
+        initWithString:title
+            attributes:@{
+                NSFontAttributeName: [NSFont boldSystemFontOfSize:[NSFont smallSystemFontSize]],
+                NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
+            }] autorelease]];
+    return header;
+}
+
 - (void)showIcon {
     // The menu outlives this method and is read back by tag on every refresh,
     // so it is owned here rather than left to the status item.
@@ -1878,19 +1888,11 @@ static NSArray *agentCandidates(void) {
     // An unreleased build reports the last shipped version number, so the
     // build stamp names the commit it actually came from.
     NSString *stamp = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"TrickpadBuildStamp"];
-    NSMenuItem *versionItem = [aboutMenu addItemWithTitle:
-        stamp != nil
-            ? [NSString stringWithFormat:@"Version %@ (%@)", version ?: @"unknown", stamp]
-            : [NSString stringWithFormat:@"Version %@", version ?: @"unknown"]
-                                                  action:NULL keyEquivalent:@""];
-    // Bold marks the row as identity rather than action; the secondary color
-    // keeps it quieter than the commands around it.
-    [versionItem setAttributedTitle:[[[NSAttributedString alloc]
-        initWithString:[versionItem title]
-            attributes:@{
-                NSFontAttributeName: [NSFont boldSystemFontOfSize:[NSFont systemFontSize]],
-                NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
-            }] autorelease]];
+    NSString *versionTitle = stamp != nil
+        ? [NSString stringWithFormat:@"Version %@ (%@)", version ?: @"unknown", stamp]
+        : [NSString stringWithFormat:@"Version %@", version ?: @"unknown"];
+    NSMenuItem *versionItem = MGMenuSectionHeader(versionTitle);
+    [aboutMenu addItem:versionItem];
     [versionItem setEnabled:NO];
     // No ellipsis on rows that only open a page: the mark means the command
     // needs further input before it completes, not that it leaves the app.
