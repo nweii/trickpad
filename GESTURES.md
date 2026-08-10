@@ -15,9 +15,9 @@ Gestures that hold one finger still are named by where the fingers sit, not by w
 | `one-finger-tap` | Tap with one finger |
 | `two-finger-tap` | Tap with two fingers |
 | `three-finger-tap` | Tap with three fingers |
+| `front-right-tap` | Tap the front right of the surface |
 | `two-finger-click` | Experimental: physically click with two fingers touching; replaces the normal click |
 | `three-finger-click` | Experimental: physically click with three fingers touching; replaces the normal click |
-| `front-right-tap` | Tap the front right of the surface |
 | `one-finger-swipe-left` | Swipe left with one finger |
 | `one-finger-swipe-right` | Swipe right with one finger |
 | `two-finger-swipe-left` | Swipe left with two fingers |
