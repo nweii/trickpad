@@ -111,12 +111,13 @@ static void languageChanged(CFNotificationCenterRef center, void *observer, CFSt
     }
 
     for (size_t i = 0; i < count; i++) {
-        // Posted at the HID tap, where a physical key enters. macOS resolves
-        // its own system shortcuts, Mission Control and App Exposé among them,
-        // above the session tap, so a chord injected there never reaches them
-        // and lands in the focused application instead. The app taps no
-        // keyboard events, so nothing here feeds back into recognition.
-        CGEventPost(kCGHIDEventTap, events[i]);
+        // Posted at the session tap. The HID tap looks more like a physical
+        // key and does reach the macOS shortcut handler, but it defeats the
+        // side-specific modifier bits this sequence sets, so a binding such as
+        // right-Control plus Space stops reaching an application that listens
+        // for that exact chord. A binding for a macOS view uses its built-in
+        // action instead, which asks macOS directly and needs no keystroke.
+        CGEventPost(kCGSessionEventTap, events[i]);
         CFRelease(events[i]);
     }
     if (source) CFRelease(source);
