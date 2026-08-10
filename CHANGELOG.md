@@ -30,6 +30,7 @@
 - Make trackpad multi-finger click gestures consume the native click, so the click and the action do not both fire. This matches the Magic Mouse click gestures.
 - Make the Magic Mouse `two-finger-click` and `three-finger-click` gestures standard. They load without the `experimental-mouse-click-gestures` setting. The setting is no longer needed. A configuration file that sets it keeps loading.
 - Play a binding's `sound` before its `say` words when a binding sets both. Before, the sound and the speech started together.
+- Strengthen the haptic tap a trackpad gesture makes. It uses the firmest pattern macOS offers, which is easier to feel than the one before it.
 - Make the gesture list easier to scan. Rows show at full strength, and the device names use the system section-header style.
 - Describe hold gestures without a side for the held finger. The list now reads "Hold a finger, tap to its right".
 - Remove the ellipsis from menu items that only open a page.

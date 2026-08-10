@@ -1107,8 +1107,11 @@ static void requestHapticFeedbackForBinding(NSDictionary *binding, int device) {
     if (!(enabled && device == TRACKPAD))
         return;
     dispatch_async(dispatch_get_main_queue(), ^{
+        // The level-change pattern is the firmest of the three AppKit offers.
+        // Generic reads as too light to notice against a gesture the hand has
+        // just finished making.
         [[NSHapticFeedbackManager defaultPerformer]
-            performFeedbackPattern:NSHapticFeedbackPatternGeneric
+            performFeedbackPattern:NSHapticFeedbackPatternLevelChange
                     performanceTime:NSHapticFeedbackPerformanceTimeNow];
     });
 }

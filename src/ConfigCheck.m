@@ -1323,8 +1323,8 @@ int main(void) {
 
             if ([engine rangeOfString:@"bindingPreference != nil"] .location == NSNotFound ||
                 [engine rangeOfString:@"enabled && device == TRACKPAD"] .location == NSNotFound ||
-                [engine rangeOfString:@"NSHapticFeedbackPatternGeneric"] .location == NSNotFound)
-                fail(@"enabled trackpad gestures request generic haptic feedback",
+                [engine rangeOfString:@"NSHapticFeedbackPatternLevelChange"] .location == NSNotFound)
+                fail(@"enabled trackpad gestures request the firm haptic pattern",
                      @"trackpad-only haptic integration", @"missing");
 
             if ([engine rangeOfString:@"copyBundleIdentifierOfAxui"] .location == NSNotFound ||
