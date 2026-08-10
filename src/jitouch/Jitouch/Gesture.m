@@ -24,6 +24,7 @@
 #import "GestureWindow.h"
 #import "SizeHistory.h"
 #import "KeyUtility.h"
+#import "ApplicationScopeCache.h"
 #import "Config.h"
 #import "ContactTapRecognizer.h"
 #import "DeferredGestureDispatcher.h"
@@ -723,7 +724,7 @@ static NSString *copyBundleIdentifierOfAxui(CFTypeRef ref) {
     return [[application bundleIdentifier] copy];
 }
 
-static NSArray *applicationCandidatesForGestureLookup(void) {
+static NSArray *resolveApplicationCandidates(void) {
     NSMutableArray *applications = [NSMutableArray array];
 
     CFTypeRef underMouseAxui = axuiUnderMouse();
@@ -749,6 +750,12 @@ static NSArray *applicationCandidatesForGestureLookup(void) {
     CFSafeRelease(frontmostWindow);
 
     return applications;
+}
+
+// Every binding lookup goes through the cache, since a touch frame asks for
+// this several times over and the resolution above is all Accessibility calls.
+static NSArray *applicationCandidatesForGestureLookup(void) {
+    return MGApplicationScopeCacheCandidates();
 }
 
 // declared reports whether any configuration entry named the gesture at all,
@@ -5149,6 +5156,8 @@ CFMutableArrayRef deviceList;
         me = self;
 
         systemWideElement = AXUIElementCreateSystemWide();
+
+        MGApplicationScopeCacheSetResolver(resolveApplicationCandidates);
 
         // Character Recognizer
         initNormPdf();

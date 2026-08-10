@@ -7,6 +7,7 @@
 //
 
 #import "Settings.h"
+#import "ApplicationScopeCache.h"
 #import "Config.h"
 #import <CoreFoundation/CFPreferences.h>
 #import <CoreFoundation/CoreFoundation.h>
@@ -287,6 +288,10 @@ static int notSynchronize;
     [recognitionMap release];
     recognitionMap = [[NSMutableDictionary alloc] init];
     optimize(recognitionCommands, recognitionMap);
+
+    // A new file can scope bindings to applications the previous one never
+    // named, so the resolved candidates are asked for again.
+    MGApplicationScopeCacheInvalidate();
 }
 
 + (void)loadSettings {

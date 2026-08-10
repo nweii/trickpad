@@ -10,6 +10,7 @@
 #import "JitouchAppDelegate.h"
 #import "Settings.h"
 #import "Gesture.h"
+#import "ApplicationScopeCache.h"
 #import "CursorWindow.h"
 #import <Carbon/Carbon.h>
 #import <CoreFoundation/CFPreferences.h>
@@ -2188,6 +2189,10 @@ void languageChanged(CFNotificationCenterRef center, void *observer, CFStringRef
                                                           object: @"fyi.thirdwind.trickpad.PrefpaneTarget"];
 
     [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self selector:@selector(wokeUp:) name:NSWorkspaceDidWakeNotification object: NULL];
+
+    // An application-scoped binding must take effect the moment its
+    // application comes forward, so activation drops the cached candidates.
+    MGApplicationScopeCacheObserveApplicationActivation();
 
     //CFNotificationCenterAddObserver(CFNotificationCenterGetDistributedCenter(), self, languageChanged, kTISNotifySelectedKeyboardInputSourceChanged, NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
 }

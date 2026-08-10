@@ -118,6 +118,7 @@ clang \
   -framework ScriptingBridge \
   -framework MultitouchSupport \
   "$ROOT/src/main.m" \
+  "$ROOT/src/ApplicationScopeCache.m" \
   "$ROOT/src/Config.m" \
   "$ROOT/src/ContactTapRecognizer.m" \
   "$ROOT/src/DeferredGestureDispatcher.m" \
