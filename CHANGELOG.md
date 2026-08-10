@@ -39,6 +39,7 @@
 
 - Fix the `mission-control` action, which did nothing. The call it makes to macOS needed a second value that a macOS release added. The new `app-expose`, `show-desktop`, and `app-switcher` actions use the corrected call.
 - Lower the work Trickpad does while fingers rest on a device. Before, it asked macOS which application was in front many times per second. It now asks again only after the settings reload or a different application comes forward.
+- Stop a four-finger trackpad swipe and a two-finger Magic Mouse swipe from also scrolling. Before, only three-finger swipes held back the scroll their fingers would otherwise make.
 - Stop a resting palm from blocking scrolling. Before, a palm touching the trackpad at scroll start counted toward a configured three-finger swipe, and normal scrolling stopped.
 
 ## 0.8.1

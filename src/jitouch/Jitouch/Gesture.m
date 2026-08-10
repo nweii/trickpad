@@ -1281,11 +1281,39 @@ static BOOL dispatchExclusivePalmSafeCommand(NSString *gesture, int device, NSUI
     return claimed;
 }
 
+// A swipe family overlaps the device's own scrolling once it uses at least as
+// many fingers as scrolling does, so every count at or above that one arms
+// suppression rather than three alone. A directional lookup also answers for a
+// bare family binding, which resolves through the same call.
+static BOOL hasSwipeBindingForCount(NSString *countWord, int device) {
+    for (NSString *direction in @[@"Left", @"Right", @"Up", @"Down"]) {
+        NSString *gesture = [NSString stringWithFormat:@"%@-Swipe-%@", countWord, direction];
+        if (commandForGesture(gesture, device) != nil)
+            return YES;
+    }
+    return NO;
+}
+
 static BOOL hasThreeFingerSwipeBinding(int device) {
-    return commandForGesture(@"Three-Swipe-Left", device) != nil ||
-        commandForGesture(@"Three-Swipe-Right", device) != nil ||
-        commandForGesture(@"Three-Swipe-Up", device) != nil ||
-        commandForGesture(@"Three-Swipe-Down", device) != nil;
+    return hasSwipeBindingForCount(@"Three", device);
+}
+
+// Arms scroll suppression for every swipe count this device recognizes that
+// could be mistaken for its scrolling. A trackpad scrolls with two fingers, so
+// three and four qualify; a Magic Mouse scrolls with one, so two and three do.
+// One-finger mouse swipes keep their own suppression in their recognizer.
+static void observeBoundSwipeFamilies(int device, int activeContactCount) {
+    NSArray *counts = device == TRACKPAD ? @[@"Three", @"Four"] : @[@"Two", @"Three"];
+    int required[2] = {device == TRACKPAD ? 3 : 2, device == TRACKPAD ? 4 : 3};
+    for (NSUInteger i = 0; i < [counts count]; i++) {
+        BOOL bound = hasSwipeBindingForCount(counts[i], device);
+        if (device == TRACKPAD)
+            MGTrackpadInteractionObserveBoundScrollFamily(&trackpadInteraction,
+                activeContactCount, required[i], bound);
+        else
+            MGGestureSequenceObserveBoundScrollFamily(&magicMouseSequence,
+                activeContactCount, required[i], bound);
+    }
 }
 
 static void dispatchMagicMousePhysicalClickForContactCount(int contactCount) {
@@ -3055,11 +3083,9 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
         // A resting palm reaches this callback as an ordinary contact, so the
         // swipe family counts fingertip-scale contacts: two fingers plus a
         // palm heel must scroll, not arm three-finger scroll suppression.
-        MGTrackpadInteractionObserveBoundScrollFamily(
-            &trackpadInteraction,
+        observeBoundSwipeFamilies(TRACKPAD,
             MGTrackpadInteractionFingertipScaleContactCount(interactionContacts,
-                                                            interactionContactCount),
-            3, hasThreeFingerSwipeBinding(TRACKPAD));
+                                                            interactionContactCount));
         BOOL contactsFormTapGroup = MGTrackpadInteractionContactsFormTapGroup(
             interactionContacts, interactionContactCount);
 
@@ -4248,9 +4274,7 @@ static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, do
     disableHorizontalScroll = 0;
     if (!ignore) {
         int thumbPresent = gestureMagicMouseThumb(data, nFingers);
-        MGGestureSequenceObserveBoundScrollFamily(
-            &magicMouseSequence, nFingers - (thumbPresent ? 1 : 0), 3,
-            hasThreeFingerSwipeBinding(MAGICMOUSE));
+        observeBoundSwipeFamilies(MAGICMOUSE, nFingers - (thumbPresent ? 1 : 0));
 
         float clickXs[8], clickYs[8];
         float physicalXs[16], physicalYs[16];

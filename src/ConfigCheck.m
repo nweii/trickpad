@@ -1321,6 +1321,14 @@ int main(void) {
                 fail(@"script binding launches through ScriptRunner",
                      @"script runner integration", @"missing");
 
+            // Every swipe family that can be mistaken for the device's own
+            // scrolling must arm suppression, not the three-finger one alone.
+            if ([engine rangeOfString:@"observeBoundSwipeFamilies(TRACKPAD"] .location == NSNotFound ||
+                [engine rangeOfString:@"observeBoundSwipeFamilies(MAGICMOUSE"] .location == NSNotFound ||
+                [engine rangeOfString:@"@[@\"Three\", @\"Four\"] : @[@\"Two\", @\"Three\"]"] .location == NSNotFound)
+                fail(@"every swipe family that overlaps scrolling arms suppression",
+                     @"scroll suppression coverage", @"missing");
+
             if ([engine rangeOfString:@"bindingPreference != nil"] .location == NSNotFound ||
                 [engine rangeOfString:@"enabled && device == TRACKPAD"] .location == NSNotFound ||
                 [engine rangeOfString:@"NSHapticFeedbackPatternLevelChange"] .location == NSNotFound)
