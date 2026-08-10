@@ -111,7 +111,12 @@ static void languageChanged(CFNotificationCenterRef center, void *observer, CFSt
     }
 
     for (size_t i = 0; i < count; i++) {
-        CGEventPost(kCGSessionEventTap, events[i]);
+        // Posted at the HID tap, where a physical key enters. macOS resolves
+        // its own system shortcuts, Mission Control and App Exposé among them,
+        // above the session tap, so a chord injected there never reaches them
+        // and lands in the focused application instead. The app taps no
+        // keyboard events, so nothing here feeds back into recognition.
+        CGEventPost(kCGHIDEventTap, events[i]);
         CFRelease(events[i]);
     }
     if (source) CFRelease(source);
