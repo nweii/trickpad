@@ -17,11 +17,20 @@
 ### Added
 
 - Add trackpad area clicks. A physical click with one finger in a named region of the surface runs a bound action. The regions are the four edges, their halves and thirds, and the four corners. A click in a bound region replaces the native click. A click in a region with no binding stays a normal click. When bound regions overlap, the most specific bound region wins. Regions are narrow by default. The `trackpad-edge-gesture-depth` setting adjusts how far they reach in from the edge.
+- Add an Open Docs item to the About menu. It opens the documentation site.
+- Show the build commit beside the version in About and in Copy Debug Info for a build that is not a tagged release.
 
 ### Changed
 
 - Play a binding's `sound` before its `say` words when a binding sets both. Before, the sound and the speech started together.
 - Make a configured trackpad `three-finger-click` or `four-finger-click` replace the native click. The bound action runs and the click does not reach the application. Before, the click and the action both occurred. A click that becomes a drag stays a native drag and does not run the action. This matches the Magic Mouse click gestures.
+- Make the gesture list easier to read. Rows show at full strength, and the device names use the system section-header style.
+- Describe hold gestures without a side for the held finger. The list now reads "Hold a finger, tap to its right".
+- Remove the ellipsis from menu items that only open a page.
+
+### Fixed
+
+- Stop a resting palm from blocking scrolling. Before, a palm touching the trackpad at scroll start counted toward a configured three-finger swipe, and normal scrolling stopped.
 
 ## 0.8.1
 
