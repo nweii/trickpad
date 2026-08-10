@@ -1,0 +1,8 @@
+{
+  "dropped_events": 0,
+  "labels": [
+    {"segment": 1, "step": "candidate-r1", "requested": "candidate-gesture", "observed_gesture": "none", "expected_dispatch_count": 0, "human": "clean"},
+    {"segment": 2, "step": "candidate-r2", "requested": "candidate-gesture", "observed_gesture": "none", "expected_dispatch_count": 0, "human": "botched"}
+  ],
+  "schema": 1
+}

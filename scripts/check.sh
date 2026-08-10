@@ -66,6 +66,18 @@ clang \
   -o "$CONTACT_TAP_OUT" 2>/dev/null
 "$CONTACT_TAP_OUT"
 
+APPLICATION_SCOPE_OUT="$(mktemp -d)/applicationscopecachecheck"
+clang \
+  -fobjc-exceptions \
+  -fno-objc-arc \
+  -I"$ROOT/src" \
+  -isysroot "$SDKROOT" \
+  -framework Cocoa \
+  "$ROOT/src/ApplicationScopeCache.m" \
+  "$ROOT/src/ApplicationScopeCacheCheck.m" \
+  -o "$APPLICATION_SCOPE_OUT" 2>/dev/null
+"$APPLICATION_SCOPE_OUT"
+
 GESTURE_SEQUENCE_OUT="$(mktemp -d)/gesturesequencecheck"
 clang \
   -fobjc-exceptions \
@@ -177,6 +189,18 @@ grep -q '"Three-Finger Tap" : 1' "$TRACE_ANALYZER_FIXTURE/analysis.json" ||
   { echo "trace analyzer stopped counting catalog shadow recognitions" >&2; exit 1; }
 grep -q '"available" : 1' "$TRACE_ANALYZER_FIXTURE/analysis.json" ||
   { echo "trace analyzer stopped reporting mouse-down eligibility" >&2; exit 1; }
+CANDIDATE_TRACE_FIXTURE="$(mktemp -d)/candidate-bundle"
+cp -R "$ROOT/fixtures/trace/candidate-bundle/." "$CANDIDATE_TRACE_FIXTURE"
+"$TRACE_ANALYZER_OUT" "$CANDIDATE_TRACE_FIXTURE" >/dev/null
+grep -q '"capture" : "candidate-gesture-guided"' "$CANDIDATE_TRACE_FIXTURE/analysis.json" ||
+  { echo "trace analyzer stopped reporting the candidate capture kind" >&2; exit 1; }
+grep -q '"candidate" : "corner-pull"' "$CANDIDATE_TRACE_FIXTURE/analysis.json" ||
+  { echo "trace analyzer stopped reporting the recorded candidate name" >&2; exit 1; }
+grep -q '"peak_contact_count" : 2' "$CANDIDATE_TRACE_FIXTURE/analysis.json" ||
+  { echo "trace analyzer stopped summarizing the per-repetition contact profile" >&2; exit 1; }
+grep -q '"frames" : 3' "$CANDIDATE_TRACE_FIXTURE/analysis.json" ||
+  { echo "trace analyzer stopped counting per-repetition frames" >&2; exit 1; }
+
 MALFORMED_TRACE="$(mktemp -d)/malformed-bundle"
 if "$TRACE_ANALYZER_OUT" "$MALFORMED_TRACE" >/dev/null 2>&1; then
   echo "trace analyzer accepted a malformed bundle" >&2
@@ -371,6 +395,16 @@ grep -q 'eligibleTapContactCount = tapContactCount;' "$GESTURE_SRC" ||
   gesture_fail "Magic Mouse tap suppression release ignores contact filtering"
 [[ "$(grep -c 'if (magicMouseTapsSuppressedUntilLift ||' "$GESTURE_SRC")" -eq 4 ]] ||
   gesture_fail "a Magic Mouse tap recognizer ignores post-click suppression"
+
+# Binding lookups run several times per touch frame, so they must read the
+# cached application candidates rather than Accessibility, and both events that
+# can change the answer must still drop the cache.
+grep -q 'return MGApplicationScopeCacheCandidates();' "$GESTURE_SRC" ||
+  gesture_fail "binding lookups no longer read the cached application candidates"
+grep -q 'MGApplicationScopeCacheInvalidate();' "$ROOT/src/jitouch/Jitouch/Settings.m" ||
+  gesture_fail "a configuration reload no longer drops the cached application candidates"
+grep -q 'MGApplicationScopeCacheObserveApplicationActivation();' "$APP_SRC" ||
+  gesture_fail "the app no longer drops the cached application candidates when another application activates"
 
 grep -q 'NSWorkspaceDidWakeNotification' "$APP_SRC" || wake_fail "the app does not observe wake notifications"
 grep -q '\[self reload\]' "$APP_SRC" || wake_fail "the wake handler does not reload gesture devices"

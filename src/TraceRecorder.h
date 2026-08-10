@@ -14,6 +14,10 @@ typedef struct {
 } MGTraceContact;
 
 BOOL MGTraceStart(NSString *bundlePath, NSString **problem);
+// Starts a session whose manifest names the capture kind, and for a candidate
+// gesture protocol, the short name the person typed for the motion they record.
+BOOL MGTraceStartCapture(NSString *bundlePath, NSString *capture,
+                         NSString *candidate, NSString **problem);
 BOOL MGTraceIsActive(void);
 BOOL MGTraceIsCapturing(void);
 BOOL MGTraceSuppressesActions(void);
@@ -32,6 +36,9 @@ void MGTraceStop(void);
 void MGTraceRecordMouseFrame(const void *device, double hardwareTimestamp,
                              int frame, const MGTraceContact *contacts,
                              int contactCount);
+void MGTraceRecordTrackpadFrame(const void *device, double hardwareTimestamp,
+                                int frame, const MGTraceContact *contacts,
+                                int contactCount);
 void MGTraceRecordFilterDecision(int identifier, NSString *reason, BOOL kept,
                                  double x, double y, double size,
                                  double majorAxis, double minorAxis);

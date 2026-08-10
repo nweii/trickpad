@@ -25,6 +25,18 @@ static BOOL contactsContainPalmPatchCluster(const MGTrackpadContact *contacts,
     return NO;
 }
 
+// Counts contacts at fingertip scale, so a resting palm inflates no
+// finger-count decision that reads this instead of the raw count.
+int MGTrackpadInteractionFingertipScaleContactCount(const MGTrackpadContact *contacts,
+                                                    int contactCount) {
+    int fingertips = 0;
+    for (int i = 0; i < contactCount; i++) {
+        if (contacts[i].majorAxis <= kTrackpadBroadContactMajorAxis)
+            fingertips++;
+    }
+    return fingertips;
+}
+
 BOOL MGTrackpadInteractionContactsAreEligible(const float *majorAxes,
                                               int contactCount) {
     for (int i = 0; i < contactCount; i++) {
@@ -96,6 +108,10 @@ void MGTrackpadInteractionInitialize(MGTrackpadInteraction *interaction) {
     interaction->currentContactCount = 0;
     interaction->maximumContactCount = 0;
     interaction->pendingClickContactCount = 0;
+    interaction->lastContactX = 0;
+    interaction->lastContactY = 0;
+    interaction->pendingClickX = 0;
+    interaction->pendingClickY = 0;
     interaction->physicalClickContactsLiftedAt = -1;
     interaction->rawContactOnsets = (MGContactOnsetTracker){0};
 }
@@ -140,6 +156,10 @@ void MGTrackpadInteractionObserveContacts(MGTrackpadInteraction *interaction,
                 interaction->broadContact = YES;
         }
     }
+    if (contactCount > 0) {
+        interaction->lastContactX = contacts[0].x;
+        interaction->lastContactY = contacts[0].y;
+    }
     interaction->previousContactCount = contactCount;
     interaction->currentContactCount = contactCount;
     interaction->rawContactsObserved = NO;
@@ -157,6 +177,20 @@ BOOL MGTrackpadInteractionBeginPhysicalClick(MGTrackpadInteraction *interaction,
     interaction->physicalClickContactsLiftedAt = -1;
     interaction->pendingClickContactCount = MAX(interaction->currentContactCount,
                                                  interaction->maximumContactCount);
+    interaction->pendingClickX = interaction->lastContactX;
+    interaction->pendingClickY = interaction->lastContactY;
+    return YES;
+}
+
+// Reports the normalized position of a physical click whose whole contact
+// sequence has held one contact, the shape an area-click recognizer needs.
+BOOL MGTrackpadInteractionPendingSingleContactClickPosition(const MGTrackpadInteraction *interaction,
+                                                            float *outX,
+                                                            float *outY) {
+    if (!interaction->physicalClick || interaction->pendingClickContactCount != 1)
+        return NO;
+    *outX = interaction->pendingClickX;
+    *outY = interaction->pendingClickY;
     return YES;
 }
 

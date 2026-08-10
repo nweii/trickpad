@@ -12,6 +12,41 @@
 
 # Changelog
 
+## 0.9.0
+
+Released 2026-08-10.
+
+### Added
+
+- Add trackpad edge area clicks along the edges or corners. The regions are the four edges, their halves and thirds, and the four corners. Clicking here replaces the native click when enabled. A click in a region with no binding stays a normal click. When bound regions overlap, the most specific bound region wins. Regions are narrow by default to leave ample room for regular use and other gestures. The `trackpad-edge-gesture-depth` setting adjusts how far they reach in from the edge.
+- Support mapping any edge or corner of the trackpad to an action with `edge-click` and `corner-click` by omitting an edge section or a corner. A named region wins for its own spot.
+- Add double-tap gesture names on both devices. The Magic Mouse has `one-finger-double-tap`, `two-finger-double-tap`, and `three-finger-double-tap`. The trackpad has `two-finger-double-tap` through `five-finger-double-tap`. The action runs on two taps of that finger count inside the Mac double-click interval. A double tap that is bound alone adds no delay to the single tap. To use a single tap and its own double tap together, set `defer = true` on the single tap. Triple taps are not available.
+- Add bare swipe names such as `three-finger-swipe`. A bare name binds every direction of that finger count to one action. A directional name such as `three-finger-swipe-left` stays more specific and wins for its own direction.
+- Accept the words of a gesture name in any order, on both devices. For example, `swipe-up-three-finger` loads as `three-finger-swipe-up`. The menu and reports show the canonical name.
+- Add the `app-expose`, `show-desktop`, and `app-switcher` actions, beside the existing `mission-control`. Each asks macOS for that view directly. No application can intercept them, and they work whether or not the matching keyboard shortcut is enabled.
+- Add an Open Docs item to the About menu. It opens the documentation site.
+- Show the build commit beside the version in About and in Copy Debug Info for a build that is not a tagged release.
+
+### Changed
+
+- Make trackpad multi-finger click gestures consume the native click, so the click and the action do not both fire. This matches the Magic Mouse click gestures.
+- Make the Magic Mouse `two-finger-click` and `three-finger-click` gestures standard. They load without the `experimental-mouse-click-gestures` setting. The setting is no longer needed. A configuration file that sets it keeps loading.
+- Play a binding's `sound` before its `say` words when a binding sets both. Before, the sound and the speech started together.
+- Make the gesture list menu easier to scan. Rows show at full strength, and the device names use the system section-header style.
+- Describe hold gestures without a side for the held finger. The list now reads "Hold a finger, tap to its right".
+- Remove the ellipsis from menu items that only open a page.
+
+### Fixed
+
+- Fix the `mission-control` action, which did nothing. The call it makes to macOS needed a second value that a macOS release added. The new `app-expose`, `show-desktop`, and `app-switcher` actions use the corrected call.
+- Warn about a macOS gesture conflict for a bare swipe name such as `four-finger-swipe`. Before, only the directional names were checked.
+- Show accented names correctly in the gesture conflict report. "App Exposé" appeared with damaged characters.
+- Lower the work Trickpad does while fingers rest on a device. Before, it asked macOS which application was in front many times per second. It now asks again only after the settings reload or a different application comes forward.
+- Suppress scrolling during swipes with at least three fingers on trackpad and two fingers on mouse. Before, only three-finger swipes held back the scroll their fingers would otherwise make.
+- Prevent a resting palm from blocking scrolling. Before, a palm touching the trackpad at scroll start counted toward a configured three-finger swipe, and normal scrolling stopped.
+
+This is a backward-compatible minor release. Existing version 3 configuration files keep working. A configured trackpad multi-finger click now replaces the native click instead of adding to it.
+
 ## 0.8.1
 
 Released 2026-08-07.

@@ -24,6 +24,7 @@
 #import "GestureWindow.h"
 #import "SizeHistory.h"
 #import "KeyUtility.h"
+#import "ApplicationScopeCache.h"
 #import "Config.h"
 #import "ContactTapRecognizer.h"
 #import "DeferredGestureDispatcher.h"
@@ -129,7 +130,11 @@ bool MTDeviceIsRunning(MTDeviceRef);
 void MTDeviceGetFamilyID(MTDeviceRef, int*);
 OSStatus MTDeviceGetDeviceID(MTDeviceRef, uint64_t*) __attribute__ ((weak_import));    // no 10.5
 
-void CoreDockSendNotification(NSString *notificationName);
+// The Dock's private notification entry point. It takes a second argument on
+// current macOS, and a call missing it is silently ignored, so Mission Control
+// and its kin do nothing. scripts/debug/dock-notification-probe.m re-tests this
+// when a macOS release moves the private interface again.
+void CoreDockSendNotification(NSString *notificationName, int unused);
 
 static AXUIElementRef systemWideElement = NULL;
 
@@ -181,6 +186,31 @@ static void replayPendingMagicMousePrimaryDown(void) {
                                kTrickpadReplayedMouseEvent);
     CGEventPost(kCGSessionEventTap, pendingMagicMousePrimaryDown);
     clearPendingMagicMouseClick();
+}
+
+// A configured trackpad physical click replaces the native click: the
+// suppressed mouse-down is held here so a drag can restore the native
+// sequence, mirroring the Magic Mouse pending click above.
+static CGEventRef pendingTrackpadPrimaryDown = NULL;
+
+static void clearPendingTrackpadClick(void) {
+    if (pendingTrackpadPrimaryDown != NULL) {
+        CFRelease(pendingTrackpadPrimaryDown);
+        pendingTrackpadPrimaryDown = NULL;
+    }
+}
+
+// The area gesture recognized at a single-contact trackpad mouse-down, held
+// until its mouse-up dispatches it or a drag keeps the click native.
+static NSString *pendingTrackpadAreaClickGesture = nil;
+
+static void replayPendingTrackpadPrimaryDown(void) {
+    if (pendingTrackpadPrimaryDown == NULL) return;
+    CGEventSetIntegerValueField(pendingTrackpadPrimaryDown,
+                               kCGEventSourceUserData,
+                               kTrickpadReplayedMouseEvent);
+    CGEventPost(kCGSessionEventTap, pendingTrackpadPrimaryDown);
+    clearPendingTrackpadClick();
 }
 
 enum {
@@ -341,6 +371,9 @@ static bool familyIsMagicTrackpad(int familyID) {
 static void turnOffTrackpad() {
     trackpadNFingers = 0;
     MGTrackpadInteractionInitialize(&trackpadInteraction);
+    clearPendingTrackpadClick();
+    [pendingTrackpadAreaClickGesture release];
+    pendingTrackpadAreaClickGesture = nil;
 }
 
 static void turnOffMagicMouse() {
@@ -695,7 +728,7 @@ static NSString *copyBundleIdentifierOfAxui(CFTypeRef ref) {
     return [[application bundleIdentifier] copy];
 }
 
-static NSArray *applicationCandidatesForGestureLookup(void) {
+static NSArray *resolveApplicationCandidates(void) {
     NSMutableArray *applications = [NSMutableArray array];
 
     CFTypeRef underMouseAxui = axuiUnderMouse();
@@ -723,17 +756,28 @@ static NSArray *applicationCandidatesForGestureLookup(void) {
     return applications;
 }
 
+// Every binding lookup goes through the cache, since a touch frame asks for
+// this several times over and the resolution above is all Accessibility calls.
+static NSArray *applicationCandidatesForGestureLookup(void) {
+    return MGApplicationScopeCacheCandidates();
+}
+
+// declared reports whether any configuration entry named the gesture at all,
+// so a caller can tell an explicit "off" apart from an absent binding.
 static NSDictionary *resolvedBindingForGesture(NSString *gesture,
                                                NSDictionary *commandMap,
                                                NSArray *applications,
                                                BOOL includeUnassigned,
-                                               NSString **matchedApplication) {
+                                               NSString **matchedApplication,
+                                               BOOL *declared) {
     for (NSString *application in applications) {
         NSDictionary *applicationBindings = [commandMap objectForKey:application];
         NSDictionary *binding = [applicationBindings objectForKey:gesture];
         if (binding != nil) {
             if (matchedApplication != NULL)
                 *matchedApplication = application;
+            if (declared != NULL)
+                *declared = YES;
             return [[binding objectForKey:@"Enable"] boolValue] ? binding : nil;
         }
         if (includeUnassigned) {
@@ -741,6 +785,8 @@ static NSDictionary *resolvedBindingForGesture(NSString *gesture,
             if (binding != nil) {
                 if (matchedApplication != NULL)
                     *matchedApplication = application;
+                if (declared != NULL)
+                    *declared = YES;
                 return [[binding objectForKey:@"Enable"] boolValue] ? binding : nil;
             }
         }
@@ -749,6 +795,8 @@ static NSDictionary *resolvedBindingForGesture(NSString *gesture,
     NSDictionary *binding = [[commandMap objectForKey:@"All Applications"] objectForKey:gesture];
     if (binding != nil && matchedApplication != NULL)
         *matchedApplication = @"All Applications";
+    if (binding != nil && declared != NULL)
+        *declared = YES;
     return binding && [[binding objectForKey:@"Enable"] boolValue] ? binding : nil;
 }
 
@@ -944,13 +992,24 @@ static BOOL isMouseOnEmptySpace() {
     return ret;
 }
 
+// The most specific bound name wins: a directional swipe binding, wherever it
+// is scoped, takes its direction before the bare family binding is consulted.
+// An explicit "off" on the directional name also stops the family fallback.
 static NSDictionary *bindingForGestureWithMatch(NSString *gesture, int device,
                                                 NSString **matchedApplication) {
     NSArray *applications = applicationCandidatesForGestureLookup();
     NSDictionary *commandMap = device == TRACKPAD ? trackpadMap :
         device == MAGICMOUSE ? magicMouseMap : recognitionMap;
-    return resolvedBindingForGesture(gesture, commandMap, applications, NO,
-                                     matchedApplication);
+    BOOL declared = NO;
+    NSDictionary *binding = resolvedBindingForGesture(gesture, commandMap, applications, NO,
+                                                      matchedApplication, &declared);
+    if (binding != nil || declared)
+        return binding;
+    NSString *family = [Config directionlessGestureName:gesture];
+    if (family == nil)
+        return nil;
+    return resolvedBindingForGesture(family, commandMap, applications, NO,
+                                     matchedApplication, NULL);
 }
 
 static NSDictionary *bindingForGesture(NSString *gesture, int device) {
@@ -992,8 +1051,10 @@ static void playSystemSound(NSString *name) {
 }
 
 // One shared synthesizer, interrupted the way a sound restarts, so a repeat is
-// heard as its own utterance rather than swallowed by the previous one.
-static void speakText(NSString *text) {
+// heard as its own utterance rather than swallowed by the previous one. When a
+// sound plays on the same dispatch, the words wait for it through the
+// utterance's own pre-delay, so interrupting the speech also drops the wait.
+static void speakText(NSString *text, NSString *precedingSoundName) {
     if ([text length] == 0)
         return;
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -1017,6 +1078,13 @@ static void speakText(NSString *text) {
             initWithString:text] autorelease];
         if (voice != nil)
             [utterance setVoice:voice];
+        if ([precedingSoundName length] > 0) {
+            NSSound *preceding = [NSSound soundNamed:precedingSoundName];
+            // A long sound tail reads as lag once the attack has confirmed
+            // the gesture, so the wait is bounded rather than literal.
+            if (preceding != nil)
+                [utterance setPreUtteranceDelay:MIN([preceding duration], 1.5)];
+        }
         [synthesizer speakUtterance:utterance];
     });
 }
@@ -1026,7 +1094,8 @@ static void speakText(NSString *text) {
 // and never delay the action they accompany.
 static void confirmBindingDispatch(NSDictionary *binding, int device) {
     playSystemSound([binding objectForKey:@"ConfirmSound"]);
-    speakText([binding objectForKey:@"ConfirmSpeech"]);
+    speakText([binding objectForKey:@"ConfirmSpeech"],
+              [binding objectForKey:@"ConfirmSound"]);
 }
 
 // AppKit chooses the available actuator and may suppress feedback when the
@@ -1058,27 +1127,13 @@ static void playInternalGestureDispatchTone(void) {
 static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                       NSString *matchedApplication);
 
-static void dispatchCommand(NSString *gesture, int device) {
-    NSString *matchedApplication = nil;
-    NSDictionary *binding = bindingForGestureWithMatch(gesture, device, &matchedApplication);
-    if (binding == nil)
-        return;
-    if (device == MAGICMOUSE && MGTraceSuppressesActions()) {
-        NSString *scope = [matchedApplication isEqualToString:@"All Applications"]
-            ? @"global" : @"application";
-        NSString *kind = ![[binding objectForKey:@"Enable"] boolValue] ? @"off" :
-            [binding objectForKey:@"ScriptPath"] != nil ? @"script" :
-            [binding objectForKey:@"OpenURL"] != nil ? @"url" :
-            [binding objectForKey:@"PlaySound"] != nil ? @"sound" :
-            [binding objectForKey:@"SpeakText"] != nil ? @"speech" :
-            [[binding objectForKey:@"IsAction"] boolValue] ? @"built-in" : @"keystroke";
-        MGTraceRecordDispatch(gesture, scope, kind, @"suppressed-for-trace");
-        return;
-    }
-    BOOL deferred = [[binding objectForKey:@"Defer"] boolValue];
-    NSString *gestureKey = [NSString stringWithFormat:@"%d:%@", device, gesture];
-    dispatch_block_t action = ^{
-        if (deferred && binding != nil) {
+// The work one binding performs, without the feedback that confirms it. A
+// deferred binding raises its own feedback here, when the wait ends rather than
+// when the gesture was recognized.
+static dispatch_block_t bindingAction(NSString *gesture, int device, NSDictionary *binding,
+                                      NSString *matchedApplication, BOOL confirmsWhenRun) {
+    return [[^{
+        if (confirmsWhenRun) {
             requestHapticFeedbackForBinding(binding, device);
             confirmBindingDispatch(binding, device);
         }
@@ -1088,19 +1143,78 @@ static void dispatchCommand(NSString *gesture, int device) {
         doCommand(gesture, device, binding, matchedApplication);
         NSTimeInterval timeInterval = -[start timeIntervalSinceNow];
         if (device >= 0 && device < sizeof(deviceTypeName) / sizeof(deviceTypeName[0]) && logLevel >= LOG_LEVEL_INFO) NSLog(@"Gesture \"%@\" for %@ took %f s", gesture, deviceTypeName[device], timeInterval);
-    };
-    if (deferred) {
+    } copy] autorelease];
+}
+
+// Confirms and runs a binding at once, with the feedback raised on the calling
+// thread so it stays as close to recognition as able.
+static void dispatchBindingNow(NSString *gesture, int device, NSDictionary *binding,
+                               NSString *matchedApplication) {
+    requestHapticFeedbackForBinding(binding, device);
+    confirmBindingDispatch(binding, device);
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0),
+                   bindingAction(gesture, device, binding, matchedApplication, NO));
+}
+
+static void dispatchCommand(NSString *gesture, int device) {
+    NSString *matchedApplication = nil;
+    NSDictionary *binding = bindingForGestureWithMatch(gesture, device, &matchedApplication);
+    // A double tap is reached only by repeating its single tap, so the single
+    // tap's dispatch resolves both bindings and decides between them.
+    NSString *doubleGesture = [Config doubleTapGestureName:gesture];
+    NSString *doubleApplication = nil;
+    NSDictionary *doubleBinding = doubleGesture == nil ? nil
+        : bindingForGestureWithMatch(doubleGesture, device, &doubleApplication);
+    if (binding == nil && doubleBinding == nil)
+        return;
+    if (device == MAGICMOUSE && MGTraceSuppressesActions()) {
+        NSDictionary *traced = binding ?: doubleBinding;
+        NSString *scope = [(binding != nil ? matchedApplication : doubleApplication)
+                           isEqualToString:@"All Applications"] ? @"global" : @"application";
+        NSString *kind = ![[traced objectForKey:@"Enable"] boolValue] ? @"off" :
+            [traced objectForKey:@"ScriptPath"] != nil ? @"script" :
+            [traced objectForKey:@"OpenURL"] != nil ? @"url" :
+            [traced objectForKey:@"PlaySound"] != nil ? @"sound" :
+            [traced objectForKey:@"SpeakText"] != nil ? @"speech" :
+            [[traced objectForKey:@"IsAction"] boolValue] ? @"built-in" : @"keystroke";
+        MGTraceRecordDispatch(binding != nil ? gesture : doubleGesture,
+                              scope, kind, @"suppressed-for-trace");
+        return;
+    }
+    BOOL deferred = [[binding objectForKey:@"Defer"] boolValue];
+    NSString *gestureKey = [NSString stringWithFormat:@"%d:%@", device, gesture];
+
+    // One pending window per gesture serves both purposes. A deferred single
+    // tap waits inside it, and a repeat inside it dispatches the double tap.
+    // With only the double tap bound the window delays nothing, so the gesture
+    // that is not configured costs no latency.
+    if (deferred || doubleBinding != nil) {
+        dispatch_block_t pending = deferred
+            ? bindingAction(gesture, device, binding, matchedApplication, YES) : nil;
+        dispatch_block_t repeated = doubleBinding == nil ? nil : ^{
+            dispatchBindingNow(doubleGesture, device, doubleBinding, doubleApplication);
+        };
         [deferredGestureDispatcher() handleGestureKey:gestureKey
                                                 delay:[NSEvent doubleClickInterval]
-                                               action:action];
-    } else {
-        [deferredGestureDispatcher() cancelGestureKey:gestureKey];
-        if (binding != nil) {
-            requestHapticFeedbackForBinding(binding, device);
-            confirmBindingDispatch(binding, device);
-        }
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), action);
+                                               action:pending
+                                               repeat:repeated];
+        if (!deferred && binding != nil)
+            dispatchBindingNow(gesture, device, binding, matchedApplication);
+        return;
     }
+
+    [deferredGestureDispatcher() cancelGestureKey:gestureKey];
+    dispatchBindingNow(gesture, device, binding, matchedApplication);
+}
+
+// A tap whose only binding is its double tap is still worth recognizing: the
+// double tap is reached by repeating the single tap and has no recognizer of
+// its own.
+static BOOL gestureIsBound(NSString *gesture, int device) {
+    if (bindingForGesture(gesture, device) != nil)
+        return YES;
+    NSString *doubleGesture = [Config doubleTapGestureName:gesture];
+    return doubleGesture != nil && bindingForGesture(doubleGesture, device) != nil;
 }
 
 // A bound recognizer owns its device's contact sequence before dispatch. The
@@ -1110,7 +1224,7 @@ static BOOL dispatchExclusiveCommand(NSString *gesture, int device, NSUInteger o
         MGTraceRecordCandidate(gesture, @"shadow-recognized", @"catalog-audit");
         return NO;
     }
-    if (bindingForGesture(gesture, device) == nil) {
+    if (!gestureIsBound(gesture, device)) {
         if (device == MAGICMOUSE) MGTraceRecordCandidate(gesture, @"canceled", @"unconfigured");
         return NO;
     }
@@ -1134,7 +1248,7 @@ static BOOL dispatchExclusiveTapCommand(NSString *gesture, int device, NSUIntege
         MGTraceRecordCandidate(gesture, @"shadow-recognized", @"catalog-audit");
         return NO;
     }
-    if (bindingForGesture(gesture, device) == nil) {
+    if (!gestureIsBound(gesture, device)) {
         if (device == MAGICMOUSE) MGTraceRecordCandidate(gesture, @"canceled", @"unconfigured");
         return NO;
     }
@@ -1154,7 +1268,7 @@ static BOOL dispatchExclusiveTapCommand(NSString *gesture, int device, NSUIntege
 }
 
 static BOOL dispatchExclusivePalmSafeCommand(NSString *gesture, int device, NSUInteger owner) {
-    if (bindingForGesture(gesture, device) == nil)
+    if (!gestureIsBound(gesture, device))
         return NO;
     BOOL claimed = device == TRACKPAD
         ? MGTrackpadInteractionClaimPalmSafeGesture(&trackpadInteraction, owner)
@@ -1164,11 +1278,39 @@ static BOOL dispatchExclusivePalmSafeCommand(NSString *gesture, int device, NSUI
     return claimed;
 }
 
+// A swipe family overlaps the device's own scrolling once it uses at least as
+// many fingers as scrolling does, so every count at or above that one arms
+// suppression rather than three alone. A directional lookup also answers for a
+// bare family binding, which resolves through the same call.
+static BOOL hasSwipeBindingForCount(NSString *countWord, int device) {
+    for (NSString *direction in @[@"Left", @"Right", @"Up", @"Down"]) {
+        NSString *gesture = [NSString stringWithFormat:@"%@-Swipe-%@", countWord, direction];
+        if (commandForGesture(gesture, device) != nil)
+            return YES;
+    }
+    return NO;
+}
+
 static BOOL hasThreeFingerSwipeBinding(int device) {
-    return commandForGesture(@"Three-Swipe-Left", device) != nil ||
-        commandForGesture(@"Three-Swipe-Right", device) != nil ||
-        commandForGesture(@"Three-Swipe-Up", device) != nil ||
-        commandForGesture(@"Three-Swipe-Down", device) != nil;
+    return hasSwipeBindingForCount(@"Three", device);
+}
+
+// Arms scroll suppression for every swipe count this device recognizes that
+// could be mistaken for its scrolling. A trackpad scrolls with two fingers, so
+// three and four qualify; a Magic Mouse scrolls with one, so two and three do.
+// One-finger mouse swipes keep their own suppression in their recognizer.
+static void observeBoundSwipeFamilies(int device, int activeContactCount) {
+    NSArray *counts = device == TRACKPAD ? @[@"Three", @"Four"] : @[@"Two", @"Three"];
+    int required[2] = {device == TRACKPAD ? 3 : 2, device == TRACKPAD ? 4 : 3};
+    for (NSUInteger i = 0; i < [counts count]; i++) {
+        BOOL bound = hasSwipeBindingForCount(counts[i], device);
+        if (device == TRACKPAD)
+            MGTrackpadInteractionObserveBoundScrollFamily(&trackpadInteraction,
+                activeContactCount, required[i], bound);
+        else
+            MGGestureSequenceObserveBoundScrollFamily(&magicMouseSequence,
+                activeContactCount, required[i], bound);
+    }
 }
 
 static void dispatchMagicMousePhysicalClickForContactCount(int contactCount) {
@@ -1381,16 +1523,16 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                 CGEventPost(kCGSessionEventTap, eventRef);
                 CFRelease(eventRef);
             } else if ([command isEqualToString:@"Show Desktop"]) {
-                CoreDockSendNotification(@"com.apple.showdesktop.awake");
+                CoreDockSendNotification(@"com.apple.showdesktop.awake", 0);
             } /*else if ([command isEqualToString:@"Spaces"]) {
-                CoreDockSendNotification(@"com.apple.workspaces.awake");
+                CoreDockSendNotification(@"com.apple.workspaces.awake", 0);
             } */
             else if ([command isEqualToString:@"Application Windows"]) {
-                CoreDockSendNotification(@"com.apple.expose.front.awake");
+                CoreDockSendNotification(@"com.apple.expose.front.awake", 0);
             } else if ([command isEqualToString:@"Mission Control"]) {
-                CoreDockSendNotification(@"com.apple.expose.awake");
+                CoreDockSendNotification(@"com.apple.expose.awake", 0);
             } else if ([command isEqualToString:@"Launchpad"]) {
-                CoreDockSendNotification(@"com.apple.launchpad.toggle");
+                CoreDockSendNotification(@"com.apple.launchpad.toggle", 0);
             } else if ([command isEqualToString:@"Dashboard"]) {
                 NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
                 [[NSWorkspace sharedWorkspace] launchApplication:@"Dashboard"];
@@ -1465,7 +1607,7 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                     [keyUtil simulateKey:@"End" ShftDown:NO CtrlDown:NO AltDown:NO CmdDown:NO];
                 CFSafeRelease(tmpRef);
             } else if ([command isEqualToString:@"Application Switcher"]) {
-                CoreDockSendNotification(@"com.apple.appswitcher.awake");
+                CoreDockSendNotification(@"com.apple.appswitcher.awake", 0);
             } else if ([command isEqualToString:@"Play / Pause"]) {
                 [keyUtil simulateSpecialKey:NX_KEYTYPE_PLAY];
             } else if ([command isEqualToString:@"Next"]) {
@@ -1517,7 +1659,7 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                     // dispatch thread, so the main queue starts it and returns.
                     playSystemSound([commandDict objectForKey:@"PlaySound"]);
                 } else if ([commandDict objectForKey:@"SpeakText"]) {
-                    speakText([commandDict objectForKey:@"SpeakText"]);
+                    speakText([commandDict objectForKey:@"SpeakText"], nil);
                 } else if ([commandDict objectForKey:@"OpenURL"]) {
                     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
                     NSString *configuredURL = [commandDict objectForKey:@"OpenURL"];
@@ -2785,6 +2927,19 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
     trackpadNFingers = nFingers;
     int activeTrackpadContactCount = nFingers;
 
+    // Raw trackpad frames feed candidate-gesture trace sessions. Nothing here
+    // recognizes or suppresses; the recorder ignores frames when idle.
+    if (MGTraceIsActive()) {
+        MGTraceContact traceContacts[16];
+        int traceCount = MIN(nFingers, 16);
+        for (int i = 0; i < traceCount; i++) {
+            traceContacts[i] = (MGTraceContact){data[i].identifier, data[i].state,
+                data[i].px, data[i].py, data[i].size, data[i].majorAxis,
+                data[i].minorAxis, data[i].zDensity};
+        }
+        MGTraceRecordTrackpadFrame(device, timestamp, frame, traceContacts, traceCount);
+    }
+
     static int thumbId = -1;
     Finger *dataUnnormalized = (Finger *)malloc(sizeof(Finger) * nFingers);
     for (int i = 0; i < nFingers; i++) {
@@ -2922,9 +3077,12 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
         }
         MGTrackpadInteractionObserveContacts(&trackpadInteraction, interactionContacts,
                                              interactionContactCount, timestamp);
-        MGTrackpadInteractionObserveBoundScrollFamily(
-            &trackpadInteraction, interactionContactCount, 3,
-            hasThreeFingerSwipeBinding(TRACKPAD));
+        // A resting palm reaches this callback as an ordinary contact, so the
+        // swipe family counts fingertip-scale contacts: two fingers plus a
+        // palm heel must scroll, not arm three-finger scroll suppression.
+        observeBoundSwipeFamilies(TRACKPAD,
+            MGTrackpadInteractionFingertipScaleContactCount(interactionContacts,
+                                                            interactionContactCount));
         BOOL contactsFormTapGroup = MGTrackpadInteractionContactsFormTapGroup(
             interactionContacts, interactionContactCount);
 
@@ -4113,9 +4271,7 @@ static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, do
     disableHorizontalScroll = 0;
     if (!ignore) {
         int thumbPresent = gestureMagicMouseThumb(data, nFingers);
-        MGGestureSequenceObserveBoundScrollFamily(
-            &magicMouseSequence, nFingers - (thumbPresent ? 1 : 0), 3,
-            hasThreeFingerSwipeBinding(MAGICMOUSE));
+        observeBoundSwipeFamilies(MAGICMOUSE, nFingers - (thumbPresent ? 1 : 0));
 
         float clickXs[8], clickYs[8];
         float physicalXs[16], physicalYs[16];
@@ -4395,6 +4551,143 @@ static void multitouchDeviceRemoved(void* refCon, io_iterator_t iterator) {
 
 
 
+#pragma mark - Trackpad area clicks
+
+// Area-click regions in normalized trackpad coordinates: x and y run 0..1
+// with the origin at the bottom-left, matching the raw contact frames. The
+// regions are absolute surface positions, so dominant-hand mirroring does not
+// apply. Starter geometry; these thresholds await hardware validation.
+// The configurable trackpad-edge-gesture-depth setting sets how far an edge band reaches
+// into the surface. Corner squares span twice that, giving a corner target
+// larger than the bands it overrides. The default stays narrow so bands sit
+// under the bezel-adjacent strip a resting hand rarely clicks.
+#define kTrackpadAreaEdgeBandDepth (areaClickDepth)
+#define kTrackpadAreaCornerSize (areaClickDepth * 2.0f)
+
+static NSString *trackpadAreaCornerClickName(float x, float y) {
+    BOOL left = x <= kTrackpadAreaCornerSize;
+    BOOL right = x >= 1.0f - kTrackpadAreaCornerSize;
+    BOOL bottom = y <= kTrackpadAreaCornerSize;
+    BOOL top = y >= 1.0f - kTrackpadAreaCornerSize;
+    if (top && left) return @"Top-Left-Corner Click";
+    if (top && right) return @"Top-Right-Corner Click";
+    if (bottom && left) return @"Bottom-Left-Corner Click";
+    if (bottom && right) return @"Bottom-Right-Corner Click";
+    return nil;
+}
+
+enum {
+    kTrackpadAreaEdgeLeft = 0,
+    kTrackpadAreaEdgeRight,
+    kTrackpadAreaEdgeTop,
+    kTrackpadAreaEdgeBottom,
+};
+
+// span runs along the edge: bottom to top on a vertical edge, left to right
+// on a horizontal one, so the slugs read as English.
+static NSString *trackpadAreaEdgeThirdName(int edge, float span) {
+    BOOL high = span >= 2.0f / 3.0f;
+    BOOL low = span < 1.0f / 3.0f;
+    switch (edge) {
+        case kTrackpadAreaEdgeLeft:
+            return high ? @"Left-Edge Top-Third Click"
+                 : low ? @"Left-Edge Bottom-Third Click" : @"Left-Edge Middle-Third Click";
+        case kTrackpadAreaEdgeRight:
+            return high ? @"Right-Edge Top-Third Click"
+                 : low ? @"Right-Edge Bottom-Third Click" : @"Right-Edge Middle-Third Click";
+        case kTrackpadAreaEdgeTop:
+            return high ? @"Top-Edge Right-Third Click"
+                 : low ? @"Top-Edge Left-Third Click" : @"Top-Edge Middle-Third Click";
+        default:
+            return high ? @"Bottom-Edge Right-Third Click"
+                 : low ? @"Bottom-Edge Left-Third Click" : @"Bottom-Edge Middle-Third Click";
+    }
+}
+
+static NSString *trackpadAreaEdgeHalfName(int edge, float span) {
+    BOOL high = span >= 0.5f;
+    switch (edge) {
+        case kTrackpadAreaEdgeLeft:
+            return high ? @"Left-Edge Top-Half Click" : @"Left-Edge Bottom-Half Click";
+        case kTrackpadAreaEdgeRight:
+            return high ? @"Right-Edge Top-Half Click" : @"Right-Edge Bottom-Half Click";
+        case kTrackpadAreaEdgeTop:
+            return high ? @"Top-Edge Right-Half Click" : @"Top-Edge Left-Half Click";
+        default:
+            return high ? @"Bottom-Edge Right-Half Click" : @"Bottom-Edge Left-Half Click";
+    }
+}
+
+static NSString *trackpadAreaEdgeWholeName(int edge) {
+    switch (edge) {
+        case kTrackpadAreaEdgeLeft: return @"Left-Edge Click";
+        case kTrackpadAreaEdgeRight: return @"Right-Edge Click";
+        case kTrackpadAreaEdgeTop: return @"Top-Edge Click";
+        default: return @"Bottom-Edge Click";
+    }
+}
+
+// Resolves the most specific bound region containing a single-contact click:
+// a bound named corner, then the any-corner name, beats any edge region; a
+// bound third beats a bound half beats the whole edge, and the any-edge name
+// comes last. Where two edge bands overlap near a corner and no corner is
+// bound, the nearer edge is tried first at each span size. Returns nil when
+// no bound region contains the click, which leaves it native.
+static NSString *boundTrackpadAreaClickGesture(float x, float y) {
+    NSString *corner = trackpadAreaCornerClickName(x, y);
+    if (corner != nil && bindingForGesture(corner, TRACKPAD) != nil)
+        return corner;
+    if (corner != nil && bindingForGesture(@"Any-Corner Click", TRACKPAD) != nil)
+        return @"Any-Corner Click";
+
+    int edges[2];
+    float spans[2], distances[2];
+    int edgeCount = 0;
+    if (x <= kTrackpadAreaEdgeBandDepth) {
+        edges[edgeCount] = kTrackpadAreaEdgeLeft;
+        spans[edgeCount] = y;
+        distances[edgeCount++] = x;
+    } else if (x >= 1.0f - kTrackpadAreaEdgeBandDepth) {
+        edges[edgeCount] = kTrackpadAreaEdgeRight;
+        spans[edgeCount] = y;
+        distances[edgeCount++] = 1.0f - x;
+    }
+    if (y >= 1.0f - kTrackpadAreaEdgeBandDepth) {
+        edges[edgeCount] = kTrackpadAreaEdgeTop;
+        spans[edgeCount] = x;
+        distances[edgeCount++] = 1.0f - y;
+    } else if (y <= kTrackpadAreaEdgeBandDepth) {
+        edges[edgeCount] = kTrackpadAreaEdgeBottom;
+        spans[edgeCount] = x;
+        distances[edgeCount++] = y;
+    }
+    if (edgeCount == 0)
+        return nil;
+    if (edgeCount == 2 && distances[1] < distances[0]) {
+        int edge = edges[0]; edges[0] = edges[1]; edges[1] = edge;
+        float span = spans[0]; spans[0] = spans[1]; spans[1] = span;
+    }
+
+    for (int i = 0; i < edgeCount; i++) {
+        NSString *third = trackpadAreaEdgeThirdName(edges[i], spans[i]);
+        if (bindingForGesture(third, TRACKPAD) != nil)
+            return third;
+    }
+    for (int i = 0; i < edgeCount; i++) {
+        NSString *half = trackpadAreaEdgeHalfName(edges[i], spans[i]);
+        if (bindingForGesture(half, TRACKPAD) != nil)
+            return half;
+    }
+    for (int i = 0; i < edgeCount; i++) {
+        NSString *whole = trackpadAreaEdgeWholeName(edges[i]);
+        if (bindingForGesture(whole, TRACKPAD) != nil)
+            return whole;
+    }
+    if (bindingForGesture(@"Any-Edge Click", TRACKPAD) != nil)
+        return @"Any-Edge Click";
+    return nil;
+}
+
 #pragma mark - CGEventCallback
 
 static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon) {
@@ -4475,6 +4768,9 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
 
     if (type == kCGEventLeftMouseDragged || type == kCGEventRightMouseDragged) {
         MGTrackpadInteractionRecordPhysicalDrag(&trackpadInteraction);
+        // A suppressed trackpad click that becomes a drag keeps its native
+        // events: restore the held mouse-down before the drag passes through.
+        replayPendingTrackpadPrimaryDown();
         MGMouseClickInteractionRecordDrag(&magicMouseClickInteraction,
             (int)CGEventGetIntegerValueField(event, kCGMouseEventDeltaX),
             (int)CGEventGetIntegerValueField(event, kCGMouseEventDeltaY));
@@ -4482,6 +4778,8 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
 
     if ((type == kCGEventLeftMouseUp || type == kCGEventRightMouseUp) &&
         MGTrackpadInteractionHasPhysicalClick(&trackpadInteraction)) {
+        BOOL trackpadClickReplacedNative = pendingTrackpadPrimaryDown != NULL;
+        clearPendingTrackpadClick();
         int trackpadClickFingerCount =
             MGTrackpadInteractionFinishPhysicalClick(&trackpadInteraction);
         NSString *gesture = nil;
@@ -4490,9 +4788,18 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
             gesture = @"Three-Finger Click";
         else if (trackpadClickFingerCount == 4)
             gesture = @"Four-Finger Click";
-        if (gesture != nil)
+        else if (trackpadClickFingerCount == 1 && pendingTrackpadAreaClickGesture != nil)
+            gesture = pendingTrackpadAreaClickGesture;
+        // The configured action dispatches only when its mouse-down was
+        // suppressed, and its mouse-up is swallowed with it. A click whose
+        // native down passed through stays native and does not dispatch.
+        if (gesture != nil && (trackpadClickReplacedNative || MGTraceIsActive()))
             dispatchCommand(gesture, device);
+        [pendingTrackpadAreaClickGesture release];
+        pendingTrackpadAreaClickGesture = nil;
         trackpadRewritingSecondaryClick = NO;
+        if (trackpadClickReplacedNative)
+            return NULL;
     }
 
     // A click and a tap are the same contacts, so the fingers that performed a
@@ -4514,11 +4821,22 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
             kGestureOwnerPhysicalClick);
         if (trackpadClickBegan)
             trackpadClicked = 1;
-        if (trackpadClickBegan && type == kCGEventRightMouseDown &&
-            MGTrackpadInteractionShouldPreservePrimaryClick(
+        NSString *trackpadAreaClickGesture = nil;
+        float trackpadAreaClickX = 0, trackpadAreaClickY = 0;
+        if (trackpadClickBegan &&
+            MGTrackpadInteractionPendingSingleContactClickPosition(
+                &trackpadInteraction, &trackpadAreaClickX, &trackpadAreaClickY))
+            trackpadAreaClickGesture = boundTrackpadAreaClickGesture(
+                trackpadAreaClickX, trackpadAreaClickY);
+        [pendingTrackpadAreaClickGesture release];
+        pendingTrackpadAreaClickGesture = [trackpadAreaClickGesture retain];
+        BOOL configuredTrackpadClick = trackpadClickBegan &&
+            (trackpadAreaClickGesture != nil ||
+             MGTrackpadInteractionShouldPreservePrimaryClick(
                 &trackpadInteraction,
                 bindingForGesture(@"Three-Finger Click", TRACKPAD) != nil,
-                bindingForGesture(@"Four-Finger Click", TRACKPAD) != nil)) {
+                bindingForGesture(@"Four-Finger Click", TRACKPAD) != nil));
+        if (configuredTrackpadClick && type == kCGEventRightMouseDown) {
             CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, 0);
             CGEventSetType(event, kCGEventLeftMouseDown);
             type = kCGEventLeftMouseDown;
@@ -4532,6 +4850,15 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
         if (simulating) {   //simulating should be reset when mouseup, but sometimes mouseup doesn't get called
             simulating = 0; //so we have to reset it manually
             clearPendingMagicMouseClick();
+        }
+        // A confidently recognized configured trackpad click replaces the
+        // native click: suppress its mouse-down and hold a copy so a drag
+        // can restore the native sequence. An ambiguous click never begins
+        // a physical click here, so it passes through untouched.
+        clearPendingTrackpadClick();
+        if (configuredTrackpadClick && !MGTraceIsActive()) {
+            pendingTrackpadPrimaryDown = CGEventCreateCopy(event);
+            return NULL;
         }
         NSString *gesture = nil;
         int device = 0;
@@ -4857,6 +5184,8 @@ CFMutableArrayRef deviceList;
         me = self;
 
         systemWideElement = AXUIElementCreateSystemWide();
+
+        MGApplicationScopeCacheSetResolver(resolveApplicationCandidates);
 
         // Character Recognizer
         initNormPdf();

@@ -248,6 +248,20 @@ int main(void) {
                 @"raw full lift did not reset trackpad ownership");
 
         MGTrackpadInteractionFinishFrame(&interaction, 0);
+        // Two fingertips plus a palm-scale heel count as two, so a resting
+        // palm cannot arm three-finger scroll suppression at scroll start.
+        MGTrackpadContact palmScroll[3] = {
+            {1, 0.51f, 0.52f, 7.4f},
+            {2, 0.42f, 0.39f, 7.9f},
+            {3, 0.96f, 0.06f, 15.0f},
+        };
+        require(MGTrackpadInteractionFingertipScaleContactCount(palmScroll, 3) == 2,
+                @"palm-scale contact counted toward the swipe family's fingertips");
+        MGTrackpadInteractionObserveBoundScrollFamily(
+            &interaction, MGTrackpadInteractionFingertipScaleContactCount(palmScroll, 3),
+            3, YES);
+        require(!MGTrackpadInteractionSuppressesNativeScroll(&interaction),
+                @"two fingertips plus a resting palm armed scroll suppression");
         MGTrackpadInteractionObserveBoundScrollFamily(&interaction, 3, 3, YES);
         require(MGTrackpadInteractionSuppressesNativeScroll(&interaction),
                 @"bound trackpad swipe family did not suppress native scrolling");

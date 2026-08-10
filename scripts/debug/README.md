@@ -6,6 +6,8 @@ Small single-file programs for diagnosing keyboard and input problems by hand. N
 - `release-secure-input.m` — attempts to release a Secure Input state a terminated process left behind.
 - `right-control-test.m` — posts one right-Control-plus-Space chord through the same event-planning path a binding uses, which separates a recognition problem from a keystroke problem.
 - `release-right-control.m` — releases a right-Control modifier left held down.
+- `dock-notification-probe.m` — reports which `CoreDockSendNotification` call form macOS honors, so a Mission Control or App Expose action that does nothing can be told apart from a gesture that never fired.
+- `watch-middle-button.m` — prints every middle-button down, drag, and up, so a `middle-click` binding can be watched without an application that uses the middle button. A press that never prints its up left the button down.
 
 Compile one with clang, naming the frameworks it imports:
 

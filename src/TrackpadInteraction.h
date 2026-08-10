@@ -22,6 +22,10 @@ typedef struct {
     int currentContactCount;
     int maximumContactCount;
     int pendingClickContactCount;
+    float lastContactX;
+    float lastContactY;
+    float pendingClickX;
+    float pendingClickY;
     double physicalClickContactsLiftedAt;
     MGContactOnsetTracker rawContactOnsets;
 } MGTrackpadInteraction;
@@ -35,6 +39,8 @@ void MGTrackpadInteractionObserveContacts(MGTrackpadInteraction *interaction,
                                           const MGTrackpadContact *contacts,
                                           int contactCount,
                                           double timestamp);
+int MGTrackpadInteractionFingertipScaleContactCount(const MGTrackpadContact *contacts,
+                                                    int contactCount);
 BOOL MGTrackpadInteractionContactsAreEligible(const float *majorAxes,
                                               int contactCount);
 BOOL MGTrackpadInteractionContactsFormHoldTapPair(float firstX,
@@ -53,6 +59,9 @@ BOOL MGTrackpadInteractionHasPhysicalClick(const MGTrackpadInteraction *interact
 BOOL MGTrackpadInteractionShouldPreservePrimaryClick(const MGTrackpadInteraction *interaction,
                                                      BOOL threeFingerBindingAvailable,
                                                      BOOL fourFingerBindingAvailable);
+BOOL MGTrackpadInteractionPendingSingleContactClickPosition(const MGTrackpadInteraction *interaction,
+                                                            float *outX,
+                                                            float *outY);
 void MGTrackpadInteractionRecordPhysicalDrag(MGTrackpadInteraction *interaction);
 int MGTrackpadInteractionFinishPhysicalClick(MGTrackpadInteraction *interaction);
 BOOL MGTrackpadInteractionContactsArrivedWithin(const MGTrackpadInteraction *interaction,

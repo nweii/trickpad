@@ -348,15 +348,25 @@ int main(void) {
         NSArray *mouseClickProblems = nil;
         s = parseWithProblems(@"[mouse]\ntwo-finger-click = return\nthree-finger-click = escape\n",
                               &mouseClickProblems);
-        if (bindingFor(s, @"MagicMouseCommands", @"Two-Finger Click") != nil ||
-            bindingFor(s, @"MagicMouseCommands", @"Three-Finger Click") != nil)
-            fail(@"mouse physical clicks default off", @"no bindings", @"bindings loaded");
-        if ([mouseClickProblems count] != 2)
-            fail(@"disabled mouse physical clicks are reported", @2,
+        if ([mouseClickProblems count] != 0)
+            fail(@"mouse physical clicks load without a setting", @0,
                  @([mouseClickProblems count]));
 
-        // The opt-in applies after the whole file parses, so [general] may
-        // appear after the bindings without making the setting order-sensitive.
+        // The setting is accepted for compatibility with existing files and
+        // has no effect; either value leaves the bindings loaded and reports
+        // nothing.
+        NSArray *inertFlagProblems = nil;
+        s = parseWithProblems(@"[mouse]\ntwo-finger-click = return\n"
+                              @"[general]\nexperimental-mouse-click-gestures = false\n",
+                              &inertFlagProblems);
+        if (bindingFor(s, @"MagicMouseCommands", @"Two-Finger Click") == nil ||
+            [inertFlagProblems count] != 0)
+            fail(@"experimental-mouse-click-gestures is accepted and inert",
+                 @"a binding and no problems",
+                 [NSString stringWithFormat:@"%@; %lu problems",
+                  bindingFor(s, @"MagicMouseCommands", @"Two-Finger Click") ?: @"no binding",
+                  (unsigned long)[inertFlagProblems count]]);
+
         s = parse(@"[mouse]\ntwo-finger-click = return\nthree-finger-click = escape\n"
                   @"[general]\nexperimental-mouse-click-gestures = true\n");
         if (bindingFor(s, @"MagicMouseCommands", @"Two-Finger Click") == nil)
@@ -408,6 +418,53 @@ int main(void) {
         if (![[g objectForKey:@"Defer"] boolValue])
             fail(@"expanded tap binding can defer its action", @YES,
                  [g objectForKey:@"Defer"] ?: @"missing");
+
+        // A double tap is its own binding, on either device, and a single tap
+        // beside it needs an explicit defer to survive the repeat. Deferring
+        // the double tap itself has nothing to wait for and is skipped.
+        s = parse(@"[trackpad]\nthree-finger-tap { action = \"escape\", defer = true }\n"
+                  @"three-finger-double-tap = \"cmd+shift+return\"\n");
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Double-Tap");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 36)
+            fail(@"a double tap binds beside its deferred single tap", @36,
+                 [g objectForKey:@"KeyCode"] ?: @"missing");
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Tap");
+        if (![[g objectForKey:@"Defer"] boolValue])
+            fail(@"a single tap beside its double tap keeps its deferral", @YES,
+                 [g objectForKey:@"Defer"] ?: @"missing");
+
+        s = parse(@"[mouse]\ntwo-finger-double-tap = \"escape\"\n");
+        if (bindingFor(s, @"MagicMouseCommands", @"Two-Finger Tap") != nil)
+            fail(@"binding only the double tap leaves the single tap unbound",
+                 @"no single-tap binding", @"a binding");
+        g = bindingFor(s, @"MagicMouseCommands", @"Two-Finger Double-Tap");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 53)
+            fail(@"a mouse double tap binds on its own", @53,
+                 [g objectForKey:@"KeyCode"] ?: @"missing");
+
+        NSArray *doubleDeferProblems = nil;
+        s = parseWithProblems(@"[trackpad]\nthree-finger-double-tap { action = \"escape\", defer = true }\n",
+                              &doubleDeferProblems);
+        if (bindingFor(s, @"TrackpadCommands", @"Three-Finger Double-Tap") != nil ||
+            [doubleDeferProblems count] == 0)
+            fail(@"defer on a double tap is reported and skipped",
+                 @"a problem and no binding", @"a binding");
+
+        // Every tap slug that has a double-tap sibling must reach it through
+        // the one map dispatch reads, or the sibling can never fire.
+        for (NSDictionary *slugs in @[[Config mouseGestureSlugs], [Config trackpadGestureSlugs]]) {
+            for (NSString *slug in slugs) {
+                if (![slug hasSuffix:@"-double-tap"])
+                    continue;
+                NSString *single = [slug stringByReplacingOccurrencesOfString:@"-double-tap"
+                                                                   withString:@"-tap"];
+                NSString *singleEngine = [[slugs objectForKey:single] firstObject];
+                NSString *reached = [Config doubleTapGestureName:singleEngine];
+                NSString *expected = [[slugs objectForKey:slug] firstObject];
+                if (![reached isEqualToString:expected])
+                    fail([@"repeating " stringByAppendingString:single], expected, reached ?: @"nil");
+            }
+        }
 
         s = parse(@"[trackpad]\nthree-finger-click { action = \"escape\", haptic = false }\n");
         g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Click");
@@ -489,6 +546,220 @@ int main(void) {
         if (g == nil || [[g objectForKey:@"Enable"] boolValue])
             fail(@"app property override preserves a global exclusion",
                  @"disabled binding", g ?: @"missing");
+
+        // A bare swipe slug loads under its family engine name beside any
+        // directional binding, so dispatch can prefer the direction and fall
+        // back to the family.
+        s = parse(@"[trackpad]\nthree-finger-swipe = escape\n"
+                  @"three-finger-swipe-left = tab\n"
+                  @"[mouse]\ntwo-finger-swipe = escape\n");
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Swipe-Any");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 53)
+            fail(@"bare swipe slug binds the family name", @53, [g objectForKey:@"KeyCode"]);
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Swipe-Left");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 48)
+            fail(@"directional swipe binding stays its own entry", @48, [g objectForKey:@"KeyCode"]);
+        if (bindingFor(s, @"TrackpadCommands", @"Three-Swipe-Right") != nil)
+            fail(@"bare swipe slug does not expand into directional names",
+                 @"no directional entry", @"an entry");
+        if (bindingFor(s, @"MagicMouseCommands", @"Two-Swipe-Any") == nil)
+            fail(@"mouse bare swipe slug binds its family name", @"a binding", @"missing");
+
+        // Dispatch resolves the recognized direction first and consults this
+        // mapping only when no binding names it. Every directional swipe in
+        // the vocabulary must reach a family name its own device also exposes.
+        if (![[Config directionlessGestureName:@"One-Swipe-Left"] isEqualToString:@"One-Swipe-Any"] ||
+            ![[Config directionlessGestureName:@"Two-Swipe-Right"] isEqualToString:@"Two-Swipe-Any"] ||
+            ![[Config directionlessGestureName:@"Three-Swipe-Up"] isEqualToString:@"Three-Swipe-Any"] ||
+            ![[Config directionlessGestureName:@"Four-Swipe-Down"] isEqualToString:@"Four-Swipe-Any"])
+            fail(@"directional swipes map to their family name",
+                 @"the -Swipe-Any name for the finger count", @"a different mapping");
+        if ([Config directionlessGestureName:@"Three-Swipe-Any"] != nil ||
+            [Config directionlessGestureName:@"Top-Left-Corner Click"] != nil ||
+            [Config directionlessGestureName:@"Two-Finger Tap"] != nil)
+            fail(@"family fallback applies only to directional swipes",
+                 @"nil", @"a family name");
+        for (NSDictionary *slugs in @[[Config mouseGestureSlugs], [Config trackpadGestureSlugs]]) {
+            NSMutableSet *deviceEngineNames = [NSMutableSet set];
+            for (NSString *slug in slugs)
+                [deviceEngineNames addObjectsFromArray:[slugs objectForKey:slug]];
+            for (NSString *engineName in deviceEngineNames) {
+                NSString *family = [Config directionlessGestureName:engineName];
+                if (family != nil && ![deviceEngineNames containsObject:family])
+                    fail([@"family fallback is bindable for " stringByAppendingString:engineName],
+                         family, @"absent from the device vocabulary");
+            }
+        }
+
+        // The bare area-click slugs load under one engine name each, which the
+        // region cascade tries after the named regions of the same kind.
+        s = parse(@"[trackpad]\ncorner-click = escape\nedge-click = tab\n"
+                  @"top-left-corner-click = space\n");
+        g = bindingFor(s, @"TrackpadCommands", @"Any-Corner Click");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 53)
+            fail(@"corner-click binds the any-corner name", @53, [g objectForKey:@"KeyCode"]);
+        g = bindingFor(s, @"TrackpadCommands", @"Any-Edge Click");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 48)
+            fail(@"edge-click binds the any-edge name", @48, [g objectForKey:@"KeyCode"]);
+        g = bindingFor(s, @"TrackpadCommands", @"Top-Left-Corner Click");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 49)
+            fail(@"named corner binding stays its own entry", @49, [g objectForKey:@"KeyCode"]);
+
+        // Area-click names accept their words in any order. The pure
+        // canonicalizer resolves each reordering to the documented slug, uses
+        // adjacency to split the edge-region word-multiset trap, and returns
+        // nil for orderings that stay ambiguous or name nothing.
+        NSDictionary *reorderings = @{
+            // Bare and single-direction forms, every region shape.
+            @"click-edge": @"edge-click",
+            @"click-corner": @"corner-click",
+            @"edge-left-click": @"left-edge-click",
+            @"click-top-edge": @"top-edge-click",
+            // Corner directions are one vertical and one horizontal word, so
+            // the bag alone decides.
+            @"corner-click-top-right": @"top-right-corner-click",
+            @"left-bottom-corner-click": @"bottom-left-corner-click",
+            @"click-corner-right-bottom": @"bottom-right-corner-click",
+            // Edge halves, including the issue's example.
+            @"top-half-left-edge-click": @"left-edge-top-half-click",
+            @"click-right-edge-bottom-half": @"right-edge-bottom-half-click",
+            // The trap pair shares a word multiset; adjacency to "edge"
+            // resolves each side to a different canonical name.
+            @"bottom-half-right-edge-click": @"right-edge-bottom-half-click",
+            @"right-half-bottom-edge-click": @"bottom-edge-right-half-click",
+            // Edge thirds. "middle" can never be the edge, so the direction on
+            // the other side of "edge" claims the slot.
+            @"middle-third-left-edge-click": @"left-edge-middle-third-click",
+            @"middle-edge-top-third-click": @"top-edge-middle-third-click",
+            @"third-bottom-edge-right-click": @"bottom-edge-right-third-click",
+            // Canonical names pass through unchanged.
+            @"left-edge-top-half-click": @"left-edge-top-half-click",
+            @"top-edge-left-half-click": @"top-edge-left-half-click",
+            @"top-right-corner-click": @"top-right-corner-click",
+        };
+        for (NSString *input in reorderings) {
+            NSString *canonical = [Config canonicalAreaClickSlug:input
+                inSlugs:[Config trackpadGestureSlugs]];
+            if (![canonical isEqualToString:[reorderings objectForKey:input]])
+                fail([@"reordered area-click canonicalizes: " stringByAppendingString:input],
+                     [reorderings objectForKey:input], canonical ?: @"nil");
+        }
+        for (NSString *rejected in @[
+            @"edge-half-top-left-click",   // no direction beside "edge": ambiguous
+            @"left-left-edge-click",       // repeated word
+            @"middle-edge-click",          // middle is never an edge
+            @"top-left-edge-click",        // two directions without a size
+            @"three-finger-tap",           // not an area click
+            @"top-half-left-corner-click", // sizes belong to edges only
+        ]) {
+            NSString *canonical = [Config canonicalAreaClickSlug:rejected
+                inSlugs:[Config trackpadGestureSlugs]];
+            if (canonical != nil)
+                fail([@"area-click reordering rejects: " stringByAppendingString:rejected],
+                     @"nil", canonical);
+        }
+
+        // The generic canonicalizer resolves a bag of words to a slug only
+        // when exactly one slug matches, so its safety rests on no two
+        // canonical slugs of a device sharing a word multiset. The edge
+        // family shares multisets by design and is owned by the adjacency
+        // rule above; hold-tap names carry their own beside-the-anchor rule;
+        // brush names are ordered by "to" and load only as written. Assert
+        // the uniqueness for everything else rather than trusting it.
+        for (NSDictionary *slugs in @[[Config mouseGestureSlugs], [Config trackpadGestureSlugs]]) {
+            NSMutableDictionary *bags = [NSMutableDictionary dictionary];
+            for (NSString *slug in slugs) {
+                NSArray *words = [slug componentsSeparatedByString:@"-"];
+                if ([words containsObject:@"edge"] || [words containsObject:@"to"] ||
+                    ([words containsObject:@"hold"] && [words containsObject:@"tap"]))
+                    continue;
+                NSString *bag = [[words sortedArrayUsingSelector:@selector(compare:)]
+                                 componentsJoinedByString:@"-"];
+                if ([bags objectForKey:bag] != nil)
+                    fail([@"gesture slugs share a word multiset: " stringByAppendingString:slug],
+                         @"unique word multisets", [bags objectForKey:bag]);
+                [bags setObject:slug forKey:bag];
+            }
+        }
+
+        // Every family reorders through the one canonicalizer, on both
+        // devices. Area-click inputs pass through the adjacency rule.
+        NSDictionary *mouseReorderings = @{
+            @"swipe-up-three-finger": @"three-finger-swipe-up",   // directional swipe
+            @"swipe-one-finger": @"one-finger-swipe",             // bare swipe
+            @"tap-three-finger": @"three-finger-tap",             // tap
+            @"tap-front-right": @"front-right-tap",               // positional tap
+            @"click-two-finger": @"two-finger-click",             // physical click
+            @"tap-right-hold-left": @"hold-left-tap-right",       // hold-tap
+            @"left-hold-right-tap": @"hold-left-tap-right",       // hold-tap, prefix order
+        };
+        for (NSString *input in mouseReorderings) {
+            NSString *canonical = [Config canonicalSlug:input
+                inSlugs:[Config mouseGestureSlugs]];
+            if (![canonical isEqualToString:[mouseReorderings objectForKey:input]])
+                fail([@"reordered mouse name canonicalizes: " stringByAppendingString:input],
+                     [mouseReorderings objectForKey:input], canonical ?: @"nil");
+        }
+        NSDictionary *trackpadReorderings = @{
+            @"swipe-down-four-finger": @"four-finger-swipe-down", // directional swipe
+            @"tap-five-finger": @"five-finger-tap",               // tap
+            @"click-four-finger": @"four-finger-click",           // physical click
+            @"slide-hold": @"hold-slide",                         // hold-slide
+            @"tap-left-hold-right": @"hold-right-tap-left",       // hold-tap
+            @"click-corner-top-right": @"top-right-corner-click", // area click
+        };
+        for (NSString *input in trackpadReorderings) {
+            NSString *canonical = [Config canonicalSlug:input
+                inSlugs:[Config trackpadGestureSlugs]];
+            if (![canonical isEqualToString:[trackpadReorderings objectForKey:input]])
+                fail([@"reordered trackpad name canonicalizes: " stringByAppendingString:input],
+                     [trackpadReorderings objectForKey:input], canonical ?: @"nil");
+        }
+        for (NSString *rejected in @[
+            @"three-finger-flick",     // word bag matching no slug
+            @"swipe-up-four-finger",   // trackpad-only bag on the mouse
+            @"tap-hold-left-right",    // no direction beside an anchor: ambiguous
+            @"to-index-pinky",         // brush order carries meaning; only canonical loads
+        ]) {
+            NSString *canonical = [Config canonicalSlug:rejected
+                inSlugs:[Config mouseGestureSlugs]];
+            if (canonical != nil)
+                fail([@"gesture reordering rejects: " stringByAppendingString:rejected],
+                     @"nil", canonical);
+        }
+        if ([Config canonicalSlug:@"to-pinky-index"
+              inSlugs:[Config trackpadGestureSlugs]] != nil)
+            fail(@"reordered brush name rejects", @"nil", @"a brush slug");
+
+        // Through the parser, a reordered name loads under the canonical
+        // engine name, so the menu and reports display only canonical names.
+        s = parse(@"[mouse]\nswipe-up-three-finger = space\ntap-three-finger = tab\n");
+        g = bindingFor(s, @"MagicMouseCommands", @"Three-Swipe-Up");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 49)
+            fail(@"reordered swipe name loads canonically", @49, [g objectForKey:@"KeyCode"]);
+        g = bindingFor(s, @"MagicMouseCommands", @"Three-Finger Tap");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 48)
+            fail(@"reordered tap name loads canonically", @48, [g objectForKey:@"KeyCode"]);
+        s = parse(@"[trackpad]\ntop-half-left-edge-click = space\n"
+                  @"corner-click-top-right = tab\n");
+        g = bindingFor(s, @"TrackpadCommands", @"Left-Edge Top-Half Click");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 49)
+            fail(@"reordered edge-region name loads canonically", @49, [g objectForKey:@"KeyCode"]);
+        g = bindingFor(s, @"TrackpadCommands", @"Top-Right-Corner Click");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 48)
+            fail(@"reordered corner name loads canonically", @48, [g objectForKey:@"KeyCode"]);
+
+        // An ordering that stays ambiguous is skipped with the normal report.
+        NSArray *ambiguousProblems = nil;
+        s = parseWithProblems(@"[trackpad]\nedge-half-top-left-click = space\n",
+                              &ambiguousProblems);
+        if ([ambiguousProblems count] != 1 ||
+            bindingFor(s, @"TrackpadCommands", @"Left-Edge Top-Half Click") != nil ||
+            bindingFor(s, @"TrackpadCommands", @"Top-Edge Left-Half Click") != nil)
+            fail(@"ambiguous area-click ordering is skipped with a report",
+                 @"one problem and no binding",
+                 [NSString stringWithFormat:@"%lu problems",
+                  (unsigned long)[ambiguousProblems count]]);
 
         s = parse(@"[trackpad]\nthree-finger-tap { action = \"escape\", defer = true }\n"
                   @"[trackpad \"Safari\"]\nthree-finger-tap { defer = false }\n");
@@ -892,9 +1163,34 @@ int main(void) {
                         BOOL physicalClick = [engineName hasSuffix:@"-Finger Click"] &&
                             [engine rangeOfString:[NSString stringWithFormat:@"gesture = @\"%@\"", engineName]].location != NSNotFound &&
                             [engine rangeOfString:@"dispatchCommand(gesture, device)"].location != NSNotFound;
+                        // Area clicks resolve to one gesture name at mouse-down
+                        // and dispatch it through the shared physical-click
+                        // mouse-up path, so each name needs a literal in the
+                        // engine's region tables rather than its own dispatch.
+                        BOOL areaClick = ([engineName rangeOfString:@"-Edge"].location != NSNotFound ||
+                             [engineName hasSuffix:@"-Corner Click"]) &&
+                            [engine rangeOfString:[NSString stringWithFormat:@"@\"%@\"", engineName]].location != NSNotFound &&
+                            [engine rangeOfString:@"pendingTrackpadAreaClickGesture"].location != NSNotFound &&
+                            [engine rangeOfString:@"dispatchCommand(gesture, device)"].location != NSNotFound;
+                        // Family names have no recognizer of their own: the
+                        // directional recognizer dispatches, and the binding
+                        // lookup falls back to the family name it maps to.
+                        // A double tap has no recognizer either: the single
+                        // tap's recognizer dispatches, and a repeat inside the
+                        // double-click interval reaches this name instead.
+                        BOOL doubleTap = [engineName hasSuffix:@" Double-Tap"] &&
+                            [Config doubleTapGestureName:
+                                [engineName stringByReplacingOccurrencesOfString:@" Double-Tap"
+                                                                      withString:@" Tap"]] != nil &&
+                            [engine rangeOfString:@"doubleTapGestureName:gesture"].location != NSNotFound;
+                        BOOL swipeFamily = [engineName hasSuffix:@"-Swipe-Any"] &&
+                            [Config directionlessGestureName:
+                                [engineName stringByReplacingOccurrencesOfString:@"-Any"
+                                                                      withString:@"-Left"]] != nil &&
+                            [engine rangeOfString:@"directionlessGestureName"].location != NSNotFound;
                         BOOL dispatched = [engine rangeOfString:exclusiveDispatch].location != NSNotFound ||
                             [engine rangeOfString:exclusiveTapDispatch].location != NSNotFound;
-                        if (!dispatched && !physicalClick)
+                        if (!dispatched && !physicalClick && !areaClick && !swipeFamily && !doubleTap)
                             fail([NSString stringWithFormat:@"%@ %@ has an exclusive recognizer dispatch", constant, slug],
                                  [NSString stringWithFormat:@"%@ or %@", exclusiveDispatch, exclusiveTapDispatch], @"missing");
                     }
@@ -907,7 +1203,13 @@ int main(void) {
                                          @"MGTrackpadInteractionFinishPhysicalClick",
                                          @"MGTrackpadInteractionShouldPreservePrimaryClick",
                                          @"trackpadRewritingSecondaryClick",
+                                         @"trackpadClickReplacedNative",
+                                         @"pendingTrackpadPrimaryDown = CGEventCreateCopy(event)",
+                                         @"replayPendingTrackpadPrimaryDown",
                                          @"trackpadClickFingerCount == 3", @"trackpadClickFingerCount == 4",
+                                         @"trackpadClickFingerCount == 1",
+                                         @"pendingTrackpadAreaClickGesture",
+                                         @"MGTrackpadInteractionPendingSingleContactClickPosition",
                                          @"magicMouseThreeFingerFlag", @"device = TRACKPAD",
                                          @"device = MAGICMOUSE", @"dispatchCommand(gesture, device)",
                                          @"dispatchMagicMousePhysicalClickForContactCount"]) {
@@ -1001,10 +1303,31 @@ int main(void) {
                 fail(@"deferred binding uses the Mac double-click interval",
                      @"deferred dispatcher integration", @"missing");
 
+            // One pending window serves both the deferred single tap and the
+            // double tap. A second window or timer would drift from it.
+            for (NSString *required in @[
+                @"[Config doubleTapGestureName:gesture]",
+                @"if (deferred || doubleBinding != nil)",
+                @"repeat:repeated",
+                @"dispatchBindingNow(doubleGesture, device, doubleBinding, doubleApplication)",
+            ]) {
+                if ([engine rangeOfString:required].location == NSNotFound)
+                    fail(@"a repeated tap dispatches its double tap through the one pending window",
+                         required, @"missing");
+            }
+
             if ([engine rangeOfString:@"objectForKey:@\"ScriptPath\""] .location == NSNotFound ||
                 [engine rangeOfString:@"[ScriptRunner launchScriptAtPath:"] .location == NSNotFound)
                 fail(@"script binding launches through ScriptRunner",
                      @"script runner integration", @"missing");
+
+            // Every swipe family that can be mistaken for the device's own
+            // scrolling must arm suppression, not the three-finger one alone.
+            if ([engine rangeOfString:@"observeBoundSwipeFamilies(TRACKPAD"] .location == NSNotFound ||
+                [engine rangeOfString:@"observeBoundSwipeFamilies(MAGICMOUSE"] .location == NSNotFound ||
+                [engine rangeOfString:@"@[@\"Three\", @\"Four\"] : @[@\"Two\", @\"Three\"]"] .location == NSNotFound)
+                fail(@"every swipe family that overlaps scrolling arms suppression",
+                     @"scroll suppression coverage", @"missing");
 
             if ([engine rangeOfString:@"bindingPreference != nil"] .location == NSNotFound ||
                 [engine rangeOfString:@"enabled && device == TRACKPAD"] .location == NSNotFound ||
@@ -1016,6 +1339,41 @@ int main(void) {
                 [engine rangeOfString:@"resolvedBindingForGesture"] .location == NSNotFound)
                 fail(@"app scopes resolve by display name or bundle identifier",
                      @"shared application binding resolver", @"missing");
+
+            // The area-click cascade resolves most specific first: named
+            // corner, the any-corner name, named thirds, halves, whole edges,
+            // then the any-edge name. Source order carries that precedence.
+            NSString *areaCascade = section(engine,
+                @"static NSString *boundTrackpadAreaClickGesture",
+                @"#pragma mark - CGEventCallback");
+            NSArray *cascadeOrder = @[@"return corner;",
+                                      @"@\"Any-Corner Click\"",
+                                      @"trackpadAreaEdgeThirdName",
+                                      @"trackpadAreaEdgeHalfName",
+                                      @"trackpadAreaEdgeWholeName",
+                                      @"@\"Any-Edge Click\""];
+            NSUInteger previousLocation = 0;
+            for (NSString *step in cascadeOrder) {
+                NSRange found = [areaCascade rangeOfString:step];
+                if (found.location == NSNotFound || found.location < previousLocation) {
+                    fail(@"area-click cascade keeps most-specific-first order",
+                         [cascadeOrder componentsJoinedByString:@" before "], step);
+                    break;
+                }
+                previousLocation = found.location;
+            }
+
+            // The family fallback runs only when no entry names the direction,
+            // so an explicit directional "off" keeps excluding the direction.
+            NSString *resolver = section(engine,
+                @"static NSDictionary *bindingForGestureWithMatch",
+                @"static NSDictionary *bindingForGesture(");
+            for (NSString *required in @[@"directionlessGestureName:gesture",
+                                         @"binding != nil || declared"]) {
+                if ([resolver rangeOfString:required].location == NSNotFound)
+                    fail(@"binding lookup falls back to the swipe family name",
+                         required, @"missing");
+            }
         }
 
         if (failures == 0) {

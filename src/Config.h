@@ -42,9 +42,27 @@
 + (NSDictionary *)mouseGestureSlugs;
 + (NSDictionary *)trackpadGestureSlugs;
 
+// Canonicalizes a reordered area-click name (edge regions, corners, and the
+// bare edge-click and corner-click forms) to the slug `slugs` documents.
+// Ambiguous orderings and non-area-click names return nil.
++ (NSString *)canonicalAreaClickSlug:(NSString *)slug inSlugs:(NSDictionary *)slugs;
+
+// Canonicalizes a reordered gesture name from any family to the slug `slugs`
+// documents, trying the area-click rule first and a unique bag-of-words match
+// otherwise. Ambiguous orderings and unknown word sets return nil.
++ (NSString *)canonicalSlug:(NSString *)slug inSlugs:(NSDictionary *)slugs;
+
 // Returns the first engine name for the public slug containing raw, so aliases
 // can be presented as one configured gesture.
 + (NSString *)canonicalGestureName:(NSString *)raw inSlugs:(NSDictionary *)slugs;
+
+// The directionless family name a directional swipe falls back to at dispatch
+// when no binding names its own direction. Returns nil for any other gesture.
++ (NSString *)directionlessGestureName:(NSString *)engineName;
+
+// The double-tap name a repeat of this tap reaches at dispatch. Returns nil for
+// any gesture that does not pair with a double tap.
++ (NSString *)doubleTapGestureName:(NSString *)engineName;
 
 // Every action slug the configuration accepts, mapped to the engine command
 // string it dispatches.

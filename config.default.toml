@@ -16,7 +16,6 @@ config-version = 3
 dominant-hand = "right"
 haptic-feedback = true
 menu-bar-icon = "trickpad"   # Or name an SF Symbol: "sf:hand.tap.fill"
-experimental-mouse-click-gestures = false
 
 # ----------------------------------------
 
@@ -38,3 +37,10 @@ hold-right-tap-left = "escape"
 
 # four-finger-tap = "url:things:///add?title={{clipboard|urlencode}}"   # New to-do from whatever you copied
 # three-finger-tap = "script:~/bin/my-script"   # Any executable file, run directly
+
+# ----------------------------------------
+
+# A binding can apply in one app only. Name the app in the heading:
+
+# [TRACKPAD."Finder"]
+# top-right-corner-click = "cmd+i"   # Show info for the selected file

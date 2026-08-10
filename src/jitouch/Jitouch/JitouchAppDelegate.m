@@ -10,6 +10,7 @@
 #import "JitouchAppDelegate.h"
 #import "Settings.h"
 #import "Gesture.h"
+#import "ApplicationScopeCache.h"
 #import "CursorWindow.h"
 #import <Carbon/Carbon.h>
 #import <CoreFoundation/CFPreferences.h>
@@ -19,6 +20,8 @@
 #import "KeyUtility.h"
 #import "TraceRecorder.h"
 #import "TraceSessionModel.h"
+
+static NSMenuItem *MGMenuSectionHeader(NSString *title);
 #include <pwd.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -158,6 +161,26 @@ static NSArray *magicMouseGestureCatalogAuditProtocol(void) {
               @"instruction": @"Use the mouse normally for up to two minutes. Click, scroll, reposition, and switch Spaces as usual. Do not intentionally perform a Trickpad gesture. Actions and native-scroll suppression are disabled for shadow recognitions."},
         ] retain];
     });
+    return steps;
+}
+
+// Builds one repetition per step for a motion that has no recognizer. Nothing
+// is expected to dispatch, so every step records raw contact frames and a
+// human execution-quality label only.
+static NSArray *candidateGestureTraceProtocol(NSString *candidate, NSInteger repetitions) {
+    NSMutableArray *steps = [NSMutableArray array];
+    for (NSInteger repetition = 1; repetition <= repetitions; repetition++) {
+        [steps addObject:@{
+            @"id": [NSString stringWithFormat:@"candidate-r%ld", (long)repetition],
+            // The name stays out of every step field the recorder writes into an
+            // event. Only the panel heading shows it.
+            @"requested": @"candidate-gesture",
+            @"heading": candidate,
+            @"expected": @0,
+            @"instruction": [NSString stringWithFormat:
+                @"Perform the candidate motion once, the same way each time. Repetition %ld of %ld.",
+                (long)repetition, (long)repetitions]}];
+    }
     return steps;
 }
 
@@ -611,6 +634,10 @@ static BOOL runLaunchctl(NSArray *arguments) {
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://thirdwind.fyi/trickpad/download"]];
 }
 
+- (void)openDocs:(id)sender {
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://thirdwind.fyi/trickpad/docs"]];
+}
+
 - (void)openAccessibilitySettings:(id)sender {
     NSURL *url = [NSURL URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"];
     [[NSWorkspace sharedWorkspace] openURL:url];
@@ -741,6 +768,63 @@ static NSString *commentForBindingLine(NSArray *configLines, NSString *device,
     return nil;
 }
 
+// Where a skipped line belongs in the Current Gestures list, from its problem
+// report ("line N:  text\n          reason"). Recorded line numbers can drift
+// from the file, so placement demands the file still show a matching
+// binding-shaped line at that number inside a device section; a problem that
+// fails the match stays behind the details row rather than landing on the
+// wrong group. Returns nil, or @{@"Device", @"Title", @"Reason"}.
+static NSDictionary *skippedLinePlacement(NSString *problem, NSArray *configLines) {
+    if (![problem hasPrefix:@"line "])
+        return nil;
+    NSRange newline = [problem rangeOfString:@"\n"];
+    NSRange colon = [problem rangeOfString:@":  "];
+    if (newline.location == NSNotFound || colon.location == NSNotFound ||
+        colon.location > newline.location)
+        return nil;
+    NSInteger lineNumber = [[problem substringWithRange:
+        NSMakeRange(5, colon.location - 5)] integerValue];
+    NSCharacterSet *whitespace = [NSCharacterSet whitespaceCharacterSet];
+    NSString *text = [[problem substringWithRange:
+        NSMakeRange(colon.location + 3, newline.location - colon.location - 3)]
+        stringByTrimmingCharactersInSet:whitespace];
+    NSString *reason = [[problem substringFromIndex:newline.location + 1]
+        stringByTrimmingCharactersInSet:whitespace];
+    if (lineNumber < 1 || (NSUInteger)lineNumber > [configLines count])
+        return nil;
+
+    // A binding line names a key before = or {; section headers and prose from
+    // the structural checks do not qualify.
+    if ([text hasPrefix:@"["])
+        return nil;
+    NSUInteger keyEnd = NSNotFound;
+    for (NSUInteger i = 0; i < [text length]; i++) {
+        unichar c = [text characterAtIndex:i];
+        if (c == '=' || c == '{' || [whitespace characterIsMember:c]) { keyEnd = i; break; }
+    }
+    if (keyEnd == NSNotFound || keyEnd == 0)
+        return nil;
+    NSString *key = [text substringToIndex:keyEnd];
+    NSString *fileLine = [configLines[(NSUInteger)lineNumber - 1]
+        stringByTrimmingCharactersInSet:whitespace];
+    if (![fileLine hasPrefix:key])
+        return nil;
+
+    for (NSInteger i = lineNumber - 1; i >= 0; i--) {
+        NSString *line = [configLines[(NSUInteger)i]
+            stringByTrimmingCharactersInSet:whitespace];
+        if (![line hasPrefix:@"["])
+            continue;
+        NSString *header = [[line substringFromIndex:1] uppercaseString];
+        if ([header hasPrefix:@"MOUSE"])
+            return @{@"Device": @"Mouse", @"Title": text, @"Reason": reason};
+        if ([header hasPrefix:@"TRACKPAD"])
+            return @{@"Device": @"Trackpad", @"Title": text, @"Reason": reason};
+        return nil;
+    }
+    return nil;
+}
+
 static NSArray *configFileLines(void) {
     NSString *path = [Config resolvedPath];
     NSString *text = path != nil
@@ -756,6 +840,10 @@ static NSArray *configFileLines(void) {
         return;
 
     NSMenu *sub = [[[NSMenu alloc] initWithTitle:@"Current Gestures"] autorelease];
+    // Binding rows carry no action, and automatic validation would gray them
+    // out. They stay enabled so the text reads at full contrast; clicking one
+    // does nothing. Section headers and the empty row opt out individually.
+    [sub setAutoenablesItems:NO];
     NSArray *configLines = configFileLines();
 
     if (lastConfigRejected || [lastConfigProblems count] > 0) {
@@ -773,6 +861,25 @@ static NSArray *configFileLines(void) {
     NSArray *sources = @[@[@"Mouse", magicMouseCommands ?: @[], [Config mouseGestureSlugs]],
                          @[@"Trackpad", trackpadCommands ?: @[], [Config trackpadGestureSlugs]]];
     BOOL any = NO;
+
+    // Skipped binding lines join their device group dimmed so the gap shows
+    // where the user expects the binding. A rejected reload keeps the previous
+    // configuration's bindings on screen, so its problems, which describe the
+    // rejected file, stay behind the details row alone.
+    NSMutableDictionary *skippedByDevice = [NSMutableDictionary dictionary];
+    if (!lastConfigRejected) {
+        for (NSString *problem in lastConfigProblems) {
+            NSDictionary *placed = skippedLinePlacement(problem, configLines);
+            if (placed == nil)
+                continue;
+            NSMutableArray *rows = [skippedByDevice objectForKey:placed[@"Device"]];
+            if (rows == nil) {
+                rows = [NSMutableArray array];
+                [skippedByDevice setObject:rows forKey:placed[@"Device"]];
+            }
+            [rows addObject:placed];
+        }
+    }
 
     for (NSArray *pair in sources) {
         NSMutableArray *lines = [NSMutableArray array];
@@ -805,18 +912,17 @@ static NSArray *configFileLines(void) {
             }
             [lines addObjectsFromArray:appLines];
         }
-        if ([lines count] == 0)
+        NSArray *skipped = [skippedByDevice objectForKey:pair[0]] ?: @[];
+        if ([lines count] == 0 && [skipped count] == 0)
             continue;
 
         if (any)
             [sub addItem:[NSMenuItem separatorItem]];
         any = YES;
 
-        NSMenuItem *header = [sub addItemWithTitle:pair[0] action:NULL keyEquivalent:@""];
-        [header setEnabled:NO];
+        [sub addItem:MGMenuSectionHeader(pair[0])];
         for (NSArray *line in lines) {
             NSMenuItem *row = [sub addItemWithTitle:line[0] action:NULL keyEquivalent:@""];
-            [row setEnabled:NO];
             [row setIndentationLevel:1];
             // The user's own note from the binding's line, the way they wrote
             // it. The dimmed suffix keeps the row scannable; the tooltip
@@ -835,24 +941,39 @@ static NSArray *configFileLines(void) {
                 }
                 // Parentheses at full menu size separate the user's note from
                 // the binding while skimming; shrunken text read as noise, and
-                // color alone cannot carry the boundary. The explicit colors
-                // keep a commented row matching its disabled neighbors instead
-                // of rendering at full strength.
+                // color alone cannot carry the boundary. The binding renders
+                // at full label strength like its neighbors; the dimmed note
+                // marks where the user's own words begin.
                 NSMutableAttributedString *title = [[[NSMutableAttributedString alloc]
                     initWithString:[NSString stringWithFormat:@"%@  (%@)", line[0], shown]]
                     autorelease];
                 NSUInteger mainLength = [(NSString *)line[0] length];
                 [title addAttributes:@{
                         NSFontAttributeName: [NSFont menuFontOfSize:0],
-                        NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
+                        NSForegroundColorAttributeName: [NSColor labelColor],
                     } range:NSMakeRange(0, mainLength)];
                 [title addAttributes:@{
                         NSFontAttributeName: [NSFont menuFontOfSize:0],
-                        NSForegroundColorAttributeName: [NSColor tertiaryLabelColor],
+                        NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
                     } range:NSMakeRange(mainLength,
                                         [[title string] length] - mainLength)];
                 [row setAttributedTitle:title];
             }
+        }
+        // The whole row dims where a note only dims its parenthetical, so a
+        // skipped line reads as absent rather than active; the reason it was
+        // skipped rides on the tooltip.
+        for (NSDictionary *placed in skipped) {
+            NSMenuItem *row = [sub addItemWithTitle:placed[@"Title"] action:NULL keyEquivalent:@""];
+            [row setIndentationLevel:1];
+            [row setToolTip:placed[@"Reason"]];
+            NSAttributedString *title = [[[NSAttributedString alloc]
+                initWithString:placed[@"Title"]
+                    attributes:@{
+                        NSFontAttributeName: [NSFont menuFontOfSize:0],
+                        NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
+                    }] autorelease];
+            [row setAttributedTitle:title];
         }
     }
 
@@ -867,6 +988,10 @@ static NSArray *configFileLines(void) {
 - (NSString *)debugInformation {
     NSString *version = [[NSBundle mainBundle]
         objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"unknown";
+    NSString *stamp = [[NSBundle mainBundle]
+        objectForInfoDictionaryKey:@"TrickpadBuildStamp"];
+    if (stamp != nil)
+        version = [NSString stringWithFormat:@"%@ (%@)", version, stamp];
     NSString *configPath = [Config resolvedPath] ?: @"missing";
     return [NSString stringWithFormat:
         @"Trickpad %@\nmacOS %@\nAccessibility: %@\nConfiguration: %@\n"
@@ -978,7 +1103,8 @@ static NSTextField *traceText(NSRect frame, CGFloat size, BOOL bold) {
             (unsigned long)count,
             completedTracePath ?: @"Analysis is finishing…"]];
     } else {
-        [traceHeading setStringValue:[step objectForKey:@"requested"] ?: @"Trace step"];
+        [traceHeading setStringValue:[step objectForKey:@"heading"]
+            ?: [step objectForKey:@"requested"] ?: @"Trace step"];
         NSDictionary *status = MGTraceStatus();
         NSString *stateInstruction = phase == MGTraceSessionPreparing
             ? (manualCapture
@@ -1143,35 +1269,77 @@ static NSTextField *traceText(NSRect frame, CGFloat size, BOOL bold) {
     [tracePanel center];
 }
 
+// Asks for the candidate name and repetition count. Returns NO when the person
+// cancels or leaves the name empty.
+- (BOOL)askForCandidateGesture:(NSString **)candidate repetitions:(NSInteger *)repetitions {
+    NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+    [alert setMessageText:@"Record a candidate gesture"];
+    [alert setInformativeText:@"Name the motion you are prototyping and choose how many repetitions to record. No recognizer runs against it; the session records raw contact frames and your label for each repetition."];
+    [alert addButtonWithTitle:@"Start"];
+    [alert addButtonWithTitle:@"Cancel"];
+    NSView *fields = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 54)] autorelease];
+    NSTextField *nameField = [[[NSTextField alloc] initWithFrame:NSMakeRect(0, 28, 300, 24)] autorelease];
+    [[nameField cell] setPlaceholderString:@"Candidate name, such as corner-pull"];
+    NSTextField *countField = [[[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 300, 24)] autorelease];
+    [countField setStringValue:@"10"];
+    [fields addSubview:nameField]; [fields addSubview:countField];
+    [alert setAccessoryView:fields];
+    [[alert window] setInitialFirstResponder:nameField];
+    [NSApp activateIgnoringOtherApps:YES];
+    if ([alert runModal] != NSAlertFirstButtonReturn) return NO;
+    NSString *name = [[nameField stringValue] stringByTrimmingCharactersInSet:
+        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if ([name length] == 0) return NO;
+    if ([name length] > 40) name = [name substringToIndex:40];
+    NSInteger count = [countField integerValue];
+    *candidate = name;
+    *repetitions = MIN(MAX(count, 1), 60);
+    return YES;
+}
+
 - (void)startTraceSession:(id)sender {
     if (MGTraceIsActive()) return;
-    if (!enMMAll) {
+    BOOL tapCalibration = [sender tag] == 1;
+    BOOL ambientCapture = [sender tag] == 2;
+    BOOL catalogAudit = [sender tag] == 3;
+    BOOL candidateGesture = [sender tag] == 4;
+    if (!enMMAll && !candidateGesture) {
         [self reportFailure:@"Magic Mouse gestures are turned off."
                      detail:@"Turn them on in config.toml before starting a trace session. Nothing changed."];
         return;
     }
+    NSString *candidateName = nil;
+    NSInteger candidateRepetitions = 0;
+    if (candidateGesture &&
+        ![self askForCandidateGesture:&candidateName repetitions:&candidateRepetitions])
+        return;
     NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:
         [NSString stringWithFormat:@"Trickpad-Trace-%@", [[NSUUID UUID] UUIDString]]];
     NSString *problem = nil;
-    if (!MGTraceStart(path, &problem)) {
+    if (!MGTraceStartCapture(path, candidateGesture ? @"candidate-gesture-guided"
+                                                    : @"magic-mouse-guided",
+                             candidateName, &problem)) {
         [self reportFailure:@"Could not start the trace session." detail:problem];
         return;
     }
-    BOOL tapCalibration = [sender tag] == 1;
-    BOOL ambientCapture = [sender tag] == 2;
-    BOOL catalogAudit = [sender tag] == 3;
     [activeTraceProtocol release];
-    activeTraceProtocol = [(catalogAudit ? magicMouseGestureCatalogAuditProtocol() :
+    activeTraceProtocol = [(candidateGesture
+            ? candidateGestureTraceProtocol(candidateName, candidateRepetitions) :
+        catalogAudit ? magicMouseGestureCatalogAuditProtocol() :
         ambientCapture ? magicMouseAmbientGestureTraceProtocol() :
         tapCalibration ? magicMouseTapCalibrationTraceProtocol() :
         magicMousePhysicalClickTraceProtocol()) retain];
     [activeTraceProtocolTitle release];
-    activeTraceProtocolTitle = [(catalogAudit ? @"Audit gesture catalog" :
+    activeTraceProtocolTitle = [(candidateGesture
+            ? [NSString stringWithFormat:@"Candidate gesture: %@", candidateName] :
+        catalogAudit ? @"Audit gesture catalog" :
         ambientCapture ? @"Capture normal mouse use" :
         tapCalibration ? @"Magic Mouse tap calibration" :
         @"Magic Mouse physical-click trace") copy];
     [activeTraceProtocolOverview release];
-    activeTraceProtocolOverview = [(catalogAudit
+    activeTraceProtocolOverview = [(candidateGesture
+        ? [NSString stringWithFormat:@"This records the same motion %ld times on the trackpad or the Magic Mouse so a recognizer can be designed from the data. No recognizer runs against it, so nothing is detected and nothing dispatches. Perform the motion the same way each time, then label how well you executed it.\n\nUse Return, M, U, or K so the pointer can stay in the gray surface. Botched retries the same repetition; the other labels advance. Configured Trickpad actions are suppressed; native behavior remains active.", (long)candidateRepetitions] :
+        catalogAudit
         ? @"This shadow-audits every supported Magic Mouse recognizer during up to two minutes of ordinary use, including gestures absent from your configuration. It never fires actions, claims a gesture sequence, or suppresses native scrolling. Potential recognitions are listed in the exported report. Choose Stop, then Export Partial when finished."
         : ambientCapture
         ? @"This captures up to two minutes of ordinary Magic Mouse use so any unexpected configured gesture can be identified without guessing what motion caused it. Work normally after the countdown. Trickpad actions are suppressed, and the panel counts every would-be gesture dispatch. Choose Stop, then Export Partial when finished."
@@ -1179,7 +1347,8 @@ static NSTextField *traceText(NSRect frame, CGFloat size, BOOL bold) {
         ? @"This takes about 3 minutes. It compares deliberate two-finger taps, including taps near an edge, against your natural resting edge contact during ordinary clicks, scrolling, and a brief extra touch. Trickpad reports detection automatically. You only label whether your physical attempt matched the instruction.\n\nUse Return, M, U, or K so the pointer can stay in the gray surface. Botched retries the same step; the other labels advance. Configured Trickpad actions are suppressed; native mouse behavior remains active."
         : @"This takes about 4 minutes. It compares natural, deliberately held, and immediate lifts, upper and lower contact positions, then checks drag, contact-shape, scroll, tap, and rapid-repeat conflicts. Trickpad reports detection automatically. You only label whether your physical attempt matched the instruction.\n\nUse Return, M, U, or K so the pointer can stay in the gray surface. Botched retries the same step; the other labels advance. Configured Trickpad actions are suppressed; native mouse behavior remains active.") copy];
     [activeTraceObservedGesture release];
-    activeTraceObservedGesture = [((ambientCapture || catalogAudit) ? @"*" :
+    activeTraceObservedGesture = [(candidateGesture ? @"none" :
+        (ambientCapture || catalogAudit) ? @"*" :
         tapCalibration ? @"Two-Finger Tap" : nil) copy];
     [traceSession release];
     traceSession = [[MGTraceSessionModel alloc] initWithSteps:currentTraceProtocol()];
@@ -1346,6 +1515,9 @@ static NSTextField *traceText(NSRect frame, CGFloat size, BOOL bold) {
         NSMenuItem *catalog = [menu addItemWithTitle:@"Audit Gesture Catalog…"
                                                 action:@selector(startTraceSession:) keyEquivalent:@""];
         [catalog setTarget:self]; [catalog setTag:3];
+        NSMenuItem *candidate = [menu addItemWithTitle:@"Record Candidate Gesture…"
+                                                action:@selector(startTraceSession:) keyEquivalent:@""];
+        [candidate setTarget:self]; [candidate setTag:4];
         NSMenuItem *start = [menu addItemWithTitle:@"Start Physical Click Trace…"
                                             action:@selector(startTraceSession:) keyEquivalent:@""];
         [start setTarget:self];
@@ -1642,9 +1814,27 @@ static NSArray *agentCandidates(void) {
         NSMenuItem *hint = [menu addItemWithTitle:@"Edit Settings..." action:@selector(preferences:) keyEquivalent:@""];
         [hint setTarget:self];
 
-        NSMenuItem *docs = [menu addItemWithTitle:@"Read the Setup Guide..." action:@selector(about:) keyEquivalent:@""];
+        NSMenuItem *docs = [menu addItemWithTitle:@"Read the Setup Guide" action:@selector(about:) keyEquivalent:@""];
         [docs setTarget:self];
     }
+}
+
+// The one heading style for inert label rows in these menus: the system menu
+// section header, with a small bold faded row standing in before macOS 14.
+static NSMenuItem *MGMenuSectionHeader(NSString *title) {
+    if (@available(macOS 14.0, *))
+        return [NSMenuItem sectionHeaderWithTitle:title];
+    NSMenuItem *header = [[[NSMenuItem alloc] initWithTitle:title
+                                                     action:NULL
+                                              keyEquivalent:@""] autorelease];
+    [header setEnabled:NO];
+    [header setAttributedTitle:[[[NSAttributedString alloc]
+        initWithString:title
+            attributes:@{
+                NSFontAttributeName: [NSFont boldSystemFontOfSize:[NSFont smallSystemFontSize]],
+                NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
+            }] autorelease]];
+    return header;
 }
 
 - (void)showIcon {
@@ -1696,15 +1886,26 @@ static NSArray *agentCandidates(void) {
 
     NSMenu *aboutMenu = [[[NSMenu alloc] initWithTitle:@"About Trickpad"] autorelease];
     NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-    NSMenuItem *versionItem = [aboutMenu addItemWithTitle:
-        [NSString stringWithFormat:@"Version %@", version ?: @"unknown"]
-                                                  action:NULL keyEquivalent:@""];
+    // An unreleased build reports the last shipped version number, so the
+    // build stamp names the commit it actually came from.
+    NSString *stamp = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"TrickpadBuildStamp"];
+    NSString *versionTitle = stamp != nil
+        ? [NSString stringWithFormat:@"Version %@ (%@)", version ?: @"unknown", stamp]
+        : [NSString stringWithFormat:@"Version %@", version ?: @"unknown"];
+    NSMenuItem *versionItem = MGMenuSectionHeader(versionTitle);
+    [aboutMenu addItem:versionItem];
     [versionItem setEnabled:NO];
-    NSMenuItem *downloadItem = [aboutMenu addItemWithTitle:@"Get Latest Version..."
+    // No ellipsis on rows that only open a page: the mark means the command
+    // needs further input before it completes, not that it leaves the app.
+    NSMenuItem *docsItem = [aboutMenu addItemWithTitle:@"Open Docs"
+                                                action:@selector(openDocs:)
+                                         keyEquivalent:@""];
+    [docsItem setTarget:self];
+    NSMenuItem *downloadItem = [aboutMenu addItemWithTitle:@"Get Latest Version"
                                                     action:@selector(getLatestVersion:)
                                              keyEquivalent:@""];
     [downloadItem setTarget:self];
-    NSMenuItem *websiteItem = [aboutMenu addItemWithTitle:@"Website..." action:@selector(about:) keyEquivalent:@""];
+    NSMenuItem *websiteItem = [aboutMenu addItemWithTitle:@"Website" action:@selector(about:) keyEquivalent:@""];
     [websiteItem setTarget:self];
 
     NSMenuItem *aboutItem = [theMenu addItemWithTitle:@"About Trickpad" action:NULL keyEquivalent:@""];
@@ -1988,6 +2189,10 @@ void languageChanged(CFNotificationCenterRef center, void *observer, CFStringRef
                                                           object: @"fyi.thirdwind.trickpad.PrefpaneTarget"];
 
     [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self selector:@selector(wokeUp:) name:NSWorkspaceDidWakeNotification object: NULL];
+
+    // An application-scoped binding must take effect the moment its
+    // application comes forward, so activation drops the cached candidates.
+    MGApplicationScopeCacheObserveApplicationActivation();
 
     //CFNotificationCenterAddObserver(CFNotificationCenterGetDistributedCenter(), self, languageChanged, kTISNotifySelectedKeyboardInputSourceChanged, NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
 }

@@ -4,7 +4,7 @@ Trigger an action without taking your hand off the mouse.
 
 Trickpad turns finger gestures on a Magic Mouse or Magic Trackpad into keyboard shortcuts, built-in actions, custom URLs, or executable scripts. Its gestures include taps, swipes, physical multi-finger clicks, and motions where you hold one finger still while another taps or slides.
 
-The default configuration gives a Magic Mouse a middle click and maps a hold-and-tap gesture on either device to Return. The app runs in the background with a menu bar item and leaves normal clicks and existing gestures alone unless an experimental Magic Mouse physical-click replacement is explicitly enabled.
+The default configuration gives a Magic Mouse a middle click and maps a hold-and-tap gesture on either device to Return. The app runs in the background with a menu bar item and leaves normal clicks and existing gestures alone. A configured physical multi-finger click is the exception: it replaces that click with its bound action, and on the Magic Mouse it must be explicitly enabled.
 
 ## Features
 

@@ -143,6 +143,37 @@ int main(void) {
         MGTraceFinishOpenStep(@"ambient");
         MGTraceStop();
 
+        NSString *candidateRoot = [NSTemporaryDirectory() stringByAppendingPathComponent:
+            [NSString stringWithFormat:@"MGTraceCandidateCheck-%@", [[NSUUID UUID] UUIDString]]];
+        require(MGTraceStartCapture(candidateRoot, @"candidate-gesture-guided",
+                                    @"corner-pull", &problem),
+                @"candidate gesture session did not start");
+        MGTraceBeginStep(@"candidate-r1", @"candidate-gesture", @"none", 0,
+                         @"Perform the candidate motion", YES, NO);
+        require(!MGTraceObservesUnconfiguredGesture(@"Two-Finger Click") &&
+                !MGTraceAuditsGestureCatalog(),
+                @"candidate session evaluated an existing recognizer");
+        MGTraceRecordTrackpadFrame((void *)0x3, 1.0, 1, contacts, 1);
+        MGTraceRecordTrackpadFrame((void *)0x3, 2.0, 2, NULL, 0);
+        usleep(900000);
+        require([[MGTraceStatus() objectForKey:@"awaiting_label"] boolValue],
+                @"a trackpad full lift did not close the candidate capture window");
+        MGTraceMarkStep(@"clean");
+        MGTraceStop();
+        NSDictionary *candidateManifest = [NSJSONSerialization JSONObjectWithData:
+            [NSData dataWithContentsOfFile:[candidateRoot stringByAppendingPathComponent:@"manifest.json"]]
+            options:0 error:nil];
+        require([[candidateManifest objectForKey:@"candidate"] isEqualToString:@"corner-pull"] &&
+                [[candidateManifest objectForKey:@"capture"] isEqualToString:@"candidate-gesture-guided"],
+                @"candidate metadata did not reach the bundle manifest");
+        NSString *candidateEvents = [NSString stringWithContentsOfFile:
+            [candidateRoot stringByAppendingPathComponent:@"events.ndjson"]
+            encoding:NSUTF8StringEncoding error:nil];
+        require([candidateEvents rangeOfString:@"trackpad-1"].location != NSNotFound,
+                @"candidate session did not record trackpad contact frames");
+        require([candidateEvents rangeOfString:@"corner-pull"].location == NSNotFound,
+                @"the typed candidate name reached a trace event envelope");
+
         if (failures == 0) {
             printf("trace recorder: all checks passed\n");
             return 0;

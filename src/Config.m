@@ -36,9 +36,15 @@
             @"one-finger-tap": @[@"One-Finger Tap"],
             @"two-finger-tap": @[@"Two-Finger Tap"],
             @"three-finger-tap": @[@"Three-Finger Tap"],
+            @"one-finger-double-tap": @[@"One-Finger Double-Tap"],
+            @"two-finger-double-tap": @[@"Two-Finger Double-Tap"],
+            @"three-finger-double-tap": @[@"Three-Finger Double-Tap"],
             @"two-finger-click": @[@"Two-Finger Click"],
             @"three-finger-click": @[@"Three-Finger Click"],
             @"front-right-tap": @[@"Right-Front Tap"],
+            @"one-finger-swipe": @[@"One-Swipe-Any"],
+            @"two-finger-swipe": @[@"Two-Swipe-Any"],
+            @"three-finger-swipe": @[@"Three-Swipe-Any"],
             @"one-finger-swipe-left": @[@"One-Swipe-Left"],
             @"one-finger-swipe-right": @[@"One-Swipe-Right"],
             @"two-finger-swipe-left": @[@"Two-Swipe-Left"],
@@ -63,8 +69,44 @@
             @"three-finger-tap": @[@"Three-Finger Tap"],
             @"four-finger-tap": @[@"Four-Finger Tap"],
             @"five-finger-tap": @[@"Five-Finger Tap"],
+            @"two-finger-double-tap": @[@"Two-Finger Double-Tap"],
+            @"three-finger-double-tap": @[@"Three-Finger Double-Tap"],
+            @"four-finger-double-tap": @[@"Four-Finger Double-Tap"],
+            @"five-finger-double-tap": @[@"Five-Finger Double-Tap"],
             @"three-finger-click": @[@"Three-Finger Click"],
             @"four-finger-click": @[@"Four-Finger Click"],
+            @"edge-click": @[@"Any-Edge Click"],
+            @"corner-click": @[@"Any-Corner Click"],
+            @"left-edge-click": @[@"Left-Edge Click"],
+            @"right-edge-click": @[@"Right-Edge Click"],
+            @"top-edge-click": @[@"Top-Edge Click"],
+            @"bottom-edge-click": @[@"Bottom-Edge Click"],
+            @"left-edge-top-half-click": @[@"Left-Edge Top-Half Click"],
+            @"left-edge-bottom-half-click": @[@"Left-Edge Bottom-Half Click"],
+            @"right-edge-top-half-click": @[@"Right-Edge Top-Half Click"],
+            @"right-edge-bottom-half-click": @[@"Right-Edge Bottom-Half Click"],
+            @"top-edge-left-half-click": @[@"Top-Edge Left-Half Click"],
+            @"top-edge-right-half-click": @[@"Top-Edge Right-Half Click"],
+            @"bottom-edge-left-half-click": @[@"Bottom-Edge Left-Half Click"],
+            @"bottom-edge-right-half-click": @[@"Bottom-Edge Right-Half Click"],
+            @"left-edge-top-third-click": @[@"Left-Edge Top-Third Click"],
+            @"left-edge-middle-third-click": @[@"Left-Edge Middle-Third Click"],
+            @"left-edge-bottom-third-click": @[@"Left-Edge Bottom-Third Click"],
+            @"right-edge-top-third-click": @[@"Right-Edge Top-Third Click"],
+            @"right-edge-middle-third-click": @[@"Right-Edge Middle-Third Click"],
+            @"right-edge-bottom-third-click": @[@"Right-Edge Bottom-Third Click"],
+            @"top-edge-left-third-click": @[@"Top-Edge Left-Third Click"],
+            @"top-edge-middle-third-click": @[@"Top-Edge Middle-Third Click"],
+            @"top-edge-right-third-click": @[@"Top-Edge Right-Third Click"],
+            @"bottom-edge-left-third-click": @[@"Bottom-Edge Left-Third Click"],
+            @"bottom-edge-middle-third-click": @[@"Bottom-Edge Middle-Third Click"],
+            @"bottom-edge-right-third-click": @[@"Bottom-Edge Right-Third Click"],
+            @"top-left-corner-click": @[@"Top-Left-Corner Click"],
+            @"top-right-corner-click": @[@"Top-Right-Corner Click"],
+            @"bottom-left-corner-click": @[@"Bottom-Left-Corner Click"],
+            @"bottom-right-corner-click": @[@"Bottom-Right-Corner Click"],
+            @"three-finger-swipe": @[@"Three-Swipe-Any"],
+            @"four-finger-swipe": @[@"Four-Swipe-Any"],
             @"three-finger-swipe-left": @[@"Three-Swipe-Left"],
             @"three-finger-swipe-right": @[@"Three-Swipe-Right"],
             @"three-finger-swipe-up": @[@"Three-Swipe-Up"],
@@ -80,6 +122,150 @@
     return m;
 }
 
+// Area-click names read naturally in several orders, so a reordering of a
+// documented name is accepted and canonicalized here, at parse time, before
+// anything downstream sees it. The edge-region family is ambiguous as a bag of
+// words (left-edge-top-half-click and top-edge-left-half-click share a word
+// multiset), so the direction word attached to "edge" names the edge and the
+// remaining direction and size words form the part. An ordering that leaves no
+// direction attached to "edge" stays ambiguous and returns nil, as does any
+// word set that is not an area-click name in `slugs`.
++ (NSString *)canonicalAreaClickSlug:(NSString *)slug inSlugs:(NSDictionary *)slugs {
+    NSArray *tokens = [slug componentsSeparatedByString:@"-"];
+    NSSet *directions = [NSSet setWithArray:@[@"left", @"right", @"top", @"bottom", @"middle"]];
+    NSSet *sizes = [NSSet setWithArray:@[@"half", @"third"]];
+
+    NSString *shape = nil;      // "edge" or "corner"
+    NSString *size = nil;
+    NSMutableArray *found = [NSMutableArray array];
+    NSUInteger clicks = 0;
+    NSUInteger edgeIndex = NSNotFound;
+    for (NSUInteger i = 0; i < [tokens count]; i++) {
+        NSString *token = [tokens objectAtIndex:i];
+        if ([token isEqualToString:@"click"]) {
+            clicks++;
+        } else if ([token isEqualToString:@"edge"] || [token isEqualToString:@"corner"]) {
+            if (shape != nil)
+                return nil;
+            shape = token;
+            edgeIndex = i;
+        } else if ([sizes containsObject:token]) {
+            if (size != nil)
+                return nil;
+            size = token;
+        } else if ([directions containsObject:token]) {
+            if ([found containsObject:token])
+                return nil;
+            [found addObject:token];
+        } else {
+            return nil;
+        }
+    }
+    if (clicks != 1 || shape == nil)
+        return nil;
+
+    NSString *candidate = nil;
+    if ([shape isEqualToString:@"corner"]) {
+        if (size == nil && [found count] == 0) {
+            candidate = @"corner-click";
+        } else if (size == nil && [found count] == 2) {
+            // Corners have one vertical and one horizontal word; canonical
+            // order puts the vertical first, so the bag alone decides.
+            NSString *vertical = [found containsObject:@"top"] ? @"top" :
+                ([found containsObject:@"bottom"] ? @"bottom" : nil);
+            NSString *horizontal = [found containsObject:@"left"] ? @"left" :
+                ([found containsObject:@"right"] ? @"right" : nil);
+            if (vertical == nil || horizontal == nil)
+                return nil;
+            candidate = [NSString stringWithFormat:@"%@-%@-corner-click", vertical, horizontal];
+        } else {
+            return nil;
+        }
+    } else if (size == nil && [found count] <= 1) {
+        candidate = [found count] == 0 ? @"edge-click" :
+            [NSString stringWithFormat:@"%@-edge-click", [found firstObject]];
+    } else if (size != nil && [found count] == 2) {
+        // Adjacency decides the edge: the direction word beside "edge", the
+        // preceding one first the way the canonical names read. "middle" is
+        // never an edge, so it cannot claim the slot.
+        NSString *edgeDirection = nil;
+        NSString *before = edgeIndex > 0 ? [tokens objectAtIndex:edgeIndex - 1] : nil;
+        NSString *after = edgeIndex + 1 < [tokens count] ? [tokens objectAtIndex:edgeIndex + 1] : nil;
+        if ([found containsObject:before] && ![before isEqualToString:@"middle"])
+            edgeDirection = before;
+        else if ([found containsObject:after] && ![after isEqualToString:@"middle"])
+            edgeDirection = after;
+        if (edgeDirection == nil)
+            return nil;
+        NSString *partDirection = [[found firstObject] isEqualToString:edgeDirection]
+            ? [found lastObject] : [found firstObject];
+        candidate = [NSString stringWithFormat:@"%@-edge-%@-%@-click",
+                     edgeDirection, partDirection, size];
+    } else {
+        return nil;
+    }
+    return [slugs objectForKey:candidate] != nil ? candidate : nil;
+}
+
+// The whole gesture vocabulary accepts its words in any order, canonicalized
+// here at parse time when the exact lookup misses, so everything downstream
+// sees only canonical names. Three families share a word multiset and cannot
+// be named by a bag of words alone: the edge-region family uses the adjacency
+// rule in canonicalAreaClickSlug:, hold-tap names read each direction beside
+// its "hold" or "tap", and brush names are ordered by "to", so only their
+// canonical spellings load. Every other documented name has a unique word
+// multiset, which ConfigCheck asserts, so a bag matching exactly one slug
+// resolves to it; anything still ambiguous or matching nothing returns nil.
++ (NSString *)canonicalSlug:(NSString *)slug inSlugs:(NSDictionary *)slugs {
+    NSString *area = [Config canonicalAreaClickSlug:slug inSlugs:slugs];
+    if (area != nil)
+        return area;
+
+    NSArray *tokens = [slug componentsSeparatedByString:@"-"];
+    NSArray *bag = [tokens sortedArrayUsingSelector:@selector(compare:)];
+
+    if ([bag isEqualToArray:@[@"hold", @"left", @"right", @"tap"]]) {
+        // Each direction pairs with the anchor word beside it. A direction
+        // beside both anchors takes whichever the other direction leaves,
+        // and a direction beside neither leaves the ordering ambiguous.
+        NSString *held = nil;
+        NSString *tapped = nil;
+        for (NSString *direction in @[@"left", @"right"]) {
+            NSUInteger i = [tokens indexOfObject:direction];
+            BOOL nearHold = (i > 0 && [[tokens objectAtIndex:i - 1] isEqualToString:@"hold"]) ||
+                (i + 1 < [tokens count] && [[tokens objectAtIndex:i + 1] isEqualToString:@"hold"]);
+            BOOL nearTap = (i > 0 && [[tokens objectAtIndex:i - 1] isEqualToString:@"tap"]) ||
+                (i + 1 < [tokens count] && [[tokens objectAtIndex:i + 1] isEqualToString:@"tap"]);
+            if (nearHold && !nearTap)
+                held = direction;
+            else if (nearTap && !nearHold)
+                tapped = direction;
+            else if (!nearHold && !nearTap)
+                return nil;
+        }
+        if (held == nil && tapped != nil)
+            held = [tapped isEqualToString:@"left"] ? @"right" : @"left";
+        else if (tapped == nil && held != nil)
+            tapped = [held isEqualToString:@"left"] ? @"right" : @"left";
+        if (held == nil || tapped == nil)
+            return nil;
+        NSString *candidate = [NSString stringWithFormat:@"hold-%@-tap-%@", held, tapped];
+        return [slugs objectForKey:candidate] != nil ? candidate : nil;
+    }
+
+    NSString *match = nil;
+    for (NSString *candidate in slugs) {
+        NSArray *candidateBag = [[candidate componentsSeparatedByString:@"-"]
+                                 sortedArrayUsingSelector:@selector(compare:)];
+        if ([bag isEqualToArray:candidateBag]) {
+            if (match != nil)
+                return nil;
+            match = candidate;
+        }
+    }
+    return match;
+}
+
 + (NSString *)canonicalGestureName:(NSString *)raw inSlugs:(NSDictionary *)slugs {
     for (NSString *slug in slugs) {
         NSArray *engineNames = [slugs objectForKey:slug];
@@ -87,6 +273,48 @@
             return [engineNames firstObject];
     }
     return raw;
+}
+
+// A bare swipe slug binds every direction of its family through one engine
+// name. Dispatch tries the recognized direction first, then this family name,
+// so a directional binding overrides the bare one for its own direction.
++ (NSString *)directionlessGestureName:(NSString *)engineName {
+    static NSDictionary *families = nil;
+    if (families == nil) {
+        families = [@{
+            @"One-Swipe-Left": @"One-Swipe-Any",
+            @"One-Swipe-Right": @"One-Swipe-Any",
+            @"Two-Swipe-Left": @"Two-Swipe-Any",
+            @"Two-Swipe-Right": @"Two-Swipe-Any",
+            @"Three-Swipe-Left": @"Three-Swipe-Any",
+            @"Three-Swipe-Right": @"Three-Swipe-Any",
+            @"Three-Swipe-Up": @"Three-Swipe-Any",
+            @"Three-Swipe-Down": @"Three-Swipe-Any",
+            @"Four-Swipe-Left": @"Four-Swipe-Any",
+            @"Four-Swipe-Right": @"Four-Swipe-Any",
+            @"Four-Swipe-Up": @"Four-Swipe-Any",
+            @"Four-Swipe-Down": @"Four-Swipe-Any",
+        } retain];
+    }
+    return [families objectForKey:engineName];
+}
+
+// The double tap a repeat of this tap reaches, or nil when a tap does not pair
+// with one. A double tap has no recognizer: the single tap's recognizer runs
+// twice, and the second run inside the Mac's double-click interval dispatches
+// this name instead.
++ (NSString *)doubleTapGestureName:(NSString *)engineName {
+    static NSDictionary *doubles = nil;
+    if (doubles == nil) {
+        doubles = [@{
+            @"One-Finger Tap": @"One-Finger Double-Tap",
+            @"Two-Finger Tap": @"Two-Finger Double-Tap",
+            @"Three-Finger Tap": @"Three-Finger Double-Tap",
+            @"Four-Finger Tap": @"Four-Finger Double-Tap",
+            @"Five-Finger Tap": @"Five-Finger Double-Tap",
+        } retain];
+    }
+    return [doubles objectForKey:engineName];
 }
 
 // Built-in engine commands, keyed by the slug the configuration uses. The value
@@ -97,6 +325,9 @@
         m = [@{
             @"middle-click": @"Middle Click",
             @"mission-control": @"Mission Control",
+            @"app-expose": @"Application Windows",
+            @"show-desktop": @"Show Desktop",
+            @"app-switcher": @"Application Switcher",
             @"next-tab": @"Next Tab",
             @"previous-tab": @"Previous Tab",
             @"new-tab": @"New Tab",
@@ -115,22 +346,66 @@
     static NSDictionary *phrases = nil;
     if (phrases == nil) {
         phrases = [@{
-            @"Index-Fix Middle-Near-Tap": @"Hold your left finger, tap to its right",
-            @"Index-Fix Middle-Far-Tap": @"Hold your left finger, tap wide to its right",
-            @"Middle-Fix Index-Near-Tap": @"Hold your right finger, tap to its left",
-            @"Middle-Fix Index-Far-Tap": @"Hold your right finger, tap wide to its left",
-            @"One-Fix Left-Tap": @"Hold your right finger, tap to its left",
-            @"One-Fix Right-Tap": @"Hold your left finger, tap to its right",
+            // Naming the held finger's side reads as a handedness claim
+            // ("your left finger"), and the tap direction already carries the
+            // shape, so the held finger goes unsided.
+            @"Index-Fix Middle-Near-Tap": @"Hold a finger, tap to its right",
+            @"Index-Fix Middle-Far-Tap": @"Hold a finger, tap wide to its right",
+            @"Middle-Fix Index-Near-Tap": @"Hold a finger, tap to its left",
+            @"Middle-Fix Index-Far-Tap": @"Hold a finger, tap wide to its left",
+            @"One-Fix Left-Tap": @"Hold a finger, tap to its left",
+            @"One-Fix Right-Tap": @"Hold a finger, tap to its right",
             @"One-Fix One-Slide": @"Hold one finger, slide another",
             @"One-Finger Tap": @"Tap with one finger",
             @"Two-Finger Tap": @"Tap with two fingers",
             @"Three-Finger Tap": @"Tap with three fingers",
             @"Four-Finger Tap": @"Tap with four fingers",
             @"Five-Finger Tap": @"Tap with five fingers",
+            @"One-Finger Double-Tap": @"Tap twice with one finger",
+            @"Two-Finger Double-Tap": @"Tap twice with two fingers",
+            @"Three-Finger Double-Tap": @"Tap twice with three fingers",
+            @"Four-Finger Double-Tap": @"Tap twice with four fingers",
+            @"Five-Finger Double-Tap": @"Tap twice with five fingers",
             @"Two-Finger Click": @"Click with two fingers",
             @"Three-Finger Click": @"Click with three fingers",
             @"Four-Finger Click": @"Click with four fingers",
+            // Area-click rows front-load the edge and separate the span with
+            // a middle dot, so a column of similar bindings aligns and scans.
+            @"Any-Edge Click": @"Click along any edge",
+            @"Any-Corner Click": @"Click any corner",
+            @"Left-Edge Click": @"Click left edge",
+            @"Right-Edge Click": @"Click right edge",
+            @"Top-Edge Click": @"Click top edge",
+            @"Bottom-Edge Click": @"Click bottom edge",
+            @"Left-Edge Top-Half Click": @"Click left edge · top half",
+            @"Left-Edge Bottom-Half Click": @"Click left edge · bottom half",
+            @"Right-Edge Top-Half Click": @"Click right edge · top half",
+            @"Right-Edge Bottom-Half Click": @"Click right edge · bottom half",
+            @"Top-Edge Left-Half Click": @"Click top edge · left half",
+            @"Top-Edge Right-Half Click": @"Click top edge · right half",
+            @"Bottom-Edge Left-Half Click": @"Click bottom edge · left half",
+            @"Bottom-Edge Right-Half Click": @"Click bottom edge · right half",
+            @"Left-Edge Top-Third Click": @"Click left edge · top third",
+            @"Left-Edge Middle-Third Click": @"Click left edge · middle third",
+            @"Left-Edge Bottom-Third Click": @"Click left edge · bottom third",
+            @"Right-Edge Top-Third Click": @"Click right edge · top third",
+            @"Right-Edge Middle-Third Click": @"Click right edge · middle third",
+            @"Right-Edge Bottom-Third Click": @"Click right edge · bottom third",
+            @"Top-Edge Left-Third Click": @"Click top edge · left third",
+            @"Top-Edge Middle-Third Click": @"Click top edge · middle third",
+            @"Top-Edge Right-Third Click": @"Click top edge · right third",
+            @"Bottom-Edge Left-Third Click": @"Click bottom edge · left third",
+            @"Bottom-Edge Middle-Third Click": @"Click bottom edge · middle third",
+            @"Bottom-Edge Right-Third Click": @"Click bottom edge · right third",
+            @"Top-Left-Corner Click": @"Click top left corner",
+            @"Top-Right-Corner Click": @"Click top right corner",
+            @"Bottom-Left-Corner Click": @"Click bottom left corner",
+            @"Bottom-Right-Corner Click": @"Click bottom right corner",
             @"Right-Front Tap": @"Tap the front right of the mouse",
+            @"One-Swipe-Any": @"Swipe with one finger, any direction",
+            @"Two-Swipe-Any": @"Swipe with two fingers, any direction",
+            @"Three-Swipe-Any": @"Swipe with three fingers, any direction",
+            @"Four-Swipe-Any": @"Swipe with four fingers, any direction",
             @"One-Swipe-Left": @"Swipe left with one finger",
             @"One-Swipe-Right": @"Swipe right with one finger",
             @"Two-Swipe-Left": @"Swipe left with two fingers",
@@ -744,8 +1019,11 @@ static NSDictionary *parseBinding(NSString *rawValue) {
 static NSSet *knownSettingNames(void) {
     static NSSet *s = nil;
     if (s == nil) {
-        s = [[NSSet setWithArray:@[@"config-version", @"dominant-hand", @"menu-bar-icon", @"enable-mouse", @"enable-trackpad", @"tap-speed",
+        s = [[NSSet setWithArray:@[@"config-version", @"dominant-hand", @"menu-bar-icon", @"enable-mouse", @"enable-trackpad", @"tap-speed", @"trackpad-edge-gesture-depth",
                                    @"haptic-feedback", @"verbose-logging",
+                                   // Accepted for compatibility with existing files. Magic Mouse
+                                   // physical-click bindings load unconditionally, so nothing
+                                   // reads this setting; it still parses as a boolean.
                                    @"experimental-mouse-click-gestures"]] retain];
     }
     return s;
@@ -867,7 +1145,7 @@ static void appendTOMLTable(NSMutableString *output, NSInteger *currentLine,
             BOOL wrongType = ([booleans containsObject:key] && value.type != TOML_BOOLEAN) ||
                 ([key isEqualToString:@"config-version"] && value.type != TOML_INT64) ||
                 (([key isEqualToString:@"dominant-hand"] || [key isEqualToString:@"menu-bar-icon"]) && value.type != TOML_STRING) ||
-                ([key isEqualToString:@"tap-speed"] &&
+                (([key isEqualToString:@"tap-speed"] || [key isEqualToString:@"trackpad-edge-gesture-depth"]) &&
                  value.type != TOML_INT64 && value.type != TOML_FP64);
             if (wrongType)
                 rendered = @"\"<wrong TOML type>\"";
@@ -1210,11 +1488,22 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
                 ? [Config mouseGestureSlugs] : [Config trackpadGestureSlugs];
             NSArray *engineNames = [slugs objectForKey:key];
             if (engineNames == nil) {
+                // A reordered gesture name canonicalizes here, so the
+                // declaration key, engine names, and every downstream surface
+                // carry only the canonical spelling.
+                NSString *canonical = [Config canonicalSlug:key inSlugs:slugs];
+                if (canonical != nil) {
+                    key = canonical;
+                    engineNames = [slugs objectForKey:key];
+                }
+            }
+            if (engineNames == nil) {
                 report(line, [NSString stringWithFormat:@"no %@ gesture named \"%@\"", device, key]);
                 continue;
             }
-            if (expandedDefer != nil && ![key hasSuffix:@"-tap"]) {
-                report(line, @"defer is available only for tap gestures");
+            if (expandedDefer != nil &&
+                (![key hasSuffix:@"-tap"] || [key hasSuffix:@"-double-tap"])) {
+                report(line, @"defer is available only for single-tap gestures");
                 continue;
             }
             if (expandedHaptic != nil && [device isEqualToString:@"mouse"]) {
@@ -1299,6 +1588,13 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
                 report(line, @"tap-speed must be a positive number of seconds");
                 continue;
             }
+            if ([key isEqualToString:@"trackpad-edge-gesture-depth"]) {
+                double depth = 0;
+                if (!parsePositiveNumber(value, &depth) || depth >= 0.5) {
+                    report(line, @"trackpad-edge-gesture-depth must be a fraction of the surface above 0 and below 0.5");
+                    continue;
+                }
+            }
             if ([key isEqualToString:@"dominant-hand"] &&
                 ![@[@"left", @"right"] containsObject:[[stripQuotes(value) lowercaseString]
                                                          stringByTrimmingCharactersInSet:
@@ -1339,37 +1635,6 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
 
     BOOL leftHanded = [[stripQuotes(str(@"dominant-hand", @"right")) lowercaseString]
         isEqualToString:@"left"];
-
-    // Magic Mouse physical clicks depend on contact timing and hand posture
-    // that vary across people and devices. Keep them available for testing,
-    // but do not silently activate them in the supported gesture set.
-    if (!parseBoolean(str(@"experimental-mouse-click-gestures", @"false"), NO)) {
-        NSSet *clickNames = [NSSet setWithArray:@[@"Two-Finger Click", @"Three-Finger Click"]];
-        NSMutableSet *reportedBindings = [NSMutableSet set];
-        for (NSString *scopeName in mouseScopeOrder) {
-            NSMutableArray *bindings = [mouseScopes objectForKey:scopeName];
-            for (NSInteger i = (NSInteger)[bindings count] - 1; i >= 0; i--) {
-                NSDictionary *binding = [bindings objectAtIndex:(NSUInteger)i];
-                if (![clickNames containsObject:[binding objectForKey:@"Gesture"]])
-                    continue;
-                NSString *sourceKey = [NSString stringWithFormat:@"%@|%@",
-                    [binding objectForKey:@"SourceLine"], [binding objectForKey:@"SourceText"]];
-                if (![reportedBindings containsObject:sourceKey]) {
-                    [reportedBindings addObject:sourceKey];
-                    [problems addObject:[NSString stringWithFormat:
-                        @"line %@:  %@\n          requires experimental-mouse-click-gestures = true in [GENERAL]",
-                        [binding objectForKey:@"SourceLine"], [binding objectForKey:@"SourceText"]]];
-                }
-                [bindings removeObjectAtIndex:(NSUInteger)i];
-            }
-        }
-        [activeBindingKeys filterUsingPredicate:[NSPredicate predicateWithBlock:
-            ^BOOL(NSString *key, NSDictionary *unused) {
-                return !([key hasPrefix:@"mouse|"] &&
-                         ([key hasSuffix:@"|two-finger-click"] ||
-                          [key hasSuffix:@"|three-finger-click"]));
-            }]];
-    }
 
     NSArray *(^commands)(NSMutableDictionary *, NSMutableArray *) =
         ^NSArray *(NSMutableDictionary *scopes, NSMutableArray *order) {
@@ -1431,13 +1696,13 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
     return @{
         @"enAll": @1,
         @"ClickSpeed": @([str(@"tap-speed", @"0.25") floatValue]),
+        @"AreaClickDepth": @([str(@"trackpad-edge-gesture-depth", @"0.06") floatValue]),
         @"Sensitivity": @4.6666,
         @"ShowIcon": @1,
         @"BindingCount": @([activeBindingKeys count]),
         @"SystemGestureConflicts": MGSystemGestureConflictsForCurrentUser(mouseSlugs, trackpadSlugs),
         @"HapticFeedback": @(parseBoolean(str(@"haptic-feedback", @"true"), YES) ? 1 : 0),
         @"MenuBarIcon": stripQuotes(str(@"menu-bar-icon", @"trickpad")),
-        @"ExperimentalMouseClickGestures": @(parseBoolean(str(@"experimental-mouse-click-gestures", @"false"), NO) ? 1 : 0),
         @"LogLevel": @(parseBoolean(str(@"verbose-logging", @"false"), NO) ? 3 : 1),
         @"enTPAll": @(parseBoolean(str(@"enable-trackpad", @"true"), YES) ? 1 : 0),
         @"enMMAll": @(parseBoolean(str(@"enable-mouse", @"true"), YES) ? 1 : 0),
