@@ -130,7 +130,11 @@ bool MTDeviceIsRunning(MTDeviceRef);
 void MTDeviceGetFamilyID(MTDeviceRef, int*);
 OSStatus MTDeviceGetDeviceID(MTDeviceRef, uint64_t*) __attribute__ ((weak_import));    // no 10.5
 
-void CoreDockSendNotification(NSString *notificationName);
+// The Dock's private notification entry point. It takes a second argument on
+// current macOS, and a call missing it is silently ignored, so Mission Control
+// and its kin do nothing. scripts/debug/dock-notification-probe.m re-tests this
+// when a macOS release moves the private interface again.
+void CoreDockSendNotification(NSString *notificationName, int unused);
 
 static AXUIElementRef systemWideElement = NULL;
 
@@ -1491,16 +1495,16 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                 CGEventPost(kCGSessionEventTap, eventRef);
                 CFRelease(eventRef);
             } else if ([command isEqualToString:@"Show Desktop"]) {
-                CoreDockSendNotification(@"com.apple.showdesktop.awake");
+                CoreDockSendNotification(@"com.apple.showdesktop.awake", 0);
             } /*else if ([command isEqualToString:@"Spaces"]) {
-                CoreDockSendNotification(@"com.apple.workspaces.awake");
+                CoreDockSendNotification(@"com.apple.workspaces.awake", 0);
             } */
             else if ([command isEqualToString:@"Application Windows"]) {
-                CoreDockSendNotification(@"com.apple.expose.front.awake");
+                CoreDockSendNotification(@"com.apple.expose.front.awake", 0);
             } else if ([command isEqualToString:@"Mission Control"]) {
-                CoreDockSendNotification(@"com.apple.expose.awake");
+                CoreDockSendNotification(@"com.apple.expose.awake", 0);
             } else if ([command isEqualToString:@"Launchpad"]) {
-                CoreDockSendNotification(@"com.apple.launchpad.toggle");
+                CoreDockSendNotification(@"com.apple.launchpad.toggle", 0);
             } else if ([command isEqualToString:@"Dashboard"]) {
                 NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
                 [[NSWorkspace sharedWorkspace] launchApplication:@"Dashboard"];
@@ -1575,7 +1579,7 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                     [keyUtil simulateKey:@"End" ShftDown:NO CtrlDown:NO AltDown:NO CmdDown:NO];
                 CFSafeRelease(tmpRef);
             } else if ([command isEqualToString:@"Application Switcher"]) {
-                CoreDockSendNotification(@"com.apple.appswitcher.awake");
+                CoreDockSendNotification(@"com.apple.appswitcher.awake", 0);
             } else if ([command isEqualToString:@"Play / Pause"]) {
                 [keyUtil simulateSpecialKey:NX_KEYTYPE_PLAY];
             } else if ([command isEqualToString:@"Next"]) {
