@@ -10,8 +10,8 @@ Gestures that hold one finger still are named by where the fingers sit, not by w
 
 | Write this | Hand motion |
 |---|---|
-| `hold-left-tap-right` | Hold one finger still, tap to its right with another |
-| `hold-right-tap-left` | Hold one finger still, tap to its left with another |
+| `hold-left-tap-right` | Hold one finger still and tap to its right with another, keeping the hold through the tap |
+| `hold-right-tap-left` | Hold one finger still and tap to its left with another, keeping the hold through the tap |
 | `one-finger-tap` | Tap with one finger |
 | `two-finger-tap` | Tap with two fingers |
 | `three-finger-tap` | Tap with three fingers |
@@ -40,8 +40,8 @@ The trackpad recognizes a hold-and-slide in one direction only, so it has one sl
 
 | Write this | Hand motion |
 |---|---|
-| `hold-left-tap-right` | Hold one finger still, tap to its right with another |
-| `hold-right-tap-left` | Hold one finger still, tap to its left with another |
+| `hold-left-tap-right` | Hold one finger still and tap to its right with another, keeping the hold through the tap |
+| `hold-right-tap-left` | Hold one finger still and tap to its left with another, keeping the hold through the tap |
 | `hold-slide` | Hold one finger still, slide another |
 | `two-finger-tap` | Tap with two fingers |
 | `three-finger-tap` | Tap with three fingers |
