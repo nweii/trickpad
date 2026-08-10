@@ -8,7 +8,7 @@ Gestures that hold one finger still are named by where the fingers sit, not by w
 
 ## Magic Mouse
 
-| Write this | The motion |
+| Write this | Hand motion |
 |---|---|
 | `hold-left-tap-right` | Hold one finger still, tap to its right with another |
 | `hold-right-tap-left` | Hold one finger still, tap to its left with another |
@@ -33,7 +33,7 @@ Physical clicks ignore narrow contacts at either side and palm contacts at the r
 
 The trackpad recognizes a hold-and-slide in one direction only, so it has one slide name where the mouse has two.
 
-| Write this | The motion |
+| Write this | Hand motion |
 |---|---|
 | `hold-left-tap-right` | Hold one finger still, tap to its right with another |
 | `hold-right-tap-left` | Hold one finger still, tap to its left with another |
@@ -65,7 +65,7 @@ Regions stay narrow by default so a click during ordinary pointing does not land
 
 An area click fires only when the clicking finger is the only contact on the surface. Lift your palm and resting fingers for the click. This keeps a resting hand from triggering regions, at the cost of making each area click a deliberate motion. Binding many regions at once works, but neighboring regions sit close together, so a dense layout asks for conscious aim; most configurations are better served by a few well-separated regions.
 
-| Write this | The region |
+| Write this | Part |
 |---|---|
 | `left-edge-click` | Anywhere along the left edge |
 | `right-edge-click` | Anywhere along the right edge |
