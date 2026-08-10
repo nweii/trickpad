@@ -25,6 +25,7 @@
 
 ### Changed
 
+- Make the Magic Mouse `two-finger-click` and `three-finger-click` gestures standard. They load without the `experimental-mouse-click-gestures` setting. The setting is no longer needed. A configuration file that sets it keeps loading.
 - Play a binding's `sound` before its `say` words when a binding sets both. Before, the sound and the speech started together.
 - Make a configured trackpad `three-finger-click` or `four-finger-click` replace the native click. The bound action runs and the click does not reach the application. Before, the click and the action both occurred. Hold the click down and move to get a normal drag, and the action does not run. The Magic Mouse click gestures behave the same way.
 - Make the gesture list easier to read. Rows show at full strength, and the device names use the system section-header style.

@@ -100,7 +100,7 @@ Read the relevant part of `config.toml` before editing. Make the smallest valid 
 
 After an edit, confirm the exact lines changed. Trickpad has no supported command-line configuration reload. Do not send `SIGHUP`; it rebuilds touch-device registration without rereading `config.toml`. If the user asked to apply the change, restart Trickpad. Otherwise, tell them to choose **Reload Settings** from the menu bar.
 
-Ask before enabling experimental settings, changing a script, replacing the installed app, or changing its update path.
+Ask before changing a script, replacing the installed app, or changing its update path.
 
 ## Help report a problem
 

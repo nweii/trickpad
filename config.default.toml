@@ -16,7 +16,6 @@ config-version = 3
 dominant-hand = "right"
 haptic-feedback = true
 menu-bar-icon = "trickpad"   # Or name an SF Symbol: "sf:hand.tap.fill"
-experimental-mouse-click-gestures = false
 
 # ----------------------------------------
 

@@ -16,8 +16,8 @@ Gestures that hold one finger still are named by where the fingers sit, not by w
 | `two-finger-tap` | Tap with two fingers |
 | `three-finger-tap` | Tap with three fingers |
 | `front-right-tap` | Tap the front right of the surface |
-| `two-finger-click` | Experimental: physically click with two fingers touching; replaces the normal click |
-| `three-finger-click` | Experimental: physically click with three fingers touching; replaces the normal click |
+| `two-finger-click` | Physically click with two fingers touching; replaces the normal click |
+| `three-finger-click` | Physically click with three fingers touching; replaces the normal click |
 | `one-finger-swipe` | Swipe with one finger, either direction |
 | `one-finger-swipe-left` | Swipe left with one finger |
 | `one-finger-swipe-right` | Swipe right with one finger |
@@ -32,7 +32,7 @@ Gestures that hold one finger still are named by where the fingers sit, not by w
 
 A bare swipe name such as `three-finger-swipe` binds every direction of that finger count to one action. A directional name is more specific and wins for its own direction. An `"off"` on either name works the same way in an application table: it excludes one direction or the whole family there.
 
-Physical clicks ignore narrow contacts at either side and palm contacts at the rear. Counted fingertips must form one connected cluster; a recognized thumb does not count toward the gesture. They are disabled by default while recognition is calibrated across natural grips and hardware. Set `experimental-mouse-click-gestures = true` under `[GENERAL]` to opt in.
+Physical clicks ignore narrow contacts at either side and palm contacts at the rear. Counted fingertips must form one connected cluster; a recognized thumb does not count toward the gesture.
 
 ## Magic Trackpad
 
@@ -269,7 +269,7 @@ App updates and localizations can change menu titles. Update the App Shortcut if
 | `trackpad-edge-gesture-depth` | Fraction of the trackpad an edge band reaches in from its edge, above 0 and below 0.5; corners span twice this; default `0.06` |
 | `haptic-feedback` | `true` requests confirmation for configured trackpad gestures, default `true` |
 | `menu-bar-icon` | `trickpad`, or `sf:` followed by a name from [SF Symbols](https://developer.apple.com/sf-symbols/); default `trickpad` |
-| `experimental-mouse-click-gestures` | `true` enables posture-sensitive Magic Mouse physical-click replacements, default `false` |
+| `experimental-mouse-click-gestures` | Has no effect; accepted so existing files that set it keep loading |
 | `verbose-logging` | `true` logs every gesture and keystroke to Console |
 
 Booleans are `true` or `false`, following TOML.

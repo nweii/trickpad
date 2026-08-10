@@ -348,15 +348,25 @@ int main(void) {
         NSArray *mouseClickProblems = nil;
         s = parseWithProblems(@"[mouse]\ntwo-finger-click = return\nthree-finger-click = escape\n",
                               &mouseClickProblems);
-        if (bindingFor(s, @"MagicMouseCommands", @"Two-Finger Click") != nil ||
-            bindingFor(s, @"MagicMouseCommands", @"Three-Finger Click") != nil)
-            fail(@"mouse physical clicks default off", @"no bindings", @"bindings loaded");
-        if ([mouseClickProblems count] != 2)
-            fail(@"disabled mouse physical clicks are reported", @2,
+        if ([mouseClickProblems count] != 0)
+            fail(@"mouse physical clicks load without a setting", @0,
                  @([mouseClickProblems count]));
 
-        // The opt-in applies after the whole file parses, so [general] may
-        // appear after the bindings without making the setting order-sensitive.
+        // The setting is accepted for compatibility with existing files and
+        // has no effect; either value leaves the bindings loaded and reports
+        // nothing.
+        NSArray *inertFlagProblems = nil;
+        s = parseWithProblems(@"[mouse]\ntwo-finger-click = return\n"
+                              @"[general]\nexperimental-mouse-click-gestures = false\n",
+                              &inertFlagProblems);
+        if (bindingFor(s, @"MagicMouseCommands", @"Two-Finger Click") == nil ||
+            [inertFlagProblems count] != 0)
+            fail(@"experimental-mouse-click-gestures is accepted and inert",
+                 @"a binding and no problems",
+                 [NSString stringWithFormat:@"%@; %lu problems",
+                  bindingFor(s, @"MagicMouseCommands", @"Two-Finger Click") ?: @"no binding",
+                  (unsigned long)[inertFlagProblems count]]);
+
         s = parse(@"[mouse]\ntwo-finger-click = return\nthree-finger-click = escape\n"
                   @"[general]\nexperimental-mouse-click-gestures = true\n");
         if (bindingFor(s, @"MagicMouseCommands", @"Two-Finger Click") == nil)

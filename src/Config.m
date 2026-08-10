@@ -929,6 +929,9 @@ static NSSet *knownSettingNames(void) {
     if (s == nil) {
         s = [[NSSet setWithArray:@[@"config-version", @"dominant-hand", @"menu-bar-icon", @"enable-mouse", @"enable-trackpad", @"tap-speed", @"trackpad-edge-gesture-depth",
                                    @"haptic-feedback", @"verbose-logging",
+                                   // Accepted for compatibility with existing files. Magic Mouse
+                                   // physical-click bindings load unconditionally, so nothing
+                                   // reads this setting; it still parses as a boolean.
                                    @"experimental-mouse-click-gestures"]] retain];
     }
     return s;
@@ -1540,37 +1543,6 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
     BOOL leftHanded = [[stripQuotes(str(@"dominant-hand", @"right")) lowercaseString]
         isEqualToString:@"left"];
 
-    // Magic Mouse physical clicks depend on contact timing and hand posture
-    // that vary across people and devices. Keep them available for testing,
-    // but do not silently activate them in the supported gesture set.
-    if (!parseBoolean(str(@"experimental-mouse-click-gestures", @"false"), NO)) {
-        NSSet *clickNames = [NSSet setWithArray:@[@"Two-Finger Click", @"Three-Finger Click"]];
-        NSMutableSet *reportedBindings = [NSMutableSet set];
-        for (NSString *scopeName in mouseScopeOrder) {
-            NSMutableArray *bindings = [mouseScopes objectForKey:scopeName];
-            for (NSInteger i = (NSInteger)[bindings count] - 1; i >= 0; i--) {
-                NSDictionary *binding = [bindings objectAtIndex:(NSUInteger)i];
-                if (![clickNames containsObject:[binding objectForKey:@"Gesture"]])
-                    continue;
-                NSString *sourceKey = [NSString stringWithFormat:@"%@|%@",
-                    [binding objectForKey:@"SourceLine"], [binding objectForKey:@"SourceText"]];
-                if (![reportedBindings containsObject:sourceKey]) {
-                    [reportedBindings addObject:sourceKey];
-                    [problems addObject:[NSString stringWithFormat:
-                        @"line %@:  %@\n          requires experimental-mouse-click-gestures = true in [GENERAL]",
-                        [binding objectForKey:@"SourceLine"], [binding objectForKey:@"SourceText"]]];
-                }
-                [bindings removeObjectAtIndex:(NSUInteger)i];
-            }
-        }
-        [activeBindingKeys filterUsingPredicate:[NSPredicate predicateWithBlock:
-            ^BOOL(NSString *key, NSDictionary *unused) {
-                return !([key hasPrefix:@"mouse|"] &&
-                         ([key hasSuffix:@"|two-finger-click"] ||
-                          [key hasSuffix:@"|three-finger-click"]));
-            }]];
-    }
-
     NSArray *(^commands)(NSMutableDictionary *, NSMutableArray *) =
         ^NSArray *(NSMutableDictionary *scopes, NSMutableArray *order) {
             NSMutableArray *result = [NSMutableArray array];
@@ -1638,7 +1610,6 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
         @"SystemGestureConflicts": MGSystemGestureConflictsForCurrentUser(mouseSlugs, trackpadSlugs),
         @"HapticFeedback": @(parseBoolean(str(@"haptic-feedback", @"true"), YES) ? 1 : 0),
         @"MenuBarIcon": stripQuotes(str(@"menu-bar-icon", @"trickpad")),
-        @"ExperimentalMouseClickGestures": @(parseBoolean(str(@"experimental-mouse-click-gestures", @"false"), NO) ? 1 : 0),
         @"LogLevel": @(parseBoolean(str(@"verbose-logging", @"false"), NO) ? 3 : 1),
         @"enTPAll": @(parseBoolean(str(@"enable-trackpad", @"true"), YES) ? 1 : 0),
         @"enMMAll": @(parseBoolean(str(@"enable-mouse", @"true"), YES) ? 1 : 0),
