@@ -124,6 +124,7 @@ clang \
   "$ROOT/src/DeferredGestureDispatcher.m" \
   "$ROOT/src/GestureSequence.m" \
   "$ROOT/src/KeyEventSequence.m" \
+  "$ROOT/src/MiddleButtonLifecycle.m" \
   "$ROOT/src/MouseContactFilter.m" \
   "$ROOT/src/MouseClickInteraction.m" \
   "$ROOT/src/ContactOnsetTracker.m" \
