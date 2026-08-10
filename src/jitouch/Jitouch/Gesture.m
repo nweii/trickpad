@@ -367,6 +367,8 @@ static void turnOffTrackpad() {
     trackpadNFingers = 0;
     MGTrackpadInteractionInitialize(&trackpadInteraction);
     clearPendingTrackpadClick();
+    [pendingTrackpadAreaClickGesture release];
+    pendingTrackpadAreaClickGesture = nil;
 }
 
 static void turnOffMagicMouse() {
