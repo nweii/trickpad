@@ -22,15 +22,22 @@
 
 - (void)handleGestureKey:(NSString *)key
                    delay:(NSTimeInterval)delay
-                  action:(dispatch_block_t)action {
-    __block NSNumber *token = nil;
+                  action:(dispatch_block_t)action
+                  repeat:(dispatch_block_t)repeatAction {
+    NSNumber *token = nil;
     @synchronized (self) {
-        if ([_pendingTokens objectForKey:key] != nil) {
+        if ([_pendingTokens objectForKey:key] == nil) {
+            token = [NSNumber numberWithUnsignedInteger:++_nextToken];
+            [_pendingTokens setObject:token forKey:key];
+        } else {
             [_pendingTokens removeObjectForKey:key];
-            return;
         }
-        token = [NSNumber numberWithUnsignedInteger:++_nextToken];
-        [_pendingTokens setObject:token forKey:key];
+    }
+
+    if (token == nil) {
+        if (repeatAction != nil)
+            repeatAction();
+        return;
     }
 
     _scheduler(delay, ^{
@@ -41,7 +48,7 @@
                 shouldRun = YES;
             }
         }
-        if (shouldRun)
+        if (shouldRun && action != nil)
             action();
     });
 }

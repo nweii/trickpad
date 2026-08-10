@@ -60,6 +60,10 @@
 // when no binding names its own direction. Returns nil for any other gesture.
 + (NSString *)directionlessGestureName:(NSString *)engineName;
 
+// The double-tap name a repeat of this tap reaches at dispatch. Returns nil for
+// any gesture that does not pair with a double tap.
++ (NSString *)doubleTapGestureName:(NSString *)engineName;
+
 // Every action slug the configuration accepts, mapped to the engine command
 // string it dispatches.
 + (NSDictionary *)actionNames;

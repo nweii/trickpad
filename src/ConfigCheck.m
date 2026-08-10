@@ -419,6 +419,53 @@ int main(void) {
             fail(@"expanded tap binding can defer its action", @YES,
                  [g objectForKey:@"Defer"] ?: @"missing");
 
+        // A double tap is its own binding, on either device, and a single tap
+        // beside it needs an explicit defer to survive the repeat. Deferring
+        // the double tap itself has nothing to wait for and is skipped.
+        s = parse(@"[trackpad]\nthree-finger-tap { action = \"escape\", defer = true }\n"
+                  @"three-finger-double-tap = \"cmd+shift+return\"\n");
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Double-Tap");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 36)
+            fail(@"a double tap binds beside its deferred single tap", @36,
+                 [g objectForKey:@"KeyCode"] ?: @"missing");
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Tap");
+        if (![[g objectForKey:@"Defer"] boolValue])
+            fail(@"a single tap beside its double tap keeps its deferral", @YES,
+                 [g objectForKey:@"Defer"] ?: @"missing");
+
+        s = parse(@"[mouse]\ntwo-finger-double-tap = \"escape\"\n");
+        if (bindingFor(s, @"MagicMouseCommands", @"Two-Finger Tap") != nil)
+            fail(@"binding only the double tap leaves the single tap unbound",
+                 @"no single-tap binding", @"a binding");
+        g = bindingFor(s, @"MagicMouseCommands", @"Two-Finger Double-Tap");
+        if ([[g objectForKey:@"KeyCode"] intValue] != 53)
+            fail(@"a mouse double tap binds on its own", @53,
+                 [g objectForKey:@"KeyCode"] ?: @"missing");
+
+        NSArray *doubleDeferProblems = nil;
+        s = parseWithProblems(@"[trackpad]\nthree-finger-double-tap { action = \"escape\", defer = true }\n",
+                              &doubleDeferProblems);
+        if (bindingFor(s, @"TrackpadCommands", @"Three-Finger Double-Tap") != nil ||
+            [doubleDeferProblems count] == 0)
+            fail(@"defer on a double tap is reported and skipped",
+                 @"a problem and no binding", @"a binding");
+
+        // Every tap slug that has a double-tap sibling must reach it through
+        // the one map dispatch reads, or the sibling can never fire.
+        for (NSDictionary *slugs in @[[Config mouseGestureSlugs], [Config trackpadGestureSlugs]]) {
+            for (NSString *slug in slugs) {
+                if (![slug hasSuffix:@"-double-tap"])
+                    continue;
+                NSString *single = [slug stringByReplacingOccurrencesOfString:@"-double-tap"
+                                                                   withString:@"-tap"];
+                NSString *singleEngine = [[slugs objectForKey:single] firstObject];
+                NSString *reached = [Config doubleTapGestureName:singleEngine];
+                NSString *expected = [[slugs objectForKey:slug] firstObject];
+                if (![reached isEqualToString:expected])
+                    fail([@"repeating " stringByAppendingString:single], expected, reached ?: @"nil");
+            }
+        }
+
         s = parse(@"[trackpad]\nthree-finger-click { action = \"escape\", haptic = false }\n");
         g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Click");
         if ([g objectForKey:@"HapticFeedback"] == nil ||
@@ -1128,6 +1175,14 @@ int main(void) {
                         // Family names have no recognizer of their own: the
                         // directional recognizer dispatches, and the binding
                         // lookup falls back to the family name it maps to.
+                        // A double tap has no recognizer either: the single
+                        // tap's recognizer dispatches, and a repeat inside the
+                        // double-click interval reaches this name instead.
+                        BOOL doubleTap = [engineName hasSuffix:@" Double-Tap"] &&
+                            [Config doubleTapGestureName:
+                                [engineName stringByReplacingOccurrencesOfString:@" Double-Tap"
+                                                                      withString:@" Tap"]] != nil &&
+                            [engine rangeOfString:@"doubleTapGestureName:gesture"].location != NSNotFound;
                         BOOL swipeFamily = [engineName hasSuffix:@"-Swipe-Any"] &&
                             [Config directionlessGestureName:
                                 [engineName stringByReplacingOccurrencesOfString:@"-Any"
@@ -1135,7 +1190,7 @@ int main(void) {
                             [engine rangeOfString:@"directionlessGestureName"].location != NSNotFound;
                         BOOL dispatched = [engine rangeOfString:exclusiveDispatch].location != NSNotFound ||
                             [engine rangeOfString:exclusiveTapDispatch].location != NSNotFound;
-                        if (!dispatched && !physicalClick && !areaClick && !swipeFamily)
+                        if (!dispatched && !physicalClick && !areaClick && !swipeFamily && !doubleTap)
                             fail([NSString stringWithFormat:@"%@ %@ has an exclusive recognizer dispatch", constant, slug],
                                  [NSString stringWithFormat:@"%@ or %@", exclusiveDispatch, exclusiveTapDispatch], @"missing");
                     }
@@ -1247,6 +1302,19 @@ int main(void) {
                 [engine rangeOfString:@"handleGestureKey:"] .location == NSNotFound)
                 fail(@"deferred binding uses the Mac double-click interval",
                      @"deferred dispatcher integration", @"missing");
+
+            // One pending window serves both the deferred single tap and the
+            // double tap. A second window or timer would drift from it.
+            for (NSString *required in @[
+                @"[Config doubleTapGestureName:gesture]",
+                @"if (deferred || doubleBinding != nil)",
+                @"repeat:repeated",
+                @"dispatchBindingNow(doubleGesture, device, doubleBinding, doubleApplication)",
+            ]) {
+                if ([engine rangeOfString:required].location == NSNotFound)
+                    fail(@"a repeated tap dispatches its double tap through the one pending window",
+                         required, @"missing");
+            }
 
             if ([engine rangeOfString:@"objectForKey:@\"ScriptPath\""] .location == NSNotFound ||
                 [engine rangeOfString:@"[ScriptRunner launchScriptAtPath:"] .location == NSNotFound)
