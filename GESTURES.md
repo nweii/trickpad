@@ -61,6 +61,10 @@ An area click is a physical click with one finger that lands in a named region o
 
 Slugs read edge first, then span, then action. Vertical edges divide top to bottom; horizontal edges divide left to right.
 
+Regions stay narrow by default so a click during ordinary pointing does not land in one by accident. `trackpad-edge-gesture-depth` under `[GENERAL]` sets how far an edge band reaches in from its edge, as a fraction of the surface; corner squares span twice that depth. On a surface wider than it is tall, the same fraction reaches physically deeper on the left and right edges than on the top and bottom, and both scale together.
+
+An area click fires only when the clicking finger is the only contact on the surface. Lift your palm and resting fingers for the click. This keeps a resting hand from triggering regions, at the cost of making each area click a deliberate motion. Binding many regions at once works, but neighboring regions sit close together, so a dense layout asks for conscious aim; most configurations are better served by a few well-separated regions.
+
 | Write this | The region |
 |---|---|
 | `left-edge-click` | Anywhere along the left edge |
@@ -91,11 +95,6 @@ Slugs read edge first, then span, then action. Vertical edges divide top to bott
 | `top-right-corner-click` | The top right corner |
 | `bottom-left-corner-click` | The bottom left corner |
 | `bottom-right-corner-click` | The bottom right corner |
-
-Regions stay narrow by default so a click during ordinary pointing does not land in one by accident. `trackpad-edge-gesture-depth` under `[GENERAL]` sets how far an edge band reaches in from its edge, as a fraction of the surface; corner squares span twice that depth. On a surface wider than it is tall, the same fraction reaches physically deeper on the left and right edges than on the top and bottom, and both scale together.
-
-An area click fires only when the clicking finger is the only contact on the surface. Lift your palm and resting fingers for the click. This keeps a resting hand from triggering regions, at the cost of making each area click a deliberate motion. Binding many regions at once works, but neighboring regions sit close together, so a dense layout asks for conscious aim; most configurations are better served by a few well-separated regions.
-
 On both devices, a confidently recognized configured click replaces the native click: the bound action fires on release and the click does not reach the application. An ambiguous click, such as one with a resting palm, stays native and does not fire the bound action. A drag keeps its native events and does not fire the configured click action.
 
 One continuous touch sequence can run one kind of configured gesture. A swipe or hold gesture may repeat while it owns the sequence, but a physical click, tap, or different gesture will not also run until every finger lifts.
