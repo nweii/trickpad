@@ -29,6 +29,10 @@ Issues live as GitHub issues in `nweii/trickpad`, managed with the `gh` CLI. The
 
 The five canonical triage roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
 
+### Verification
+
+A step can report success it did not achieve. Proving a check fails, reading a build's exit code, the two devices' asymmetries, and instrumenting a path before diagnosing it. See `docs/agents/verification.md`.
+
 ### Domain docs
 
 Single-context: `CONTEXT.md` and `docs/adr/` at the repository root. See `docs/agents/domain.md`.
@@ -119,7 +123,7 @@ Sparkle, vendored at a pinned version under `third_party/sparkle/` with its own 
 
 **An empty `SPARKLE_PUBLIC_KEY` builds an app with no updater**, and the build refuses when that would produce a release. The private half lives in the Keychain with a recovery copy in 1Password, and no agent needs it. Losing both strands every installed copy: a replacement key produces a public key those copies reject. Sparkle's key rotation is the documented escape and requires Developer ID signing, which this app does not have. For the same reason `SURequireSignedFeed` and `SUVerifyUpdateBeforeExtraction` stay off until it does.
 
-**Publishing is not uploading the archive.** The feed also names deltas, and Sparkle prefers a delta when one applies, so an unpublished delta breaks the update for exactly the people it was built for. `package.sh` prints every file the feed names and refuses when one is missing. Upload those before the appcast, so the feed never names something absent, and set the cache header each wants: archives never change, the appcast changes every release. Inheriting the host default caches both for four hours, which hides a release and lets the feed and its archives disagree.
+**Publishing is not uploading the archive.** The feed also names deltas, and Sparkle prefers a delta when one applies, so an unpublished delta breaks the update for exactly the people it was built for. `package.sh` prints every file the feed names and refuses when one is missing. Upload those before the appcast, so the feed never names something absent, and set the cache header each wants: archives never change, the appcast changes every release. Inheriting the host default caches both for four hours, which hides a release and lets the feed and its archives disagree. After publishing, compare each archive's served length against the length the appcast names. They must match before the release is announced. An archive published under a name already used caches to the edge for a year, so replacing one needs a cache purge and not another upload, which reports success either way.
 
 ### What a release commits this repository to
 
