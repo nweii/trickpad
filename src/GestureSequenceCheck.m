@@ -106,6 +106,55 @@ int main(void) {
         require(lowerResolves == 2 && higherResolves == 2,
                 @"a full lift did not clear every swipe family latch");
 
+        // Replays the event order captured from a real three-finger swipe:
+        // arm, drop the driven scroll, full lift, then momentum beginning about
+        // four milliseconds later. Releasing suppression at lift delivers the
+        // whole inertia tail, which is what the user sees as the page moving.
+        MGGestureSequenceInitialize(&sequence);
+        MGGestureSequenceObserveBoundScrollFamily(&sequence, 3, 3, ^BOOL{ return YES; });
+        require(MGGestureSequenceSuppressesScrollEvent(&sequence, 1, 0),
+                @"a driven scroll survived an armed swipe family");
+        require(MGGestureSequenceSuppressesScrollEvent(&sequence, 2, 0),
+                @"a driven scroll update survived an armed swipe family");
+        MGGestureSequenceFinishFrame(&sequence, 0);
+        require(!MGGestureSequenceSuppressesNativeScroll(&sequence),
+                @"full lift did not end contact-driven suppression");
+        // Lift is reported on every following frame, so the transition must be
+        // idempotent. A second zero-contact frame reads a sequence that is
+        // already reset, and must not write that over the carried latch.
+        MGGestureSequenceFinishFrame(&sequence, 0);
+        MGGestureSequenceFinishFrame(&sequence, 0);
+        require(MGGestureSequenceSuppressesScrollEvent(&sequence, 0, 1),
+                @"momentum began after full lift and was delivered");
+        require(MGGestureSequenceSuppressesScrollEvent(&sequence, 0, 2),
+                @"momentum continued after full lift and was delivered");
+        // macOS interleaves a zero-delta MayBegin event during the tail. It
+        // carries no momentum phase and must not be read as a new scroll.
+        require(!MGGestureSequenceSuppressesScrollEvent(&sequence, 128, 0),
+                @"a zero-delta bookkeeping event was dropped");
+        require(MGGestureSequenceSuppressesScrollEvent(&sequence, 0, 2),
+                @"bookkeeping between momentum events cleared the momentum latch");
+        require(MGGestureSequenceSuppressesScrollEvent(&sequence, 0, 3),
+                @"the final momentum event was delivered");
+        require(!MGGestureSequenceSuppressesScrollEvent(&sequence, 0, 2),
+                @"suppression outlived the momentum that ended it");
+
+        // A real scroll started right after a swipe belongs to the user.
+        MGGestureSequenceInitialize(&sequence);
+        MGGestureSequenceObserveBoundScrollFamily(&sequence, 3, 3, ^BOOL{ return YES; });
+        MGGestureSequenceFinishFrame(&sequence, 0);
+        require(!MGGestureSequenceSuppressesScrollEvent(&sequence, 1, 0),
+                @"a new scroll after a swipe was eaten by the momentum latch");
+        require(!MGGestureSequenceSuppressesScrollEvent(&sequence, 0, 2),
+                @"a new scroll did not clear the momentum latch");
+
+        // An unarmed sequence has no momentum to hold onto.
+        MGGestureSequenceInitialize(&sequence);
+        MGGestureSequenceObserveBoundScrollFamily(&sequence, 3, 3, ^BOOL{ return NO; });
+        MGGestureSequenceFinishFrame(&sequence, 0);
+        require(!MGGestureSequenceSuppressesScrollEvent(&sequence, 0, 1),
+                @"an unbound swipe family suppressed momentum");
+
         MGGestureSequenceInitialize(&sequence);
         require(MGGestureSequenceTryClaim(&sequence, 2), @"full lift did not release sequence ownership");
 

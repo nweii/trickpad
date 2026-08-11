@@ -78,6 +78,9 @@ void MGTrackpadInteractionObserveBoundScrollFamily(MGTrackpadInteraction *intera
                                                    int requiredContactCount,
                                                    BOOL (^resolveBinding)(void));
 BOOL MGTrackpadInteractionSuppressesNativeScroll(const MGTrackpadInteraction *interaction);
+BOOL MGTrackpadInteractionSuppressesScrollEvent(MGTrackpadInteraction *interaction,
+                                                int64_t scrollPhase,
+                                                int64_t momentumPhase);
 void MGTrackpadInteractionFinishFrame(MGTrackpadInteraction *interaction,
                                       int activeContactCount);
 void MGTrackpadInteractionExpireStalePhysicalClick(MGTrackpadInteraction *interaction,

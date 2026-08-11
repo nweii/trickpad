@@ -265,6 +265,25 @@ int main(void) {
         MGTrackpadInteractionObserveBoundScrollFamily(&interaction, 3, 3, ^BOOL{ return YES; });
         require(MGTrackpadInteractionSuppressesNativeScroll(&interaction),
                 @"bound trackpad swipe family did not suppress native scrolling");
+        // Full lift resets this whole interaction, not just its sequence, so
+        // the momentum latch has to survive that reset. The mouse reaches the
+        // sequence's own lift path; the trackpad does not.
+        require(MGTrackpadInteractionSuppressesScrollEvent(&interaction, 2, 0),
+                @"a driven trackpad scroll survived an armed swipe family");
+        // The trackpad keeps delivering zero-contact frames after a lift, which
+        // is how this reset runs repeatedly. Each repeat must leave the carried
+        // latch alone.
+        MGTrackpadInteractionFinishFrame(&interaction, 0);
+        MGTrackpadInteractionFinishFrame(&interaction, 0);
+        MGTrackpadInteractionFinishFrame(&interaction, 0);
+        require(MGTrackpadInteractionSuppressesScrollEvent(&interaction, 0, 1),
+                @"trackpad momentum was delivered after the full-lift reset");
+        require(MGTrackpadInteractionSuppressesScrollEvent(&interaction, 0, 3),
+                @"the final trackpad momentum event was delivered");
+        require(!MGTrackpadInteractionSuppressesScrollEvent(&interaction, 0, 2),
+                @"trackpad suppression outlived the momentum that ended it");
+        MGTrackpadInteractionFinishFrame(&interaction, 0);
+        MGTrackpadInteractionObserveBoundScrollFamily(&interaction, 3, 3, ^BOOL{ return YES; });
         MGTrackpadInteractionFinishFrame(&interaction, 2);
         require(MGTrackpadInteractionSuppressesNativeScroll(&interaction),
                 @"trackpad contact dropout leaked native scrolling before full lift");

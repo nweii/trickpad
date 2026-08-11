@@ -1305,10 +1305,24 @@ static BOOL hasThreeFingerSwipeBinding(int device) {
 static void observeBoundSwipeFamilies(int device, int activeContactCount) {
     NSArray *counts = device == TRACKPAD ? @[@"Three", @"Four"] : @[@"Two", @"Three"];
     int required[2] = {device == TRACKPAD ? 3 : 2, device == TRACKPAD ? 4 : 3};
+    // The count is logged on every change, not only when a family resolves. A
+    // count that never reaches a family's requirement is precisely the case
+    // that leaves the resolver silent, so it has to be visible on its own.
+    static int lastObservedCount[2] = {-1, -1};
+    if (logLevel >= LOG_LEVEL_DEBUG && device >= 0 && device < 2 &&
+        activeContactCount != lastObservedCount[device]) {
+        lastObservedCount[device] = activeContactCount;
+        NSLog(@"Swipe family observation for %@: %d contacts (families need %d or %d)",
+              deviceTypeName[device], activeContactCount, required[0], required[1]);
+    }
     for (NSUInteger i = 0; i < [counts count]; i++) {
         NSString *count = counts[i];
+        __block BOOL resolvedBound = NO;
+        __block BOOL resolverRan = NO;
         BOOL (^resolveBinding)(void) = ^BOOL{
-            return hasSwipeBindingForCount(count, device);
+            resolverRan = YES;
+            resolvedBound = hasSwipeBindingForCount(count, device);
+            return resolvedBound;
         };
         if (device == TRACKPAD)
             MGTrackpadInteractionObserveBoundScrollFamily(&trackpadInteraction,
@@ -1316,6 +1330,12 @@ static void observeBoundSwipeFamilies(int device, int activeContactCount) {
         else
             MGGestureSequenceObserveBoundScrollFamily(&magicMouseSequence,
                 activeContactCount, required[i], resolveBinding);
+        // The resolver runs only on the frame that decides a family, so its
+        // having run is the signal worth reporting, and a bound one is the one
+        // that armed suppression.
+        if (logLevel >= LOG_LEVEL_DEBUG && resolverRan)
+            NSLog(@"Swipe family %@ for %@ resolved at %d contacts: bound=%d",
+                  count, deviceTypeName[device], activeContactCount, resolvedBound);
     }
 }
 
@@ -5004,9 +5024,24 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
                 customMagicMousePrimaryTapSuppressionUntil = suppressionUntil;
             }
         }
-        if (MGGestureSequenceSuppressesNativeScroll(&magicMouseSequence) ||
-            MGTrackpadInteractionSuppressesNativeScroll(&trackpadInteraction) ||
-            isTrackpadRecognizing) {
+        // Momentum events arrive after the fingers leave the device, so the
+        // phase distinguishes a scroll the hand is still driving from its
+        // inertia. Both sequences see every event, because either may be
+        // holding suppression over its own momentum.
+        int64_t scrollPhase = CGEventGetIntegerValueField(event, kCGScrollWheelEventScrollPhase);
+        int64_t momentumPhase = CGEventGetIntegerValueField(event, kCGScrollWheelEventMomentumPhase);
+        BOOL mouseArmed = MGGestureSequenceSuppressesScrollEvent(&magicMouseSequence,
+                                                                 scrollPhase, momentumPhase);
+        BOOL trackpadArmed = MGTrackpadInteractionSuppressesScrollEvent(&trackpadInteraction,
+                                                                        scrollPhase, momentumPhase);
+        if (logLevel >= LOG_LEVEL_DEBUG) {
+            NSLog(@"Scroll event phase=%lld momentum=%lld axis1=%lld axis2=%lld "
+                  @"mouseArmed=%d trackpadArmed=%d trackpadRecognizing=%d -> %@",
+                  scrollPhase, momentumPhase, axis1, axis2,
+                  mouseArmed, trackpadArmed, isTrackpadRecognizing,
+                  (mouseArmed || trackpadArmed || isTrackpadRecognizing) ? @"dropped" : @"delivered");
+        }
+        if (mouseArmed || trackpadArmed || isTrackpadRecognizing) {
             MGTraceRecordCGEvent(@"scroll", 0, axis1, axis2, @"suppressed-by-recognizer");
             return NULL;
         }

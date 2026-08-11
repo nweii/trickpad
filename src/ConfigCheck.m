@@ -1230,8 +1230,10 @@ int main(void) {
             for (NSString *required in @[
                 @"MGTrackpadInteractionObserveBoundScrollFamily",
                 @"MGGestureSequenceObserveBoundScrollFamily",
-                @"MGTrackpadInteractionSuppressesNativeScroll",
-                @"MGGestureSequenceSuppressesNativeScroll",
+                // The scroll tap decides per event, not per armed flag, because
+                // a gesture's momentum arrives after its contacts are gone.
+                @"MGTrackpadInteractionSuppressesScrollEvent",
+                @"MGGestureSequenceSuppressesScrollEvent",
             ]) {
                 if ([engine rangeOfString:required].location == NSNotFound)
                     fail(@"bound swipe families suppress native scrolling through sequence lift",
