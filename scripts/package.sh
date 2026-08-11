@@ -254,7 +254,12 @@ if /usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP_BUNDLE/Contents/Info.plis
   # installed copy acts on it, so it should follow a decision rather than a
   # build finishing. Upload the files above before the appcast, so the feed
   # never names something that is not there yet.
+  # Cache headers are named here because inheriting the host's default caches
+  # the feed for hours, which leaves a published release invisible and, worse,
+  # lets the feed and its archives disagree about what an archive contains.
   echo "To publish, upload every file listed above, appcast last:" >&2
+  echo "  archives and deltas: --cache-control 'public, max-age=31536000, immutable'" >&2
+  echo "  appcast.xml:         --cache-control 'public, max-age=60'" >&2
   echo "  CLOUDFLARE_ACCOUNT_ID=… wrangler r2 object put … --remote" >&2
   echo "  See the private delivery note for the bucket and path." >&2
 fi
