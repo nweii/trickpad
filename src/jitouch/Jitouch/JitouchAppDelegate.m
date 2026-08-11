@@ -1929,7 +1929,7 @@ static NSMenuItem *MGMenuSectionHeader(NSString *title) {
                                                       action:@selector(checkForUpdates:)
                                                keyEquivalent:@""];
         [updateItem setTarget:self];
-        NSMenuItem *automaticItem = [aboutMenu addItemWithTitle:@"Update Automatically"
+        NSMenuItem *automaticItem = [aboutMenu addItemWithTitle:@"Install Updates Automatically"
                                                          action:@selector(toggleAutomaticUpdates:)
                                                   keyEquivalent:@""];
         [automaticItem setTarget:self];
