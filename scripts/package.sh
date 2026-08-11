@@ -229,13 +229,33 @@ if /usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP_BUNDLE/Contents/Info.plis
     exit 1
   }
 
-  echo "$UPDATE_ARCHIVE"
+  # The feed names more than the archive just built. generate_appcast also
+  # writes binary deltas between releases, and Sparkle prefers a delta over the
+  # full archive, so a delta left unpublished is a broken update for exactly the
+  # people the delta was made for. The upload set is read back out of the
+  # appcast rather than assumed, and every file it names must exist first.
+  MISSING=0
+  for referenced in $(grep -oE 'url="[^"]+"' "$APPCAST" | sed -e 's/^url="//' -e 's/"$//'); do
+    name="${referenced##*/}"
+    if [[ -f "$UPDATES_DIR/$name" ]]; then
+      echo "$UPDATES_DIR/$name"
+    else
+      echo "The appcast names $name, which is not in $UPDATES_DIR." >&2
+      MISSING=1
+    fi
+  done
+  (( MISSING == 0 )) || {
+    echo "Publishing this feed would reference a file that does not exist." >&2
+    exit 1
+  }
   echo "$APPCAST"
+
   # Publishing is deliberately a separate step. Once an appcast is live every
   # installed copy acts on it, so it should follow a decision rather than a
-  # build finishing.
-  echo "To publish, upload the archive and appcast to the feed's folder:" >&2
-  echo "  CLOUDFLARE_ACCOUNT_ID=… wrangler r2 object put …" >&2
+  # build finishing. Upload the files above before the appcast, so the feed
+  # never names something that is not there yet.
+  echo "To publish, upload every file listed above, appcast last:" >&2
+  echo "  CLOUDFLARE_ACCOUNT_ID=… wrangler r2 object put … --remote" >&2
   echo "  See the private delivery note for the bucket and path." >&2
 fi
 
