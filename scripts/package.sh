@@ -146,4 +146,97 @@ codesign --verify --deep --strict "$VERIFY_DIR/$APP_NAME.app"
 
 hdiutil detach "$DEVICE" -quiet
 DEVICE=""
+
+# The styled image is for purchase and first install, where it carries the
+# Gatekeeper instructions. An update replaces a bundle that is already in place,
+# so it ships as a plain archive and leaves the background art behind.
+#
+# Skipped entirely when the app carries no updater, which is the same condition
+# that leaves SUPublicEDKey unset in scripts/build.sh.
+if /usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP_BUNDLE/Contents/Info.plist" >/dev/null 2>&1; then
+  UPDATES_DIR="$BUILD_ROOT/updates"
+  UPDATE_ARCHIVE="$UPDATES_DIR/$APP_NAME-$VERSION.zip"
+  mkdir -p "$UPDATES_DIR"
+
+  # ditto keeps the bundle's symlinks and signature intact, which a plain zip
+  # does not, and Sparkle rejects an archive whose signature no longer verifies.
+  rm -f "$UPDATE_ARCHIVE"
+  ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$UPDATE_ARCHIVE"
+
+  # generate_appcast reads release notes from a file named after the archive,
+  # so the entry a customer sees comes from the changelog rather than being
+  # written twice.
+  RELEASE_NOTES="$UPDATES_DIR/$APP_NAME-$VERSION.html"
+  if [[ -f "$ROOT/CHANGELOG.md" ]]; then
+    awk -v version="$VERSION" '
+      $0 == "## " version { collecting = 1; next }
+      collecting && /^## / { exit }
+      collecting { print }
+    ' "$ROOT/CHANGELOG.md" > "$WORK_ROOT/notes.md"
+    if [[ -s "$WORK_ROOT/notes.md" ]]; then
+      # Escaped before any markup is added, so changelog prose containing an
+      # ampersand or an angle bracket cannot break the rendered note. Backtick
+      # spans become code, since entries name settings constantly.
+      sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' \
+          -e 's|`\([^`]*\)`|<code>\1</code>|g' \
+          "$WORK_ROOT/notes.md" > "$WORK_ROOT/notes-escaped.md"
+      # Deliberately minimal: headings and list items only. Sparkle renders this
+      # in a small pane, and anything richer would be styling a release note.
+      awk '
+        BEGIN { inList = 0 }
+        /^### / { if (inList) { print "</ul>"; inList = 0 }
+                  sub(/^### /, ""); print "<h3>" $0 "</h3>"; next }
+        /^- / { if (!inList) { print "<ul>"; inList = 1 }
+                sub(/^- /, ""); print "<li>" $0 "</li>"; next }
+        /^[[:space:]]*$/ { next }
+        { if (inList) { print "</ul>"; inList = 0 }
+          print "<p>" $0 "</p>" }
+        END { if (inList) print "</ul>" }
+      ' "$WORK_ROOT/notes-escaped.md" > "$RELEASE_NOTES"
+    fi
+  fi
+  [[ -s "$RELEASE_NOTES" ]] || {
+    echo "No changelog section found for $VERSION, so the update would ship with no notes." >&2
+    echo "Add a '## $VERSION' section to CHANGELOG.md before packaging." >&2
+    exit 1
+  }
+
+  # Not vendored, because they publish a release rather than build the app.
+  # third_party/sparkle/README.md records where they come from.
+  GENERATE_APPCAST="${SPARKLE_TOOLS:-$ROOT/third_party/sparkle/bin}/generate_appcast"
+  [[ -x "$GENERATE_APPCAST" ]] || GENERATE_APPCAST="$(command -v generate_appcast || true)"
+  [[ -n "$GENERATE_APPCAST" && -x "$GENERATE_APPCAST" ]] || {
+    echo "generate_appcast not found." >&2
+    echo "Put Sparkle's bin/ at third_party/sparkle/bin, or set SPARKLE_TOOLS." >&2
+    exit 1
+  }
+
+  # Signs each archive with the private key from the Keychain. Without that key
+  # it fails here rather than publishing a feed nothing can verify.
+  "$GENERATE_APPCAST" "$UPDATES_DIR"
+
+  APPCAST="$UPDATES_DIR/appcast.xml"
+  [[ -s "$APPCAST" ]] || {
+    echo "generate_appcast produced no appcast." >&2
+    exit 1
+  }
+  grep -q "edSignature" "$APPCAST" || {
+    echo "The appcast carries no signature, so no installed copy would accept it." >&2
+    exit 1
+  }
+  grep -Fq "$VERSION" "$APPCAST" || {
+    echo "The appcast has no entry for $VERSION." >&2
+    exit 1
+  }
+
+  echo "$UPDATE_ARCHIVE"
+  echo "$APPCAST"
+  # Publishing is deliberately a separate step. Once an appcast is live every
+  # installed copy acts on it, so it should follow a decision rather than a
+  # build finishing.
+  echo "To publish, upload the archive and appcast to the feed's folder:" >&2
+  echo "  CLOUDFLARE_ACCOUNT_ID=… wrangler r2 object put …" >&2
+  echo "  See the private delivery note for the bucket and path." >&2
+fi
+
 echo "$DMG_PATH"

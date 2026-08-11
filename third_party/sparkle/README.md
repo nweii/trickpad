@@ -23,7 +23,13 @@ after changing anything about signing.
 
 The release tools that live alongside the framework in that archive
 (`generate_appcast`, `sign_update`, `generate_keys`, `BinaryDelta`) are not
-vendored here. They are needed to publish a release, not to build the app.
+committed. They publish a release rather than build the app, so only whoever
+cuts a release needs them, and they would add several megabytes to a public
+repository for everyone else's benefit.
+
+`scripts/package.sh` looks for them at `third_party/sparkle/bin`, which is
+ignored by git, then at `SPARKLE_TOOLS`, then on `PATH`. Extract that folder
+from the release archive above and put it there.
 
 To update: download the release archive, verify its checksum, replace
 `Sparkle.framework`, and record the new version and checksum above.
