@@ -32,11 +32,10 @@ void MGUpdaterCheckForUpdates(void) {
     [sharedUpdaterController() checkForUpdates:nil];
 }
 
-// One setting behind two surfaces. Sparkle's own checkbox appears on the update
-// alert, and this is the same state, so either can turn it on and either can
-// turn it off. Without a menu row the checkbox would be a one-way door: once
-// updates install on their own the alert stops appearing, and with it the only
-// control that could undo the choice.
+// One setting behind two surfaces. Sparkle asks about automatic updates once,
+// in the permission request on second launch, and this is the same state. That
+// request never appears again, so without a menu row the answer given there
+// could never be revisited.
 //
 // Downloading implies checking, since an update cannot be fetched without
 // noticing it exists. Both move together rather than exposing an arrangement

@@ -83,16 +83,24 @@ if [[ -n "$BUILD_STAMP" ]]; then
   <string>$BUILD_STAMP</string>"
 fi
 
-# SUEnableAutomaticChecks turns off the scheduled check and suppresses the
-# permission prompt Sparkle otherwise raises on second launch, so a fresh
-# install makes no network request until someone asks for one.
+# Sparkle asks once, on second launch, whether to check for updates on its own,
+# and offers automatic downloading as an option inside that same request. The
+# question is asked before anything is fetched, so a fresh install still makes
+# no network request until someone answers.
+#
+# SUEnableAutomaticChecks is deliberately absent. Setting it removes that
+# request entirely, which also removes the only place the automatic-download
+# option is ever offered.
+#
+# SUAutomaticallyUpdate sets that option's starting state. Off, so agreeing to
+# automatic checks does not quietly agree to unattended installs as well.
 SPARKLE_KEYS=""
 if [[ "$SPARKLE_ENABLED" == "1" ]]; then
   SPARKLE_KEYS="  <key>SUFeedURL</key>
   <string>$SPARKLE_FEED_URL</string>
   <key>SUPublicEDKey</key>
   <string>$SPARKLE_PUBLIC_KEY</string>
-  <key>SUEnableAutomaticChecks</key>
+  <key>SUAutomaticallyUpdate</key>
   <false/>"
 fi
 

@@ -173,7 +173,7 @@ An expanded binding is a TOML inline table: `gesture = { action = "escape", hapt
 
 `config-version` identifies the file format and is currently `3`. A missing version means the current format while the project is in alpha. An unsupported value rejects the entire reload so another format cannot be partially reinterpreted.
 
-Whether updates install on their own is the one setting this file does not own. Sparkle keeps it in the bundle's user defaults, its own checkbox on the update alert writes there, and its documentation asks for no second copy. A TOML key would be a second source of truth for one fact. The menu row reads that state back rather than tracking it, which is also why the row exists: the checkbox appears only while an update alert is on screen, so without the row a choice made there could never be undone.
+Whether updates install on their own is the one setting this file does not own. Sparkle keeps it in the bundle's user defaults, the permission request it raises on second launch writes there, and its documentation asks for no second copy. A TOML key would be a second source of truth for one fact. The menu row reads that state back rather than tracking it, which is also why the row exists: the permission request is asked once and never again, so without the row the answer given there could never be revisited.
 
 Four value forms:
 
