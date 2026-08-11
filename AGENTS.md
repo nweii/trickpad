@@ -29,6 +29,10 @@ Issues live as GitHub issues in `nweii/trickpad`, managed with the `gh` CLI. The
 
 The five canonical triage roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
 
+### Verification
+
+A step can report success it did not achieve. Proving a check fails, reading a build's exit code, the two devices' asymmetries, and instrumenting a path before diagnosing it. See `docs/agents/verification.md`.
+
 ### Domain docs
 
 Single-context: `CONTEXT.md` and `docs/adr/` at the repository root. See `docs/agents/domain.md`.
@@ -215,28 +219,6 @@ The `appID` CFPreferences domain in `Settings.h` is vestigial — only the remov
 `./scripts/check.sh` compiles `src/Config.m` with `src/ConfigCheck.m` and runs the result against the parser. No framework, no fixtures.
 
 It asserts keystroke parsing, app scopes, exclusions, expanded options, action and deferred dispatch, URL substitution parsing and resolution, script validation and execution, skipped bad lines, boolean spellings, and comment stripping. It also asserts that every slug appears in both `GESTURES.md` and `config-notes.default.md`, and that every engine name reachable from a slug has a menu phrase. Adding a gesture without documenting it fails the check. Direct gesture dispatch is allowlisted so a recognizer that bypasses contact-sequence ownership also fails the check.
-
-### Proving a check works
-
-A check that has never failed has not been tested. Break what it guards, confirm the check names the failure, then restore.
-
-Commit first. `git restore` and `git checkout` discard the sabotage and the fix together, and an uncommitted fix is gone.
-
-Sabotage the failure the check exists for, not a convenient stand-in. A guard against two copies starting at once passes when they are started one after another, because the case it guards never occurs.
-
-### Reading a build
-
-`build.sh` prints the bundle path as part of signing, so output containing that path does not mean it succeeded. Read the exit code. A build that fails verification still prints most of a successful build's output.
-
-The same holds for anything with a pipeline: `grep` and `head` report their own status, not the command feeding them.
-
-### Verifying on hardware
-
-Gesture work is verified on both a Magic Trackpad and a Magic Mouse, because they diverge in ways that hide bugs on one device. The trackpad delivers frames after a lift and the mouse does not, so a lifecycle bug can present on one and pass on the other for reasons that have nothing to do with recognition.
-
-Scroll behaviour is verified in a native application. Electron applications coalesce small scroll deltas, so a leak that is plainly visible in BBEdit or Notes shows nothing in Obsidian.
-
-A gesture dispatching twice usually means two copies of the app are running rather than a recognizer firing twice. Count them before investigating anything else.
 
 ## Login item
 
