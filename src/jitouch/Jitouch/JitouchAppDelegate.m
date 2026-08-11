@@ -643,10 +643,12 @@ static BOOL runLaunchctl(NSArray *arguments) {
 // documentation says not to hold a second copy, so the menu reads the state
 // back rather than tracking it. That is the reason this is not a config.toml
 // key, and the one deliberate exception to the everything-in-TOML idiom.
-- (void)toggleAutomaticUpdateChecks:(id)sender {
-    BOOL enabled = !MGUpdaterChecksAutomatically();
-    MGUpdaterSetChecksAutomatically(enabled);
-    [sender setState:MGUpdaterChecksAutomatically() ? NSOnState : NSOffState];
+//
+// The same state sits behind Sparkle's own checkbox on the update alert, so
+// the row reflects a choice made there, and can undo one.
+- (void)toggleAutomaticUpdates:(id)sender {
+    MGUpdaterSetUpdatesAutomatically(!MGUpdaterUpdatesAutomatically());
+    [sender setState:MGUpdaterUpdatesAutomatically() ? NSOnState : NSOffState];
 }
 
 - (void)openDocs:(id)sender {
@@ -1927,11 +1929,11 @@ static NSMenuItem *MGMenuSectionHeader(NSString *title) {
                                                       action:@selector(checkForUpdates:)
                                                keyEquivalent:@""];
         [updateItem setTarget:self];
-        NSMenuItem *automaticItem = [aboutMenu addItemWithTitle:@"Check Automatically"
-                                                         action:@selector(toggleAutomaticUpdateChecks:)
+        NSMenuItem *automaticItem = [aboutMenu addItemWithTitle:@"Update Automatically"
+                                                         action:@selector(toggleAutomaticUpdates:)
                                                   keyEquivalent:@""];
         [automaticItem setTarget:self];
-        [automaticItem setState:MGUpdaterChecksAutomatically() ? NSOnState : NSOffState];
+        [automaticItem setState:MGUpdaterUpdatesAutomatically() ? NSOnState : NSOffState];
     } else {
         NSMenuItem *downloadItem = [aboutMenu addItemWithTitle:@"Get Latest Version"
                                                         action:@selector(getLatestVersion:)

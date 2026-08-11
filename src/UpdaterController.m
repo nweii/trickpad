@@ -16,11 +16,6 @@ static SPUStandardUpdaterController *sharedUpdaterController(void) {
             [[SPUStandardUpdaterController alloc] initWithStartingUpdater:YES
                                                           updaterDelegate:nil
                                                        userDriverDelegate:nil];
-        // Downloading an update without being asked can install it on the next
-        // launch, which on an unnotarized build means a Gatekeeper warning that
-        // follows no action the user took. Checking is offered; downloading is
-        // not, and this line is the constraint rather than a default.
-        [[updaterController updater] setAutomaticallyDownloadsUpdates:NO];
     }
     return updaterController;
 }
@@ -37,12 +32,24 @@ void MGUpdaterCheckForUpdates(void) {
     [sharedUpdaterController() checkForUpdates:nil];
 }
 
-BOOL MGUpdaterChecksAutomatically(void) {
-    return [[sharedUpdaterController() updater] automaticallyChecksForUpdates];
+// One setting behind two surfaces. Sparkle's own checkbox appears on the update
+// alert, and this is the same state, so either can turn it on and either can
+// turn it off. Without a menu row the checkbox would be a one-way door: once
+// updates install on their own the alert stops appearing, and with it the only
+// control that could undo the choice.
+//
+// Downloading implies checking, since an update cannot be fetched without
+// noticing it exists. Both move together rather than exposing an arrangement
+// where the app checks but never acts on the answer.
+BOOL MGUpdaterUpdatesAutomatically(void) {
+    SPUUpdater *updater = [sharedUpdaterController() updater];
+    return [updater automaticallyChecksForUpdates] && [updater automaticallyDownloadsUpdates];
 }
 
-void MGUpdaterSetChecksAutomatically(BOOL checksAutomatically) {
-    [[sharedUpdaterController() updater] setAutomaticallyChecksForUpdates:checksAutomatically];
+void MGUpdaterSetUpdatesAutomatically(BOOL updatesAutomatically) {
+    SPUUpdater *updater = [sharedUpdaterController() updater];
+    [updater setAutomaticallyChecksForUpdates:updatesAutomatically];
+    [updater setAutomaticallyDownloadsUpdates:updatesAutomatically];
 }
 
 #else
@@ -51,7 +58,7 @@ void MGUpdaterSetChecksAutomatically(BOOL checksAutomatically) {
 // code compiles unchanged and simply has nothing to show.
 BOOL MGUpdaterIsAvailable(void) { return NO; }
 void MGUpdaterCheckForUpdates(void) {}
-BOOL MGUpdaterChecksAutomatically(void) { return NO; }
-void MGUpdaterSetChecksAutomatically(BOOL checksAutomatically) { (void)checksAutomatically; }
+BOOL MGUpdaterUpdatesAutomatically(void) { return NO; }
+void MGUpdaterSetUpdatesAutomatically(BOOL updatesAutomatically) { (void)updatesAutomatically; }
 
 #endif

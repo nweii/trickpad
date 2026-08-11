@@ -10,7 +10,8 @@ BOOL MGUpdaterIsAvailable(void);
 // Starts a check the user asked for. No-op when the updater is absent.
 void MGUpdaterCheckForUpdates(void);
 
-// Whether the app looks for updates on its own. Sparkle owns this setting in
-// the host bundle's user defaults, so it is read back rather than mirrored.
-BOOL MGUpdaterChecksAutomatically(void);
-void MGUpdaterSetChecksAutomatically(BOOL checksAutomatically);
+// Whether the app updates itself without being asked. Sparkle owns this setting
+// in the host bundle's user defaults, so it is read back rather than mirrored,
+// and its own checkbox on the update alert changes the same state.
+BOOL MGUpdaterUpdatesAutomatically(void);
+void MGUpdaterSetUpdatesAutomatically(BOOL updatesAutomatically);
