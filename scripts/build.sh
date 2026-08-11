@@ -13,6 +13,18 @@ BUILD_ROOT="$ROOT/build"
 APP_BUNDLE="$BUILD_ROOT/$APP_NAME.app"
 MACOS_DIR="$APP_BUNDLE/Contents/MacOS"
 RES_DIR="$APP_BUNDLE/Contents/Resources"
+FRAMEWORKS_DIR="$APP_BUNDLE/Contents/Frameworks"
+SPARKLE_FRAMEWORK="$ROOT/third_party/sparkle/Sparkle.framework"
+
+# The appcast Sparkle asks for, and the public half of the EdDSA key pair that
+# signs every update. Every copy in the wild asks for this URL forever, so it
+# must not change once a release carries it.
+#
+# The key is empty until `generate_keys` has been run and its private half is
+# in the Keychain with a recovery copy in 1Password. An empty key builds an app
+# with no updater rather than one that cannot verify what it downloads.
+SPARKLE_FEED_URL="https://updates.thirdwind.fyi/trickpad/9zvff4/appcast.xml"
+SPARKLE_PUBLIC_KEY=""
 ICON_SOURCE="$ROOT/Trickpad.icon"
 ICON_BUILD_SOURCE="$BUILD_ROOT/Trickpad.icon"
 ICON_INFO="$BUILD_ROOT/TrickpadIconInfo.plist"
@@ -52,10 +64,36 @@ if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
     fi
   fi
 fi
+# An updater that cannot verify a signature is worse than no updater, so a
+# missing key builds an app without one rather than one that trusts whatever it
+# downloads. An empty BUILD_STAMP means this build sits on the clean release
+# tag, and a release must never take that path.
+SPARKLE_ENABLED=0
+if [[ -n "$SPARKLE_PUBLIC_KEY" ]]; then
+  SPARKLE_ENABLED=1
+elif [[ -z "$BUILD_STAMP" ]]; then
+  echo "Refusing to build release $APP_VERSION with no SPARKLE_PUBLIC_KEY." >&2
+  echo "Run generate_keys, store the private half, and set the public half in this script." >&2
+  exit 1
+fi
+
 STAMP_KEYS=""
 if [[ -n "$BUILD_STAMP" ]]; then
   STAMP_KEYS="  <key>TrickpadBuildStamp</key>
   <string>$BUILD_STAMP</string>"
+fi
+
+# SUEnableAutomaticChecks turns off the scheduled check and suppresses the
+# permission prompt Sparkle otherwise raises on second launch, so a fresh
+# install makes no network request until someone asks for one.
+SPARKLE_KEYS=""
+if [[ "$SPARKLE_ENABLED" == "1" ]]; then
+  SPARKLE_KEYS="  <key>SUFeedURL</key>
+  <string>$SPARKLE_FEED_URL</string>
+  <key>SUPublicEDKey</key>
+  <string>$SPARKLE_PUBLIC_KEY</string>
+  <key>SUEnableAutomaticChecks</key>
+  <false/>"
 fi
 
 cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
@@ -86,6 +124,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key>
   <string>$APP_BUILD_NUMBER</string>
 $STAMP_KEYS
+$SPARKLE_KEYS
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_MACOS_VERSION</string>
   <key>LSUIElement</key>
@@ -97,7 +136,26 @@ PLIST
 
 SDKROOT="$(xcrun --show-sdk-path)"
 
+# The framework ships inside the bundle, so the executable finds it through an
+# rpath rather than an absolute path. Copied with ditto to preserve the version
+# symlinks; its nested code is re-signed innermost first further down.
+SPARKLE_BUILD_FLAGS=()
+if [[ "$SPARKLE_ENABLED" == "1" ]]; then
+  mkdir -p "$FRAMEWORKS_DIR"
+  rm -rf "$FRAMEWORKS_DIR/Sparkle.framework"
+  ditto "$SPARKLE_FRAMEWORK" "$FRAMEWORKS_DIR/Sparkle.framework"
+  SPARKLE_BUILD_FLAGS=(
+    -F"$ROOT/third_party/sparkle"
+    -framework Sparkle
+    -rpath @executable_path/../Frameworks
+    -DTRICKPAD_SPARKLE=1
+  )
+else
+  rm -rf "$FRAMEWORKS_DIR"
+fi
+
 clang \
+  "${SPARKLE_BUILD_FLAGS[@]}" \
   -arch x86_64 \
   -arch arm64 \
   -mmacosx-version-min="$MIN_MACOS_VERSION" \
@@ -183,11 +241,38 @@ for binary in "$MACOS_DIR/$APP_NAME" "$RES_DIR/analyze-trace"; do
   done
 done
 
+# Nested code is signed innermost first, so every signature covers contents that
+# are already final, and the bundle itself is signed last without --deep.
+# --deep re-signs nested code in its own order and leaves Sparkle's framework
+# reported as modified, which fails verification.
+if [[ "$SPARKLE_ENABLED" == "1" ]]; then
+  sparkle_version_dir="$FRAMEWORKS_DIR/Sparkle.framework/Versions/B"
+  for nested in \
+    "$sparkle_version_dir/XPCServices/Downloader.xpc" \
+    "$sparkle_version_dir/XPCServices/Installer.xpc" \
+    "$sparkle_version_dir/Updater.app" \
+    "$sparkle_version_dir/Autoupdate" \
+    "$sparkle_version_dir"; do
+    [[ -e "$nested" ]] || {
+      echo "Sparkle layout changed, missing $nested" >&2
+      exit 1
+    }
+    codesign --force --sign - "$nested" >/dev/null
+  done
+fi
+codesign --force --sign - "$RES_DIR/analyze-trace" >/dev/null
+
 # A stable designated requirement lets macOS TCC associate Accessibility
 # permission with this bundle identifier across rebuilds.
-codesign --force --deep --sign - \
+codesign --force --sign - \
   --requirements "=designated => identifier \"$BUNDLE_ID\"" \
   "$APP_BUNDLE" >/dev/null
 codesign --verify --deep --strict "$APP_BUNDLE" >/dev/null
+
+# The Accessibility grant survives rebuilds only while this requirement holds.
+codesign -d -r- "$APP_BUNDLE" 2>&1 | grep -q "designated => identifier \"$BUNDLE_ID\"" || {
+  echo "Designated requirement missing from the signed bundle" >&2
+  exit 1
+}
 
 echo "$APP_BUNDLE"
