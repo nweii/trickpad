@@ -190,6 +190,7 @@ clang \
   "$ROOT/src/TraceRecorder.m" \
   "$ROOT/src/TraceSessionModel.m" \
   "$ROOT/src/TrackpadInteraction.m" \
+  "$ROOT/src/UpdaterController.m" \
   "$ROOT/third_party/tomlc17/tomlc17.c" \
   "$SRC_ROOT/JitouchAppDelegate.m" \
   "$SRC_ROOT/Settings.m" \

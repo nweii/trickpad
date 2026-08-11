@@ -120,7 +120,7 @@ The script cannot remove the Accessibility entry or the project folder. Remove T
 
 Trickpad needs Accessibility permission because macOS requires it for apps that send keystrokes to other apps.
 
-The app has no telemetry, analytics, or crash reporting. It makes no network requests itself. Opening a URL may cause the app that handles it to use the network.
+The app has no telemetry, analytics, or crash reporting. It contacts the network only for updates. That means checking whether one exists, and downloading one you choose to install. Automatic checks are off by default, and you can turn them on from the menu bar item. The app never downloads an update without being asked. Opening a URL may cause the app that handles it to use the network.
 
 It does not read your keystrokes. The event tap it installs watches mouse and scroll events so it can tell a gesture from a normal click. Keyboard events are not in the set it listens for.
 

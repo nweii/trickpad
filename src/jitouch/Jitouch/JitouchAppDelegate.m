@@ -19,6 +19,7 @@
 #import "SystemGestureClaims.h"
 #import "KeyUtility.h"
 #import "TraceRecorder.h"
+#import "UpdaterController.h"
 #import "TraceSessionModel.h"
 
 static NSMenuItem *MGMenuSectionHeader(NSString *title);
@@ -632,6 +633,20 @@ static BOOL runLaunchctl(NSArray *arguments) {
 
 - (void)getLatestVersion:(id)sender {
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://thirdwind.fyi/trickpad/download"]];
+}
+
+- (void)checkForUpdates:(id)sender {
+    MGUpdaterCheckForUpdates();
+}
+
+// Sparkle keeps this setting in the host bundle's user defaults and its
+// documentation says not to hold a second copy, so the menu reads the state
+// back rather than tracking it. That is the reason this is not a config.toml
+// key, and the one deliberate exception to the everything-in-TOML idiom.
+- (void)toggleAutomaticUpdateChecks:(id)sender {
+    BOOL enabled = !MGUpdaterChecksAutomatically();
+    MGUpdaterSetChecksAutomatically(enabled);
+    [sender setState:MGUpdaterChecksAutomatically() ? NSOnState : NSOffState];
 }
 
 - (void)openDocs:(id)sender {
@@ -1901,10 +1916,28 @@ static NSMenuItem *MGMenuSectionHeader(NSString *title) {
                                                 action:@selector(openDocs:)
                                          keyEquivalent:@""];
     [docsItem setTarget:self];
-    NSMenuItem *downloadItem = [aboutMenu addItemWithTitle:@"Get Latest Version"
-                                                    action:@selector(getLatestVersion:)
-                                             keyEquivalent:@""];
-    [downloadItem setTarget:self];
+    // The in-app check replaces the download page rather than sitting beside
+    // it. Two routes to the same outcome invite the question of which to use,
+    // and this one needs no manual download or drag to Applications. The page
+    // stays reachable from the docs, and from the updater's own failure alert.
+    if (MGUpdaterIsAvailable()) {
+        // The ellipsis is earned here: choosing whether to install is the
+        // further input the mark stands for.
+        NSMenuItem *updateItem = [aboutMenu addItemWithTitle:@"Check for Updates…"
+                                                      action:@selector(checkForUpdates:)
+                                               keyEquivalent:@""];
+        [updateItem setTarget:self];
+        NSMenuItem *automaticItem = [aboutMenu addItemWithTitle:@"Check Automatically"
+                                                         action:@selector(toggleAutomaticUpdateChecks:)
+                                                  keyEquivalent:@""];
+        [automaticItem setTarget:self];
+        [automaticItem setState:MGUpdaterChecksAutomatically() ? NSOnState : NSOffState];
+    } else {
+        NSMenuItem *downloadItem = [aboutMenu addItemWithTitle:@"Get Latest Version"
+                                                        action:@selector(getLatestVersion:)
+                                                 keyEquivalent:@""];
+        [downloadItem setTarget:self];
+    }
     NSMenuItem *websiteItem = [aboutMenu addItemWithTitle:@"Website" action:@selector(about:) keyEquivalent:@""];
     [websiteItem setTarget:self];
 
