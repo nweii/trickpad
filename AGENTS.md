@@ -35,7 +35,9 @@ Single-context: `CONTEXT.md` and `docs/adr/` at the repository root. See `docs/a
 
 ## Vendored engine, local config layer
 
-Recognition is [Jitouch](https://github.com/JitouchApp/Jitouch), vendored under `src/jitouch/` by way of a fork. The `upstream` remote points at that fork.
+Recognition is [Jitouch](https://github.com/JitouchApp/Jitouch), vendored under `src/jitouch/`.
+
+The repository's history descends from [MagicMouseAgent](https://github.com/jyfcjing/MagicMouseAgent), a separate project that had already derived from Jitouch, which is why the root commit reads "Initial public release of MagicMouseAgent". That project is an ancestor, not a supplier: its entire history is contained in `main`, it has no commits this repository lacks, and there is no remote for it. `NOTICE.txt` carries the attribution, and it names Jitouch, which is the licensed source. `origin` is the only remote.
 
 Jitouch is a gesture app with a catalog of built-in actions and a preference pane for choosing among them. This project keeps its recognizers and drops the rest, so a gesture sends whatever keyboard shortcut the configuration names. Prefer that shape when adding anything: the built-in actions still work and are worth using where they fit, but the catalog is not the point.
 
@@ -136,7 +138,7 @@ Buyer-facing facts appear in this repository, in the packaged disk image, on the
 
 README, `config.default.toml`, `config-notes.default.md`, the website, and the storefront description mirror the facts their readers need. When an owned fact changes, search every mirror before completing the work. Completion requires every relevant mirror to agree in substance, the repository checks to pass, and a fresh package verification when delivery contents or DMG guidance changed. Preserve each surface's level of detail instead of forcing identical prose everywhere.
 
-`gh release create` has been seen to report a missing `workflow` scope that the token already holds. Creating it through `gh api repos/OWNER/REPO/releases` works. Pass `--repo` to any `gh release` or `gh repo` command here, or it resolves to the `upstream` remote and reports the fork's releases instead.
+`gh release create` has been seen to report a missing `workflow` scope that the token already holds. Creating it through `gh api repos/OWNER/REPO/releases` works.
 
 Moving a published tag turns its GitHub release back into a draft. Republishing it is a separate step, and a release left drafted is invisible.
 
