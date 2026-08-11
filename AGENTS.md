@@ -111,15 +111,15 @@ The release title is the bare version. The repository name sits above it on ever
 
 ### Updates
 
-Sparkle is vendored at a pinned version under `third_party/sparkle/`, with its own README recording the release and checksum. Four things about it are not visible from the scripts.
+Sparkle, vendored at a pinned version under `third_party/sparkle/` with its own README recording the release and checksum. Its settings are documented at <https://sparkle-project.org/documentation/customization/>. Four things are not, and each fails quietly.
 
-**The feed URL can never change.** Every copy in the wild asks for it forever. A copy that cannot reach its feed has no path to an update except a manual reinstall. Enclosure URLs are read from the feed on each check, so the archives themselves can move.
+**The feed URL can never change.** Every copy in the wild asks for it forever, and one that cannot reach its feed has no path to an update but a manual reinstall. Archives can move, since the feed names their URLs on every check.
 
-**`codesign --deep` does not sign Sparkle correctly.** It re-signs nested code in its own order and leaves the framework reported as modified, failing verification. Nested components are signed innermost first and the bundle last without `--deep`. Restoring `--deep` breaks the build, and the failure names the framework rather than the signing order.
+**`codesign --deep` does not sign Sparkle correctly.** It re-signs nested code in its own order and leaves the framework reported as modified. Nested components are signed innermost first and the bundle last without `--deep`. Restoring `--deep` fails verification with an error naming the framework rather than the signing order.
 
-**An empty `SPARKLE_PUBLIC_KEY` builds an app with no updater**, and the build refuses when that would produce a release. An updater that cannot verify a signature is worse than none. The private half lives in the Keychain with a recovery copy in 1Password, and no agent needs it: losing both copies strands every installed copy permanently, because a replacement key produces a public key that installed copies reject.
+**An empty `SPARKLE_PUBLIC_KEY` builds an app with no updater**, and the build refuses when that would produce a release. The private half lives in the Keychain with a recovery copy in 1Password, and no agent needs it. Losing both strands every installed copy: a replacement key produces a public key those copies reject. Sparkle's key rotation is the documented escape and requires Developer ID signing, which this app does not have. For the same reason `SURequireSignedFeed` and `SUVerifyUpdateBeforeExtraction` stay off until it does.
 
-**Publishing is not uploading the archive.** The feed also names deltas, and Sparkle prefers a delta when one applies, so an unpublished delta breaks the update for exactly the people it was built for. `package.sh` prints every file the feed names, and refuses when one is missing. Upload them before the appcast, so the feed never names something absent, and set the cache header each one wants: the archives never change, the appcast changes every release. Objects that inherit the host's default cache for four hours, which both hides a release and lets the feed and its archives disagree about what an archive contains.
+**Publishing is not uploading the archive.** The feed also names deltas, and Sparkle prefers a delta when one applies, so an unpublished delta breaks the update for exactly the people it was built for. `package.sh` prints every file the feed names and refuses when one is missing. Upload those before the appcast, so the feed never names something absent, and set the cache header each wants: archives never change, the appcast changes every release. Inheriting the host default caches both for four hours, which hides a release and lets the feed and its archives disagree.
 
 ### What a release commits this repository to
 
