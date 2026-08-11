@@ -24,7 +24,7 @@ SPARKLE_FRAMEWORK="$ROOT/third_party/sparkle/Sparkle.framework"
 # in the Keychain with a recovery copy in 1Password. An empty key builds an app
 # with no updater rather than one that cannot verify what it downloads.
 SPARKLE_FEED_URL="https://updates.thirdwind.fyi/trickpad/9zvff4/appcast.xml"
-SPARKLE_PUBLIC_KEY=""
+SPARKLE_PUBLIC_KEY="PRUR58SW8YdEJmAFlzV+LxGjQR1xS8txBGJdU8ZOeyw="
 ICON_SOURCE="$ROOT/Trickpad.icon"
 ICON_BUILD_SOURCE="$BUILD_ROOT/Trickpad.icon"
 ICON_INFO="$BUILD_ROOT/TrickpadIconInfo.plist"
