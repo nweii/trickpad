@@ -41,6 +41,42 @@ if TAG_COMMIT="$(git -C "$ROOT" rev-list -n 1 "v$VERSION" 2>/dev/null)" &&
   exit 1
 fi
 
+# An updater decides whether a release is newer by comparing build numbers, so a
+# number that repeats or goes backwards leaves everyone already installed with
+# no way to be offered this release. The failure is silent at the customer's
+# end, which is why it is caught here rather than noticed later.
+BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_BUNDLE/Contents/Info.plist")"
+[[ "$BUILD_NUMBER" == <-> ]] || {
+  echo "CFBundleVersion must be a plain integer, found \"$BUILD_NUMBER\"." >&2
+  exit 1
+}
+
+# Compared against the highest build number any earlier release carries, not
+# just the previous tag's. Tags predating APP_BUILD_NUMBER declare none, and
+# skipping those is correct rather than an error. Read from tagged source, which
+# the working tree cannot edit.
+HIGHEST_RELEASED_BUILD_NUMBER=0
+HIGHEST_RELEASED_TAG=""
+for tag in $(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | grep -v "^v$VERSION\$"); do
+  # Braced because zsh reads an unbraced $tag:s… as a substitution modifier.
+  # The trailing fallback matters under pipefail: a tag with no build number
+  # makes grep exit non-zero, which would otherwise abort packaging outright.
+  tagged_number="$(git -C "$ROOT" show "${tag}:scripts/build.sh" 2>/dev/null |
+    grep -m 1 '^APP_BUILD_NUMBER=' | tr -dc '0-9' || true)"
+  [[ -n "$tagged_number" ]] || continue
+  if (( tagged_number > HIGHEST_RELEASED_BUILD_NUMBER )); then
+    HIGHEST_RELEASED_BUILD_NUMBER=$tagged_number
+    HIGHEST_RELEASED_TAG="$tag"
+  fi
+done
+
+if [[ -n "$HIGHEST_RELEASED_TAG" ]] &&
+   (( BUILD_NUMBER <= HIGHEST_RELEASED_BUILD_NUMBER )); then
+  echo "Build number $BUILD_NUMBER does not exceed $HIGHEST_RELEASED_BUILD_NUMBER from $HIGHEST_RELEASED_TAG." >&2
+  echo "Raise APP_BUILD_NUMBER in scripts/build.sh before packaging." >&2
+  exit 1
+fi
+
 [[ -f "$BACKGROUND" ]] || {
   echo "Missing DMG background: $BACKGROUND" >&2
   exit 1
