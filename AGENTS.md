@@ -97,7 +97,8 @@ To cut a release:
 ```bash
 # bump APP_VERSION and APP_BUILD_NUMBER in scripts/build.sh
 ./scripts/build.sh && ./scripts/check.sh
-./scripts/package.sh
+./scripts/package.sh          # prints every file the update feed names
+# upload those files, appcast last, with the cache headers package.sh names
 git commit -am "Release X.Y.Z"
 git tag -a vX.Y.Z -m "X.Y.Z"
 git push origin main --tags
@@ -107,6 +108,18 @@ gh release create vX.Y.Z --title "X.Y.Z" --notes "..."
 GitHub releases carry the tag, changelog, and automatic source archives without a packaged binary. The DMG that `scripts/package.sh` produces is delivered through Gumroad and must not be attached to GitHub. Packaging refuses to reuse a version whose source tag already points at another commit and verifies the styled drag-to-Applications layout, app signature, license, notices, trademark notice, and exact-source link.
 
 The release title is the bare version. The repository name sits above it on every page that shows a release, so repeating it adds nothing.
+
+### Updates
+
+Sparkle, vendored at a pinned version under `third_party/sparkle/` with its own README recording the release and checksum. Its settings are documented at <https://sparkle-project.org/documentation/customization/>. Four things are not, and each fails quietly.
+
+**The feed URL can never change.** Every copy in the wild asks for it forever, and one that cannot reach its feed has no path to an update but a manual reinstall. Archives can move, since the feed names their URLs on every check.
+
+**`codesign --deep` does not sign Sparkle correctly.** It re-signs nested code in its own order and leaves the framework reported as modified. Nested components are signed innermost first and the bundle last without `--deep`. Restoring `--deep` fails verification with an error naming the framework rather than the signing order.
+
+**An empty `SPARKLE_PUBLIC_KEY` builds an app with no updater**, and the build refuses when that would produce a release. The private half lives in the Keychain with a recovery copy in 1Password, and no agent needs it. Losing both strands every installed copy: a replacement key produces a public key those copies reject. Sparkle's key rotation is the documented escape and requires Developer ID signing, which this app does not have. For the same reason `SURequireSignedFeed` and `SUVerifyUpdateBeforeExtraction` stay off until it does.
+
+**Publishing is not uploading the archive.** The feed also names deltas, and Sparkle prefers a delta when one applies, so an unpublished delta breaks the update for exactly the people it was built for. `package.sh` prints every file the feed names and refuses when one is missing. Upload those before the appcast, so the feed never names something absent, and set the cache header each wants: archives never change, the appcast changes every release. Inheriting the host default caches both for four hours, which hides a release and lets the feed and its archives disagree.
 
 ### What a release commits this repository to
 
@@ -159,6 +172,8 @@ The file is TOML, parsed by the vendored `tomlc17` parser pinned under `third_pa
 An expanded binding is a TOML inline table: `gesture = { action = "escape", haptic = false }`. `action` is required globally and may be omitted in an application scope to inherit the global action. `defer` is valid only for single-tap gestures. `haptic` is valid only for trackpad bindings and overrides `haptic-feedback` for that binding.
 
 `config-version` identifies the file format and is currently `3`. A missing version means the current format while the project is in alpha. An unsupported value rejects the entire reload so another format cannot be partially reinterpreted.
+
+Whether updates install on their own is the one setting this file does not own. Sparkle keeps it in the bundle's user defaults, the permission request it raises on second launch writes there, and its documentation asks for no second copy. A TOML key would be a second source of truth for one fact. The menu row reads that state back rather than tracking it, which is also why the row exists: the permission request is asked once and never again, so without the row the answer given there could never be revisited.
 
 Four value forms:
 

@@ -90,6 +90,19 @@ clang \
   -o "$GESTURE_SEQUENCE_OUT" 2>/dev/null
 "$GESTURE_SEQUENCE_OUT"
 
+SINGLE_INSTANCE_OUT="$(mktemp -d)/singleinstancecheck"
+clang \
+  -fobjc-exceptions \
+  -fno-objc-arc \
+  -I"$ROOT/src" \
+  -isysroot "$SDKROOT" \
+  -framework Foundation \
+  -framework AppKit \
+  "$ROOT/src/SingleInstance.m" \
+  "$ROOT/src/SingleInstanceCheck.m" \
+  -o "$SINGLE_INSTANCE_OUT" 2>/dev/null
+"$SINGLE_INSTANCE_OUT"
+
 MOUSE_CONTACT_FILTER_OUT="$(mktemp -d)/mousecontactfiltercheck"
 clang \
   -fobjc-exceptions \

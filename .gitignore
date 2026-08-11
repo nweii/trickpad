@@ -6,3 +6,7 @@ run/
 *.dSYM
 .scratch/
 .claude/
+
+# Sparkle release tools. Needed to publish a release, not to build the app.
+# third_party/sparkle/README.md records where to get them.
+third_party/sparkle/bin/
