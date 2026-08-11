@@ -259,10 +259,10 @@ int main(void) {
                 @"palm-scale contact counted toward the swipe family's fingertips");
         MGTrackpadInteractionObserveBoundScrollFamily(
             &interaction, MGTrackpadInteractionFingertipScaleContactCount(palmScroll, 3),
-            3, YES);
+            3, ^BOOL{ return YES; });
         require(!MGTrackpadInteractionSuppressesNativeScroll(&interaction),
                 @"two fingertips plus a resting palm armed scroll suppression");
-        MGTrackpadInteractionObserveBoundScrollFamily(&interaction, 3, 3, YES);
+        MGTrackpadInteractionObserveBoundScrollFamily(&interaction, 3, 3, ^BOOL{ return YES; });
         require(MGTrackpadInteractionSuppressesNativeScroll(&interaction),
                 @"bound trackpad swipe family did not suppress native scrolling");
         MGTrackpadInteractionFinishFrame(&interaction, 2);

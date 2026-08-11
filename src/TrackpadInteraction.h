@@ -76,7 +76,7 @@ BOOL MGTrackpadInteractionClaimTap(MGTrackpadInteraction *interaction,
 void MGTrackpadInteractionObserveBoundScrollFamily(MGTrackpadInteraction *interaction,
                                                    int activeContactCount,
                                                    int requiredContactCount,
-                                                   BOOL hasBinding);
+                                                   BOOL (^resolveBinding)(void));
 BOOL MGTrackpadInteractionSuppressesNativeScroll(const MGTrackpadInteraction *interaction);
 void MGTrackpadInteractionFinishFrame(MGTrackpadInteraction *interaction,
                                       int activeContactCount);
