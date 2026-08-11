@@ -97,12 +97,14 @@ BOOL MGTrackpadInteractionFiveFingerContactsAreEligible(const float *majorAxes,
     return YES;
 }
 
-void MGTrackpadInteractionInitialize(MGTrackpadInteraction *interaction) {
+// Everything the interaction owns itself, leaving the sequence alone. Split out
+// because a full lift resets these fields while the sequence keeps state that
+// deliberately outlives the contacts.
+static void resetInteractionFields(MGTrackpadInteraction *interaction) {
     interaction->broadContact = NO;
     interaction->physicalClick = NO;
     interaction->physicalDrag = NO;
     interaction->rawContactsObserved = NO;
-    MGGestureSequenceInitialize(&interaction->sequence);
     interaction->previousContactCount = 0;
     interaction->previousActiveContactCount = 0;
     interaction->currentContactCount = 0;
@@ -114,6 +116,11 @@ void MGTrackpadInteractionInitialize(MGTrackpadInteraction *interaction) {
     interaction->pendingClickY = 0;
     interaction->physicalClickContactsLiftedAt = -1;
     interaction->rawContactOnsets = (MGContactOnsetTracker){0};
+}
+
+void MGTrackpadInteractionInitialize(MGTrackpadInteraction *interaction) {
+    resetInteractionFields(interaction);
+    MGGestureSequenceInitialize(&interaction->sequence);
 }
 
 void MGTrackpadInteractionObserveRawContacts(MGTrackpadInteraction *interaction,
@@ -264,12 +271,25 @@ BOOL MGTrackpadInteractionSuppressesNativeScroll(const MGTrackpadInteraction *in
     return MGGestureSequenceSuppressesNativeScroll(&interaction->sequence);
 }
 
+BOOL MGTrackpadInteractionSuppressesScrollEvent(MGTrackpadInteraction *interaction,
+                                                int64_t scrollPhase,
+                                                int64_t momentumPhase) {
+    return MGGestureSequenceSuppressesScrollEvent(&interaction->sequence,
+                                                  scrollPhase,
+                                                  momentumPhase);
+}
+
 void MGTrackpadInteractionFinishFrame(MGTrackpadInteraction *interaction,
                                       int activeContactCount) {
     interaction->previousActiveContactCount = activeContactCount;
     if (activeContactCount == 0 && !interaction->physicalClick &&
         interaction->pendingClickContactCount == 0) {
-        MGTrackpadInteractionInitialize(interaction);
+        // The interaction's own fields reset here, but what survives a lift is
+        // the sequence's business, so that transition is delegated rather than
+        // repeated. Doing both by hand is how the momentum latch got cleared a
+        // frame after it was set.
+        resetInteractionFields(interaction);
+        MGGestureSequenceFinishFrame(&interaction->sequence, 0);
     }
 }
 
