@@ -189,6 +189,7 @@ clang \
   "$ROOT/src/SystemGestureClaims.m" \
   "$ROOT/src/TraceRecorder.m" \
   "$ROOT/src/TraceSessionModel.m" \
+  "$ROOT/src/SingleInstance.m" \
   "$ROOT/src/TrackpadInteraction.m" \
   "$ROOT/src/UpdaterController.m" \
   "$ROOT/third_party/tomlc17/tomlc17.c" \

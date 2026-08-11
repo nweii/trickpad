@@ -2,9 +2,17 @@
 #import <signal.h>
 
 #import "JitouchAppDelegate.h"
+#import "SingleInstance.h"
 
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
+        // An update has two things starting the app: the updater relaunches it,
+        // and the login agent's KeepAlive restarts what it saw exit. Two copies
+        // both watch the devices, so every gesture would dispatch twice.
+        // Checked before the status item exists, so no second icon appears.
+        if (MGAnotherInstanceOwnsThisBundle())
+            return 0;
+
         NSApplication *app = [NSApplication sharedApplication];
         [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
 
