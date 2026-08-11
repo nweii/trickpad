@@ -12,6 +12,25 @@
 
 # Changelog
 
+## 0.9.1
+
+Released 2026-08-11.
+
+### Added
+
+- Add Check for Updates to the About menu. Trickpad finds a new version and installs it. This replaces downloading and installing a new version by hand.
+- Add Check Automatically to the About menu. Trickpad then looks for a new version on its own. This setting is off until it is turned on. Trickpad never downloads an update without approval.
+
+### Fixed
+
+- Stop the page from scrolling after a bound swipe runs. The page kept the momentum of the swipe and moved after the action.
+- Stop the page from scrolling for a bound four-finger trackpad swipe that starts with three fingers.
+
+### Changed
+
+- Replace Get Latest Version in the About menu with Check for Updates. The download page stays available from the documentation.
+- Reduce the work done while fingers rest on a device. Trickpad asked the system about bindings many times each second. It now asks one time for each gesture.
+
 ## 0.9.0
 
 Released 2026-08-10.
