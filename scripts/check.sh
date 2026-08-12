@@ -442,4 +442,15 @@ for f in "$ROOT/config.default.toml" "$ROOT/GESTURES.md"; do
   grep -q 'haptic-feedback' "$f" || managed_fail "$f does not document haptic feedback"
 done
 
+BUILD_LOG="$(mktemp)"
+if ! "$ROOT/scripts/build.sh" >"$BUILD_LOG" 2>&1; then
+  cat "$BUILD_LOG" >&2
+  exit 1
+fi
+if grep -q 'warning:' "$BUILD_LOG"; then
+  grep 'warning:' "$BUILD_LOG" >&2
+  echo "build emitted compiler warnings" >&2
+  exit 1
+fi
+
 echo "login item plist writers agree"
