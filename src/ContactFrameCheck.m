@@ -43,6 +43,92 @@ static void requireSameList(MGContactList actual, MGContactList expected,
                 message);
 }
 
+static BOOL contactIsActive(Finger contact) {
+    return contact.state == MTTouchStateMakeTouch ||
+        contact.state == MTTouchStateTouching ||
+        contact.state == MTTouchStateBreakTouch;
+}
+
+static MGContactList legacyTrackpadRawContacts(MGContactList hardware) {
+    MGContactList result = {NULL, hardware.count};
+    if (result.count > 0) {
+        result.contacts = calloc(result.count, sizeof(Finger));
+        memcpy((void *)result.contacts, hardware.contacts,
+               result.count * sizeof(Finger));
+    }
+    Finger *contacts = (Finger *)result.contacts;
+    for (int i = 0; i < result.count; i++) {
+        if (!contactIsActive(contacts[i]))
+            contacts[i--] = contacts[--result.count];
+    }
+    return result;
+}
+
+static MGContactList legacyTrackpadThumbFilteredContacts(
+    MGContactList raw, int *thumbIdentifier, BOOL leftHanded) {
+    MGContactList result = {NULL, raw.count};
+    if (result.count > 0) {
+        result.contacts = calloc(result.count, sizeof(Finger));
+        memcpy((void *)result.contacts, raw.contacts,
+               result.count * sizeof(Finger));
+    }
+    Finger *contacts = (Finger *)result.contacts;
+
+    int edgeCount = 0;
+    int edgeIndex = -1;
+    float nearestInteriorX = leftHanded ? 0.0f : 1.0f;
+    for (int i = 0; i < result.count; i++) {
+        if ((leftHanded && contacts[i].px > 0.9f) ||
+            (!leftHanded && contacts[i].px < 0.1f)) {
+            edgeCount++;
+            edgeIndex = i;
+        } else if ((leftHanded && contacts[i].px > nearestInteriorX) ||
+                   (!leftHanded && contacts[i].px < nearestInteriorX)) {
+            nearestInteriorX = contacts[i].px;
+        }
+    }
+    if (edgeCount == 1 && result.count > 1 &&
+        fabsf(nearestInteriorX - contacts[edgeIndex].px) >= 0.25f)
+        contacts[edgeIndex] = contacts[--result.count];
+
+    if (*thumbIdentifier != -1) {
+        BOOL foundThumb = NO;
+        for (int i = 0; i < result.count; i++) {
+            if (contacts[i].identifier == *thumbIdentifier) {
+                contacts[i] = contacts[--result.count];
+                foundThumb = YES;
+                break;
+            }
+        }
+        if (!foundThumb)
+            *thumbIdentifier = -1;
+    } else {
+        int candidateCount = 0;
+        int candidateIndex = -1;
+        float nextLowestY = 1.0f;
+        for (int i = 0; i < result.count; i++) {
+            if (contacts[i].py < 0.1f ||
+                contacts[i].majorAxis - contacts[i].minorAxis >= 5.5f) {
+                candidateCount++;
+                candidateIndex = i;
+            } else if (contacts[i].py < nextLowestY) {
+                nextLowestY = contacts[i].py;
+            }
+        }
+        if (candidateCount == 1 && result.count > 1 &&
+            nextLowestY - contacts[candidateIndex].py >= 0.4f) {
+            *thumbIdentifier = contacts[candidateIndex].identifier;
+            contacts[candidateIndex] = contacts[--result.count];
+        }
+    }
+
+    if (leftHanded) {
+        for (int i = 0; i < result.count; i++)
+            contacts[i].px = 1.0f - contacts[i].px;
+    }
+    return result;
+}
+
 static MGContactList legacyMouseFilteredContacts(MGContactList raw) {
     MGContactList result = {NULL, 0};
     if (raw.count > 0)
@@ -134,16 +220,45 @@ int main(int argc, const char *argv[]) {
         MGTrackpadContactFrameBuilderInitialize(&trackpadBuilder);
         MGContactFrame trackpadFrame = MGTrackpadContactFrameCreate(
             &trackpadBuilder, trackpad, 4, NO);
-        const int rawIdentifiers[] = {1, 2, 3, 4};
+        const int rawIdentifiers[] = {1, 4, 3};
         const int trackpadFilteredIdentifiers[] = {1, 4};
         const int fingertipIdentifiers[] = {1};
-        requireIdentifiers(trackpadFrame.raw, rawIdentifiers, 4,
-                           @"trackpad raw view changed the hardware list");
+        requireIdentifiers(trackpadFrame.raw, rawIdentifiers, 3,
+                           @"trackpad raw view retained an inactive contact");
         requireIdentifiers(trackpadFrame.thumbFiltered,
                            trackpadFilteredIdentifiers, 2,
                            @"trackpad filtered view retained hover or edge contacts");
         requireIdentifiers(trackpadFrame.fingertipScale, fingertipIdentifiers, 1,
                            @"trackpad fingertip-scale view retained hover or palm-scale contacts");
+        MGContactFrameDestroy(&trackpadFrame);
+
+        Finger fiveFingerEdge[] = {
+            contact(20, MTTouchStateTouching, 0.02, 0.55, 1.0, 8.0, 6.0),
+            contact(21, MTTouchStateTouching, 0.30, 0.55, 1.0, 8.0, 6.0),
+            contact(22, MTTouchStateTouching, 0.42, 0.55, 1.0, 8.0, 6.0),
+            contact(23, MTTouchStateTouching, 0.54, 0.55, 1.0, 8.0, 6.0),
+            contact(24, MTTouchStateTouching, 0.66, 0.55, 1.0, 8.0, 6.0),
+        };
+        MGTrackpadContactFrameBuilderInitialize(&trackpadBuilder);
+        trackpadFrame = MGTrackpadContactFrameCreate(
+            &trackpadBuilder, fiveFingerEdge, 5, NO);
+        require(trackpadFrame.raw.count == 5,
+                @"trackpad raw view removed a five-finger tap contact");
+        require(trackpadFrame.thumbFiltered.count == 4,
+                @"trackpad thumb-filtered view retained the side-edge contact");
+        MGContactFrameDestroy(&trackpadFrame);
+
+        Finger leftTrackpad[] = {
+            contact(30, MTTouchStateTouching, 0.20, 0.55, 1.0, 8.0, 6.0),
+            contact(31, MTTouchStateTouching, 0.70, 0.55, 1.0, 8.0, 6.0),
+        };
+        MGTrackpadContactFrameBuilderInitialize(&trackpadBuilder);
+        trackpadFrame = MGTrackpadContactFrameCreate(
+            &trackpadBuilder, leftTrackpad, 2, YES);
+        require(fabsf(trackpadFrame.raw.contacts[0].px - 0.20f) < 0.0001f,
+                @"trackpad raw view changed the physical x coordinate");
+        require(fabsf(trackpadFrame.thumbFiltered.contacts[0].px - 0.80f) < 0.0001f,
+                @"trackpad thumb-filtered view did not mirror recognizer x");
         MGContactFrameDestroy(&trackpadFrame);
 
         Finger mouse[] = {
@@ -159,33 +274,82 @@ int main(int argc, const char *argv[]) {
                            @"Magic Mouse fingertip-scale view diverged from the filtered recognizer input");
         MGContactFrameDestroy(&mouseFrame);
 
+        Finger leftMouse[] = {
+            contact(12, MTTouchStateTouching, 0.90, 0.20, 1.5, 8.0, 8.0),
+            contact(13, MTTouchStateTouching, 0.40, 0.70, 1.5, 8.0, 8.0),
+        };
+        mouseFrame = MGMagicMouseContactFrameCreate(leftMouse, 2, YES);
+        require(fabsf(mouseFrame.raw.contacts[0].px - 0.10f) < 0.0001f,
+                @"Magic Mouse raw view did not mirror left-handed geometry");
+        const int leftMouseFilteredIdentifiers[] = {13};
+        requireIdentifiers(mouseFrame.thumbFiltered,
+                           leftMouseFilteredIdentifiers, 1,
+                           @"Magic Mouse left-handed thumb was not filtered");
+        MGContactFrameDestroy(&mouseFrame);
+
+        Finger thumbStable[] = {
+            contact(40, MTTouchStateTouching, 0.10, 0.20, 1.5, 8.0, 8.0),
+            contact(41, MTTouchStateTouching, 0.40, 0.70, 1.5, 8.0, 8.0),
+            contact(42, MTTouchStateTouching, 0.70, 0.75, 1.5, 8.0, 8.0),
+        };
+        mouseFrame = MGMagicMouseContactFrameCreate(thumbStable, 3, NO);
+        require(mouseFrame.thumbFiltered.count == 2,
+                @"synthetic thumb frame did not establish a thumb");
+        MGContactFrameDestroy(&mouseFrame);
+
+        Finger thumbFlicker[] = {
+            contact(40, MTTouchStateTouching, 0.16, 0.30, 1.5, 8.0, 8.0),
+            contact(41, MTTouchStateTouching, 0.40, 0.70, 1.5, 8.0, 8.0),
+            contact(42, MTTouchStateTouching, 0.70, 0.75, 1.5, 8.0, 8.0),
+        };
+        mouseFrame = MGMagicMouseContactFrameCreate(thumbFlicker, 3, NO);
+        require(mouseFrame.thumbFiltered.count == 3,
+                @"synthetic frame did not reproduce one-frame thumb flicker");
+        int lastThumbPresent = 1;
+        int thumbPresent = mouseFrame.raw.count - mouseFrame.thumbFiltered.count;
+        if (!thumbPresent && lastThumbPresent && mouseFrame.raw.count == 3)
+            thumbPresent = lastThumbPresent;
+        require(mouseFrame.raw.count - (thumbPresent ? 1 : 0) == 2,
+                @"thumb hysteresis did not preserve the recognizer count");
+        MGContactFrameDestroy(&mouseFrame);
+
         for (int argument = 1; argument < argc; argument++) {
             NSString *path = [NSString stringWithUTF8String:argv[argument]];
+            MGTrackpadContactFrameBuilder fixtureBuilder;
+            MGTrackpadContactFrameBuilderInitialize(&fixtureBuilder);
+            int legacyThumbIdentifier = -1;
             for (NSDictionary *event in frameEventsAtPath(path)) {
                 MGContactList fixtureContacts = contactsFromEvent(event);
                 NSString *device = [event objectForKey:@"device"];
                 MGContactFrame frame = [device hasPrefix:@"mouse-"]
                     ? MGMagicMouseContactFrameCreate(fixtureContacts.contacts,
                                                      fixtureContacts.count, NO)
-                    : MGTrackpadContactFrameCreate(&trackpadBuilder,
+                    : MGTrackpadContactFrameCreate(&fixtureBuilder,
                                                    fixtureContacts.contacts,
                                                    fixtureContacts.count, NO);
-                require(frame.raw.count == fixtureContacts.count,
-                        @"fixture raw count changed");
-                for (int i = 0; i < fixtureContacts.count; i++)
-                    require(frame.raw.contacts[i].identifier == fixtureContacts.contacts[i].identifier,
-                            @"fixture raw order changed");
-                MGContactList legacyFiltered = [device hasPrefix:@"mouse-"]
-                    ? legacyMouseFilteredContacts(fixtureContacts)
-                    : fixtureContacts;
+                MGContactList legacyRaw = [device hasPrefix:@"mouse-"]
+                    ? fixtureContacts
+                    : legacyTrackpadRawContacts(fixtureContacts);
+                requireSameList(frame.raw, legacyRaw,
+                                @"fixture raw derivation changed");
+                MGContactList legacyFiltered;
+                if ([device hasPrefix:@"mouse-"]) {
+                    legacyFiltered = legacyMouseFilteredContacts(legacyRaw);
+                } else {
+                    if (fixtureContacts.count == 0)
+                        legacyThumbIdentifier = -1;
+                    legacyFiltered = legacyTrackpadThumbFilteredContacts(
+                        legacyRaw, &legacyThumbIdentifier, NO);
+                }
                 MGContactList legacyFingertips = legacyFingertipScaleContacts(
                     legacyFiltered, [device hasPrefix:@"mouse-"]);
                 requireSameList(frame.thumbFiltered, legacyFiltered,
                                 @"fixture filtered derivation changed");
                 requireSameList(frame.fingertipScale, legacyFingertips,
                                 @"fixture fingertip-scale derivation changed");
-                if (legacyFiltered.contacts != fixtureContacts.contacts)
-                    free((void *)legacyFiltered.contacts);
+                free((void *)legacyFiltered.contacts);
+                if (legacyRaw.contacts != fixtureContacts.contacts)
+                    free((void *)legacyRaw.contacts);
                 free((void *)legacyFingertips.contacts);
                 MGContactFrameDestroy(&frame);
                 free((void *)fixtureContacts.contacts);

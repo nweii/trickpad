@@ -1257,7 +1257,15 @@ int main(void) {
                 @"gestureMagicMouseThreeFingerTap(filteredData, filteredCount, timestamp)",
                 @"gestureMagicMouseOneFingerTap(filteredData, filteredCount, timestamp)",
                 @"gestureMagicMouseOneFixOneTap(filteredData, filteredCount, timestamp)",
-                @"gestureMagicMouseTwoFingerSwipe(filteredData, filteredCount, timestamp, 0)",
+                @"gestureMagicMouseOneFingerSwipe(rawData, rawCount, timestamp)",
+                @"gestureMagicMouseTwoFingerSwipe(rawData, rawCount, timestamp, thumbPresent)",
+                @"gestureMagicMouseRightFrontTap(rawData, rawCount, timestamp)",
+                @"gestureMagicMouseSwipeThreeFingers(rawData, rawCount, timestamp, thumbPresent)",
+                @"gestureMagicMouseTwoFingers(rawData, rawCount, timestamp, thumbPresent)",
+                @"gestureMagicMouseV(rawData, rawCount)",
+                @"gestureMagicMouseTwoFixOneSlide(rawData, rawCount, timestamp, thumbPresent)",
+                @"gestureMagicMouseMiddleClick(rawData, rawCount)",
+                @"gestureTrackpadFiveFingerTap(\n            rawData, rawCount,",
                 @"gestureTrackpadTwoFingerTap(filteredData, filteredCount,",
                 @"gestureTrackpadHoldSlide(filteredData, filteredCount)",
             ];
@@ -1280,6 +1288,16 @@ int main(void) {
 
             NSString *mouseCallback = section(engine,
                 @"static int magicMouseCallback", @"static void turnOffMagicMouse");
+            for (NSString *required in @[
+                @"const Finger *hardwareData = contactFrame.hardware.contacts",
+                @"MGTraceRecordMouseFrame(device, timestamp, frame, traceContacts, traceCount)",
+                @"gestureMagicMouseThumb(rawData, rawCount)",
+                @"MGGestureSequenceFinishFrame(&magicMouseSequence, rawCount)",
+            ]) {
+                if ([mouseCallback rangeOfString:required].location == NSNotFound)
+                    fail(@"Magic Mouse callback preserves hardware, raw, and filtered views",
+                         required, @"missing");
+            }
             NSRange threeTapCall = [mouseCallback rangeOfString:
                 @"gestureMagicMouseThreeFingerTap(filteredData, filteredCount, timestamp)"];
             NSRange twoTapCall = [mouseCallback rangeOfString:
@@ -1288,6 +1306,37 @@ int main(void) {
                 threeTapCall.location >= twoTapCall.location)
                 fail(@"mouse tap discriminator evaluates exact higher count first",
                      @"filtered three-finger tap before filtered two-finger tap", @"missing or reversed");
+
+            NSString *mouseV = section(engine,
+                @"static int gestureMagicMouseV", @"static void gestureMagicMouseTwoFixOneSlide");
+            if ([mouseV rangeOfString:@"if (nFingers == 2) {\n            int min = data[0].px > data[1].px;"].location == NSNotFound)
+                fail(@"empty Magic Mouse frames do not dereference contact data",
+                     @"V-shape indexing inside the two-contact guard", @"missing");
+
+            NSString *mouseTwoFixOneSlide = section(engine,
+                @"static void gestureMagicMouseTwoFixOneSlide", @"static int gestureMagicMouseOneFixOneTap");
+            for (NSString *required in @[
+                @"static int lastThumbPresent = 0",
+                @"if (!thumbPresent && lastThumbPresent && contactCount == 3)",
+                @"lastThumbPresent = thumbPresent",
+            ]) {
+                if ([mouseTwoFixOneSlide rangeOfString:required].location == NSNotFound)
+                    fail(@"mouse two-fixed-one-slide preserves thumb hysteresis",
+                         required, @"missing");
+            }
+
+            NSString *trackpadCallback = section(engine,
+                @"static int trackpadCallback", @"#pragma mark - Magic Mouse");
+            for (NSString *required in @[
+                @"const Finger *hardwareData = contactFrame.hardware.contacts",
+                @"MGTrackpadInteractionObserveRawContacts(&trackpadInteraction",
+                @"MGTrackpadInteractionFinishFrame(&trackpadInteraction, rawCount)",
+                @"float physicalX = enHanded ? 1.0f - filteredData[i].px : filteredData[i].px",
+            ]) {
+                if ([trackpadCallback rangeOfString:required].location == NSNotFound)
+                    fail(@"trackpad callback preserves hardware, raw, physical, and recognizer views",
+                         required, @"missing");
+            }
             for (NSString *required in @[
                 @"if (nFingers >= 3)", @"kTwoFingerTapRejectedUntilLift",
                 @"gesture = @\"Two-Finger Click\"", @"gesture = @\"Three-Finger Click\"",

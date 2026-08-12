@@ -2935,11 +2935,13 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
     MGContactFrame contactFrame = MGTrackpadContactFrameCreateObserved(
         &trackpadContactFrameBuilder, data, nFingers, enHanded,
         logTrackpadContactFilter, NULL);
+    const Finger *hardwareData = contactFrame.hardware.contacts;
+    int hardwareCount = contactFrame.hardware.count;
     const Finger *rawData = contactFrame.raw.contacts;
     int rawCount = contactFrame.raw.count;
     const Finger *filteredData = contactFrame.thumbFiltered.contacts;
     int filteredCount = contactFrame.thumbFiltered.count;
-    trackpadNFingers = rawCount;
+    trackpadNFingers = hardwareCount;
     if (logLevel >= LOG_LEVEL_TRACE)
         NSLog(@"Trackpad contact frame raw=%d thumb-filtered=%d fingertip-scale=%d",
               rawCount, filteredCount, contactFrame.fingertipScale.count);
@@ -2948,11 +2950,11 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
     // recognizes or suppresses; the recorder ignores frames when idle.
     if (MGTraceIsActive()) {
         MGTraceContact traceContacts[16];
-        int traceCount = MIN(rawCount, 16);
+        int traceCount = MIN(hardwareCount, 16);
         for (int i = 0; i < traceCount; i++) {
-            traceContacts[i] = (MGTraceContact){rawData[i].identifier, rawData[i].state,
-                rawData[i].px, rawData[i].py, rawData[i].size, rawData[i].majorAxis,
-                rawData[i].minorAxis, rawData[i].zDensity};
+            traceContacts[i] = (MGTraceContact){hardwareData[i].identifier, hardwareData[i].state,
+                hardwareData[i].px, hardwareData[i].py, hardwareData[i].size, hardwareData[i].majorAxis,
+                hardwareData[i].minorAxis, hardwareData[i].zDensity};
         }
         MGTraceRecordTrackpadFrame(device, timestamp, frame, traceContacts, traceCount);
     }
@@ -2961,9 +2963,9 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
         if (enCharRegTP) {
             // IMPORTANT : DO NOT CHANGE ORDER
             if (enTwoDrawing)
-                trackpadRecognizerTwo(rawData, rawCount, timestamp);
+                trackpadRecognizerTwo(hardwareData, hardwareCount, timestamp);
             if (enOneDrawing)
-                trackpadRecognizerOne(rawData, rawCount, timestamp);
+                trackpadRecognizerOne(hardwareData, hardwareCount, timestamp);
         }
 
         float rawContactMajorAxes[16], rawContactYs[16];
@@ -2984,11 +2986,11 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
                                                 rawInteractionContacts,
                                                 rawContactCount, timestamp);
         gestureTrackpadFiveFingerTap(
-            filteredData, filteredCount,
+            rawData, rawCount,
             MGTrackpadInteractionFiveFingerContactsAreEligible(
                 rawContactMajorAxes, rawContactYs, rawContactCount) &&
-            (filteredCount != 5 || trackpadContactsArrivedTogether(
-                filteredData, 5, kTrackpadSimultaneousTapMaximumOnsetSpread)),
+            (rawCount != 5 || trackpadContactsArrivedTogether(
+                rawData, 5, kTrackpadSimultaneousTapMaximumOnsetSpread)),
             timestamp);
 
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -3000,9 +3002,10 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
         MGTrackpadContact interactionContacts[16];
         int interactionContactCount = MIN(filteredCount, 16);
         for (int i = 0; i < interactionContactCount; i++) {
+            float physicalX = enHanded ? 1.0f - filteredData[i].px : filteredData[i].px;
             interactionContacts[i] = (MGTrackpadContact){
                 filteredData[i].identifier,
-                filteredData[i].px,
+                physicalX,
                 filteredData[i].py,
                 filteredData[i].majorAxis,
             };
@@ -3515,12 +3518,30 @@ static void gestureMagicMouseOneFingerTap(const Finger *data, int nFingers, doub
     }
 }
 
-static void gestureMagicMouseSwipeThreeFingers(const Finger *data, int nFingers, double timestamp) {
+static int magicMouseContactsWithoutThumb(const Finger *contacts, int contactCount,
+                                          int thumbPresent, Finger *result,
+                                          int resultCapacity) {
+    int visibleCount = contactCount - (thumbPresent ? 1 : 0);
+    if (visibleCount > resultCapacity)
+        return visibleCount;
+    int thumbIndex = thumbPresent - 1;
+    for (int i = 0; i < visibleCount; i++) {
+        int sourceIndex = i == thumbIndex ? contactCount - 1 : i;
+        result[i] = contacts[sourceIndex];
+    }
+    return visibleCount;
+}
+
+static void gestureMagicMouseSwipeThreeFingers(const Finger *contacts, int contactCount,
+                                                double timestamp, int thumbPresent) {
     static double beforeendtime = -10;
     static double endtime = -1;
     static float startx[3], starty[3];
     static int lastNFingers;
     int step = 0;
+    Finger data[3];
+    int nFingers = magicMouseContactsWithoutThumb(
+        contacts, contactCount, thumbPresent, data, 3);
 
     // Resolving the binding costs a window-server round trip, so ask only when
     // a third finger arrives and hold the answer while it stays down.
@@ -3616,7 +3637,8 @@ static void gestureMagicMouseSwipeThreeFingers(const Finger *data, int nFingers,
 
 }
 
-static void gestureMagicMouseTwoFingers(const Finger *contacts, int nFingers, double timestamp) {
+static void gestureMagicMouseTwoFingers(const Finger *contacts, int contactCount,
+                                        double timestamp, int thumbPresent) {
     static double beforeendtime = -10;
     static double endtime = -1;
     static float startx[3], starty[3];
@@ -3624,10 +3646,8 @@ static void gestureMagicMouseTwoFingers(const Finger *contacts, int nFingers, do
     int step = 0;
 
     Finger data[2];
-    if (nFingers == 2) {
-        data[0] = contacts[0];
-        data[1] = contacts[1];
-    }
+    int nFingers = magicMouseContactsWithoutThumb(
+        contacts, contactCount, thumbPresent, data, 2);
 
     if (lastNFingers != 2 && nFingers == 2) {
         step = 1;
@@ -3716,7 +3736,6 @@ static void gestureMagicMouseTwoFingers(const Finger *contacts, int nFingers, do
 
 
 static int gestureMagicMouseV(const Finger *data, int nFingers) {
-    int min = data[0].px > data[1].px;
     static CGFloat baseX, baseY, appX, appY;
     static CFTypeRef cWindow;
     static int type = 0, firstTouch = 1, reset = 0;
@@ -3726,6 +3745,7 @@ static int gestureMagicMouseV(const Finger *data, int nFingers) {
 
     if (cWindow == NULL) {
         if (nFingers == 2) {
+            int min = data[0].px > data[1].px;
             if (firstTouch) {
                 fing[0][0] = data[0].px;
                 fing[0][1] = data[0].py;
@@ -3842,13 +3862,22 @@ static int gestureMagicMouseV(const Finger *data, int nFingers) {
 }
 
 
-static void gestureMagicMouseTwoFixOneSlide(const Finger *data, int nFingers, double timestamp) {
+static void gestureMagicMouseTwoFixOneSlide(const Finger *contacts, int contactCount,
+                                            double timestamp, int thumbPresent) {
     static int step = 0;
     static float fing[3][2];
     // Min id
     static int mini;
     static int move = 0;
     static float last[2];
+
+    static int lastThumbPresent = 0;
+    if (!thumbPresent && lastThumbPresent && contactCount == 3)
+        thumbPresent = lastThumbPresent;
+    Finger data[3];
+    int nFingers = magicMouseContactsWithoutThumb(
+        contacts, contactCount, thumbPresent, data, 3);
+    lastThumbPresent = thumbPresent;
 
     if (step == 0 && nFingers == 2) {
         if (lenSqrF(data, 0, 1) < 0.4) {
@@ -4118,20 +4147,20 @@ static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, do
 
     MGContactFrame contactFrame = MGMagicMouseContactFrameCreate(
         data, nFingers, enMMHanded);
+    const Finger *hardwareData = contactFrame.hardware.contacts;
+    int hardwareCount = contactFrame.hardware.count;
     const Finger *rawData = contactFrame.raw.contacts;
     int rawCount = contactFrame.raw.count;
     const Finger *filteredData = contactFrame.thumbFiltered.contacts;
     int filteredCount = contactFrame.thumbFiltered.count;
-    const Finger *fingertipData = contactFrame.fingertipScale.contacts;
-    int fingertipCount = contactFrame.fingertipScale.count;
 
     MGMouseClickInteractionObserveRawContacts(&magicMouseClickInteraction, rawCount);
     if (MGTraceIsActive()) {
-        traceCount = MIN(rawCount, 16);
+        traceCount = MIN(hardwareCount, 16);
         for (int i = 0; i < traceCount; i++) {
-            traceContacts[i] = (MGTraceContact){rawData[i].identifier, rawData[i].state,
-                rawData[i].px, rawData[i].py, rawData[i].size, rawData[i].majorAxis,
-                rawData[i].minorAxis, rawData[i].zDensity};
+            traceContacts[i] = (MGTraceContact){hardwareData[i].identifier, hardwareData[i].state,
+                hardwareData[i].px, hardwareData[i].py, hardwareData[i].size, hardwareData[i].majorAxis,
+                hardwareData[i].minorAxis, hardwareData[i].zDensity};
         }
     }
 
@@ -4156,7 +4185,7 @@ static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, do
     disableHorizontalScroll = 0;
     if (!ignore) {
         int thumbPresent = gestureMagicMouseThumb(rawData, rawCount);
-        observeBoundSwipeFamilies(MAGICMOUSE, fingertipCount);
+        observeBoundSwipeFamilies(MAGICMOUSE, rawCount - (thumbPresent ? 1 : 0));
 
         float clickXs[8], clickYs[8];
         float physicalXs[16], physicalYs[16];
@@ -4228,18 +4257,18 @@ static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, do
                 MGTraceRecordCandidate(@"physical-click", @"canceled", @"disconnected-click-cluster");
         }
 
-        gestureMagicMouseOneFingerSwipe(filteredData, filteredCount, timestamp);
-        gestureMagicMouseTwoFingerSwipe(filteredData, filteredCount, timestamp, 0);
+        gestureMagicMouseOneFingerSwipe(rawData, rawCount, timestamp);
+        gestureMagicMouseTwoFingerSwipe(rawData, rawCount, timestamp, thumbPresent);
         gestureMagicMouseThreeFingerTap(filteredData, filteredCount, timestamp);
         gestureMagicMouseTwoFingerTap(filteredData, filteredCount, timestamp);
-        gestureMagicMouseRightFrontTap(filteredData, filteredCount, timestamp);
+        gestureMagicMouseRightFrontTap(rawData, rawCount, timestamp);
         gestureMagicMouseOneFingerTap(filteredData, filteredCount, timestamp);
-        gestureMagicMouseSwipeThreeFingers(filteredData, filteredCount, timestamp);
-        gestureMagicMouseTwoFingers(filteredData, filteredCount, timestamp);
+        gestureMagicMouseSwipeThreeFingers(rawData, rawCount, timestamp, thumbPresent);
+        gestureMagicMouseTwoFingers(rawData, rawCount, timestamp, thumbPresent);
         gestureMagicMouseOneFixOneTap(filteredData, filteredCount, timestamp);
-        gestureMagicMouseV(filteredData, filteredCount);
-        gestureMagicMouseTwoFixOneSlide(filteredData, filteredCount, timestamp);
-        gestureMagicMouseMiddleClick(filteredData, filteredCount);
+        gestureMagicMouseV(rawData, rawCount);
+        gestureMagicMouseTwoFixOneSlide(rawData, rawCount, timestamp, thumbPresent);
+        gestureMagicMouseMiddleClick(rawData, rawCount);
     } else {
         completedClickContactCount = MGMouseClickInteractionObserveContacts(
             &magicMouseClickInteraction, 0, CFAbsoluteTimeGetCurrent());

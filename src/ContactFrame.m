@@ -41,15 +41,11 @@ static void mirrorContactsForLeftHand(MGContactList list, BOOL leftHanded) {
         contacts[i].px = 1.0f - contacts[i].px;
 }
 
-static MGContactList trackpadThumbFilteredContacts(
-    MGTrackpadContactFrameBuilder *builder, const Finger *contacts,
-    int contactCount, BOOL leftHanded, MGContactFrameFilterObserver observer,
-    void *context) {
+static MGContactList trackpadRawContacts(
+    const Finger *contacts, int contactCount,
+    MGContactFrameFilterObserver observer, void *context) {
     MGContactList list = copyContacts(contacts, contactCount);
     Finger *filtered = (Finger *)list.contacts;
-    if (contactCount == 0)
-        builder->thumbIdentifier = -1;
-
     for (int i = 0; i < list.count; i++) {
         if (!contactIsActive(&filtered[i])) {
             if (observer)
@@ -57,6 +53,17 @@ static MGContactList trackpadThumbFilteredContacts(
             filtered[i--] = filtered[--list.count];
         }
     }
+    return list;
+}
+
+static MGContactList trackpadThumbFilteredContacts(
+    MGTrackpadContactFrameBuilder *builder, const Finger *contacts,
+    int contactCount, int hardwareContactCount, BOOL leftHanded,
+    MGContactFrameFilterObserver observer, void *context) {
+    MGContactList list = copyContacts(contacts, contactCount);
+    Finger *filtered = (Finger *)list.contacts;
+    if (hardwareContactCount == 0)
+        builder->thumbIdentifier = -1;
 
     int edgeCount = 0;
     int edgeIndex = -1;
@@ -187,9 +194,11 @@ MGContactFrame MGTrackpadContactFrameCreateObserved(
     int contactCount, BOOL leftHanded, MGContactFrameFilterObserver observer,
     void *context) {
     MGContactFrame frame = {0};
-    frame.raw = copyContacts(contacts, contactCount);
+    frame.hardware = copyContacts(contacts, contactCount);
+    frame.raw = trackpadRawContacts(contacts, contactCount, observer, context);
     frame.thumbFiltered = trackpadThumbFilteredContacts(
-        builder, contacts, contactCount, leftHanded, observer, context);
+        builder, frame.raw.contacts, frame.raw.count, contactCount, leftHanded,
+        observer, context);
     frame.fingertipScale = fingertipScaleTrackpadContacts(frame.thumbFiltered);
     return frame;
 }
@@ -198,19 +207,19 @@ MGContactFrame MGMagicMouseContactFrameCreate(const Finger *contacts,
                                               int contactCount,
                                               BOOL leftHanded) {
     MGContactFrame frame = {0};
+    frame.hardware = copyContacts(contacts, contactCount);
     frame.raw = copyContacts(contacts, contactCount);
-    MGContactList normalized = copyContacts(contacts, contactCount);
-    mirrorContactsForLeftHand(normalized, leftHanded);
-    int thumbIndex = magicMouseThumbIndex(normalized);
+    mirrorContactsForLeftHand(frame.raw, leftHanded);
+    int thumbIndex = magicMouseThumbIndex(frame.raw);
 
-    frame.thumbFiltered = copyContacts(normalized.contacts, normalized.count);
+    frame.thumbFiltered = copyContacts(frame.raw.contacts, frame.raw.count);
     frame.fingertipScale = (MGContactList){0};
     Finger *filteredContacts = (Finger *)frame.thumbFiltered.contacts;
     int filteredDestination = 0;
-    for (int i = 0; i < normalized.count; i++) {
+    for (int i = 0; i < frame.raw.count; i++) {
         if (i == thumbIndex)
             continue;
-        Finger candidate = normalized.contacts[i];
+        Finger candidate = frame.raw.contacts[i];
         if (!MGMagicMouseContactShouldBeExcluded(candidate.px, candidate.py,
                                                   candidate.size,
                                                   candidate.minorAxis))
@@ -218,11 +227,11 @@ MGContactFrame MGMagicMouseContactFrameCreate(const Finger *contacts,
     }
     frame.thumbFiltered.count = filteredDestination;
     frame.fingertipScale = fingertipScaleMagicMouseContacts(frame.thumbFiltered);
-    free((void *)normalized.contacts);
     return frame;
 }
 
 void MGContactFrameDestroy(MGContactFrame *frame) {
+    free((void *)frame->hardware.contacts);
     free((void *)frame->raw.contacts);
     free((void *)frame->thumbFiltered.contacts);
     free((void *)frame->fingertipScale.contacts);

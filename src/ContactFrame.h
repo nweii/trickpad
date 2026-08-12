@@ -39,6 +39,7 @@ typedef struct {
 } MGContactList;
 
 typedef struct {
+    MGContactList hardware;
     MGContactList raw;
     MGContactList thumbFiltered;
     MGContactList fingertipScale;
