@@ -3512,18 +3512,12 @@ static void gestureMagicMouseOneFingerTap(const Finger *data, int nFingers, doub
     }
 }
 
-static void gestureMagicMouseSwipeThreeFingers(Finger *data, int nFingers, double timestamp, int thumbPresent) {
+static void gestureMagicMouseSwipeThreeFingers(const Finger *data, int nFingers, double timestamp) {
     static double beforeendtime = -10;
     static double endtime = -1;
     static float startx[3], starty[3];
     static int lastNFingers;
     int step = 0;
-
-    if (thumbPresent) {
-        Finger tmp = data[thumbPresent - 1];
-        data[thumbPresent - 1] = data[--nFingers];
-        data[nFingers] = tmp;
-    }
 
     // Resolving the binding costs a window-server round trip, so ask only when
     // a third finger arrives and hold the answer while it stays down.
@@ -3617,24 +3611,19 @@ static void gestureMagicMouseSwipeThreeFingers(Finger *data, int nFingers, doubl
 
     lastNFingers = nFingers;
 
-    if (thumbPresent) {
-        Finger tmp = data[thumbPresent - 1];
-        data[thumbPresent - 1] = data[nFingers];
-        data[nFingers] = tmp;
-    }
 }
 
-static void gestureMagicMouseTwoFingers(Finger *data, int nFingers, double timestamp, int thumbPresent) {
+static void gestureMagicMouseTwoFingers(const Finger *contacts, int nFingers, double timestamp) {
     static double beforeendtime = -10;
     static double endtime = -1;
     static float startx[3], starty[3];
     static int lastNFingers;
     int step = 0;
 
-    if (thumbPresent) {
-        Finger tmp = data[thumbPresent - 1];
-        data[thumbPresent - 1] = data[--nFingers];
-        data[nFingers] = tmp;
+    Finger data[2];
+    if (nFingers == 2) {
+        data[0] = contacts[0];
+        data[1] = contacts[1];
     }
 
     if (lastNFingers != 2 && nFingers == 2) {
@@ -3720,11 +3709,6 @@ static void gestureMagicMouseTwoFingers(Finger *data, int nFingers, double times
 
     lastNFingers = nFingers;
 
-    if (thumbPresent) {
-        Finger tmp = data[thumbPresent - 1];
-        data[thumbPresent - 1] = data[nFingers];
-        data[nFingers] = tmp;
-    }
 }
 
 
@@ -3855,24 +3839,13 @@ static int gestureMagicMouseV(const Finger *data, int nFingers) {
 }
 
 
-static void gestureMagicMouseTwoFixOneSlide(Finger *data, int nFingers, double timestamp, int thumbPresent) {
+static void gestureMagicMouseTwoFixOneSlide(const Finger *data, int nFingers, double timestamp) {
     static int step = 0;
     static float fing[3][2];
     // Min id
     static int mini;
     static int move = 0;
     static float last[2];
-
-    static int lastThumbPresent = 0;
-    if (!thumbPresent && lastThumbPresent && nFingers == 3) {
-        thumbPresent = lastThumbPresent;
-    }
-    if (thumbPresent) {
-        Finger tmp = data[thumbPresent - 1];
-        data[thumbPresent - 1] = data[--nFingers];
-        data[nFingers] = tmp;
-    }
-    lastThumbPresent = thumbPresent;
 
     if (step == 0 && nFingers == 2) {
         if (lenSqrF(data, 0, 1) < 0.4) {
@@ -4258,11 +4231,11 @@ static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, do
         gestureMagicMouseTwoFingerTap(filteredData, filteredCount, timestamp);
         gestureMagicMouseRightFrontTap(filteredData, filteredCount, timestamp);
         gestureMagicMouseOneFingerTap(filteredData, filteredCount, timestamp);
-        gestureMagicMouseSwipeThreeFingers((Finger *)filteredData, filteredCount, timestamp, 0);
-        gestureMagicMouseTwoFingers((Finger *)filteredData, filteredCount, timestamp, 0);
+        gestureMagicMouseSwipeThreeFingers(filteredData, filteredCount, timestamp);
+        gestureMagicMouseTwoFingers(filteredData, filteredCount, timestamp);
         gestureMagicMouseOneFixOneTap(filteredData, filteredCount, timestamp);
         gestureMagicMouseV(filteredData, filteredCount);
-        gestureMagicMouseTwoFixOneSlide((Finger *)filteredData, filteredCount, timestamp, 0);
+        gestureMagicMouseTwoFixOneSlide(filteredData, filteredCount, timestamp);
         gestureMagicMouseMiddleClick(filteredData, filteredCount);
     } else {
         completedClickContactCount = MGMouseClickInteractionObserveContacts(
