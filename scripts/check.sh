@@ -323,8 +323,7 @@ source_has 'MGApplicationScopeCacheObserveApplicationActivation();' "$APP_SRC" |
 
 source_has 'NSWorkspaceDidWakeNotification' "$APP_SRC" || wake_fail "the app does not observe wake notifications"
 source_has '\[self reload\]' "$APP_SRC" || wake_fail "the wake handler does not reload gesture devices"
-for token in turnOffMagicMouse turnOffTrackpad MTUnregisterContactFrameCallback \
-  MTDeviceStop MTDeviceCreateList MTRegisterContactFrameCallback MTDeviceStart; do
+for token in turnOffMagicMouse turnOffTrackpad '\[multitouchDevices rebuild\]'; do
   source_section_has "$token" "$ROOT/src/jitouch/Jitouch/Gesture.m" '/^- (void)reload {/,/^}/' ||
     wake_fail "Gesture reload is missing $token"
 done

@@ -11,7 +11,7 @@ typedef int (*MGMultitouchContactCallback)(MGMultitouchDeviceRef device,
                                             int contactCount,
                                             double timestamp,
                                             int frame);
-typedef void (*MGMultitouchDeviceRemovedCallback)(int familyID);
+typedef void (*MGMultitouchDeviceRemovedCallback)(BOOL wasMagicMouse);
 
 @interface MGMultitouchDeviceLifecycle : NSObject
 

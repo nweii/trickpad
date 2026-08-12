@@ -85,7 +85,7 @@ static MGMultitouchDeviceKind deviceKindForFamilyID(int familyID) {
                        sizeof(kBuiltinTrackpadFamilyIDs) / sizeof(kBuiltinTrackpadFamilyIDs[0])) ||
         familyIsInList(familyID, kMagicTrackpadFamilyIDs,
                        sizeof(kMagicTrackpadFamilyIDs) / sizeof(kMagicTrackpadFamilyIDs[0])) ||
-        familyID >= kMinimumSupportedFamilyID)
+        familyID >= kMinimumSupportedFamilyID) // Unknown IDs are treated as trackpads.
         return MGMultitouchDeviceTrackpad;
     return MGMultitouchDeviceUnsupported;
 }
@@ -268,13 +268,26 @@ static void multitouchDeviceAdded(void *refCon, io_iterator_t iterator) {
     MGMultitouchDeviceLifecycle *lifecycle = (MGMultitouchDeviceLifecycle *)refCon;
     io_service_t addedDevice;
     while ((addedDevice = IOIteratorNext(iterator))) {
+        io_name_t deviceName;
         io_string_t pathName;
+        int familyID;
         NSInteger identifier = 0;
+        IORegistryEntryGetName(addedDevice, deviceName);
+//        NSLog(@"Device's name = %s\n", deviceName);
         IORegistryEntryGetPath(addedDevice, kIOServicePlane, pathName);
+//        NSLog(@"Device's path in IOService plane = %s\n", pathName);
         CFTypeRef identifierValue = IORegistryEntrySearchCFProperty(
+            addedDevice, pathName, CFSTR("Family ID"), kCFAllocatorDefault, 0);
+        if (identifierValue != NULL) {
+            familyID = (int)[(NSString *)identifierValue integerValue];
+//            NSLog(@"Device's family ID = %@ -> %d", identifierValue, familyID);
+            CFRelease(identifierValue);
+        }
+        identifierValue = IORegistryEntrySearchCFProperty(
             addedDevice, pathName, CFSTR("Multitouch ID"), kCFAllocatorDefault, 0);
         if (identifierValue != NULL) {
             identifier = [(NSString *)identifierValue integerValue];
+//            NSLog(@"Device's multitouch ID = %@ -> %llu", identifierValue, (uint64_t)identifier);
             CFRelease(identifierValue);
         }
         IOObjectRelease(addedDevice);
@@ -292,32 +305,37 @@ static void multitouchDeviceRemoved(void *refCon, io_iterator_t iterator) {
 - (void)handleRemovedIterator:(io_iterator_t)iterator {
     io_service_t removedDevice;
     while ((removedDevice = IOIteratorNext(iterator))) {
+        io_name_t deviceName;
         io_string_t pathName;
         int familyID = -1;
         NSInteger identifier = 0;
+        IORegistryEntryGetName(removedDevice, deviceName);
+//        NSLog(@"Device's name = %s\n", deviceName);
         IORegistryEntryGetPath(removedDevice, kIOServicePlane, pathName);
+//        NSLog(@"Device's path in IOService plane = %s\n", pathName);
         CFTypeRef value = IORegistryEntrySearchCFProperty(
             removedDevice, pathName, CFSTR("Family ID"), kCFAllocatorDefault, 0);
         if (value != NULL) {
             familyID = (int)[(NSString *)value integerValue];
+//            NSLog(@"Device's family ID = %@ -> %d", value, familyID);
             CFRelease(value);
         }
         value = IORegistryEntrySearchCFProperty(
             removedDevice, pathName, CFSTR("Multitouch ID"), kCFAllocatorDefault, 0);
         if (value != NULL) {
             identifier = [(NSString *)value integerValue];
+//            NSLog(@"Device's multitouch ID = %@ -> %" PRIu64, value, (uint64_t)identifier);
             CFRelease(value);
         }
         IOObjectRelease(removedDevice);
 
         if (logLevel >= LOG_LEVEL_INFO)
             NSLog(@"Device removed: %" PRIu64 " family %d", (uint64_t)identifier, familyID);
-        if (deviceKindForFamilyID(familyID) == MGMultitouchDeviceMouse &&
-            _state->deviceRemovedCallback != NULL) {
-            if (logLevel >= LOG_LEVEL_INFO)
-                NSLog(@"Turning off magic mouse");
-            _state->deviceRemovedCallback(familyID);
-        }
+        BOOL wasMagicMouse = deviceKindForFamilyID(familyID) == MGMultitouchDeviceMouse;
+        if (wasMagicMouse && logLevel >= LOG_LEVEL_INFO)
+            NSLog(@"Turning off magic mouse");
+        if (_state->deviceRemovedCallback != NULL)
+            _state->deviceRemovedCallback(wasMagicMouse);
     }
 }
 
@@ -351,9 +369,17 @@ static void multitouchDeviceRemoved(void *refCon, io_iterator_t iterator) {
 
 - (void)start {
     _state->deviceList = _state->framework.createDeviceList(_state->frameworkContext);
+    // Keep this list for callback registrations. Releasing it here crashes.
     startDeviceList(_state);
     if (!_state->observeDeviceChanges)
         return;
+
+    /*
+    io_service_t service = IOServiceGetMatchingService(kIOMasterPortDefault, matchingDict);
+    if (service) {
+        hasMagicMouse = YES;
+    }
+    */
 
     _state->notificationPort = IONotificationPortCreate(kIOMasterPortDefault);
     CFRunLoopSourceRef source = IONotificationPortGetRunLoopSource(_state->notificationPort);
@@ -361,14 +387,18 @@ static void multitouchDeviceRemoved(void *refCon, io_iterator_t iterator) {
 
     CFMutableDictionaryRef matching = IOServiceNameMatching("AppleMultitouchDevice");
     matching = (CFMutableDictionaryRef)CFRetain(matching);
+    // Device added notification
     IOServiceAddMatchingNotification(_state->notificationPort, kIOFirstMatchNotification,
                                      matching, multitouchDeviceAdded, self,
                                      &_state->addedIterator);
     io_service_t existing;
-    while ((existing = IOIteratorNext(_state->addedIterator)))
+    while ((existing = IOIteratorNext(_state->addedIterator))) {
+        // Remove existing devices; already added
         IOObjectRelease(existing);
+    }
     multitouchDeviceAdded(self, _state->addedIterator);
 
+    // Device removed notification
     IOServiceAddMatchingNotification(_state->notificationPort, kIOTerminatedNotification,
                                      matching, multitouchDeviceRemoved, self,
                                      &_state->removedIterator);

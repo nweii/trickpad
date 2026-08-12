@@ -7,7 +7,11 @@
 
 #import <Cocoa/Cocoa.h>
 
-@interface Gesture : NSObject
+@class MGMultitouchDeviceLifecycle;
+
+@interface Gesture : NSObject {
+    MGMultitouchDeviceLifecycle *multitouchDevices;
+}
 
 - (id)init;
 
