@@ -50,6 +50,11 @@ run_trace_replay_check() {
   "$1" "$ROOT/fixtures/trace/interaction-replay.synthetic.json"
 }
 
+run_contact_frame_check() {
+  "$1" "$ROOT/fixtures/trace/analyzer-bundle/events.ndjson" \
+    "$ROOT/fixtures/trace/candidate-bundle/events.ndjson"
+}
+
 run_trace_analyzer_check() {
   local executable="$1"
   local fixture candidate_fixture malformed_trace
@@ -102,6 +107,7 @@ run_compiled_check application-scope run_without_arguments "${OBJC_FLAGS[@]}" -f
 run_compiled_check gesture-sequence run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/GestureSequence.m" "$ROOT/src/GestureSequenceCheck.m"
 run_compiled_check single-instance run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation -framework AppKit "$ROOT/src/SingleInstance.m" "$ROOT/src/SingleInstanceCheck.m"
 run_compiled_check mouse-contact-filter run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/MouseContactFilter.m" "$ROOT/src/MouseContactFilterCheck.m"
+run_compiled_check contact-frame run_contact_frame_check -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/ContactFrame.m" "$ROOT/src/MouseContactFilter.m" "$ROOT/src/ContactFrameCheck.m"
 run_compiled_check contact-onset-tracker run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/ContactOnsetTracker.m" "$ROOT/src/ContactOnsetTrackerCheck.m"
 run_compiled_check mouse-click-interaction run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/MouseClickInteraction.m" "$ROOT/src/MouseClickInteractionCheck.m"
 run_compiled_check trace-recorder run_without_arguments -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/TraceRecorder.m" "$ROOT/src/TraceRecorderCheck.m"

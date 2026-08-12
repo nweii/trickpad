@@ -26,6 +26,7 @@
 #import "KeyUtility.h"
 #import "ApplicationScopeCache.h"
 #import "Config.h"
+#import "ContactFrame.h"
 #import "ContactTapRecognizer.h"
 #import "DeferredGestureDispatcher.h"
 #import "GestureSequence.h"
@@ -85,37 +86,6 @@ static const int magicTrackpadFamilyIDs[] = {
 @implementation Gesture
 
 // Based on the code at http://steike.com/code/multitouch
-typedef struct { float x, y; } MTPoint;
-typedef struct { MTPoint pos, vel; } MTReadout;
-
-enum {
-    MTTouchStateNotTracking = 0,
-    MTTouchStateStartInRange = 1,
-    MTTouchStateHoverInRange = 2,
-    MTTouchStateMakeTouch = 3,
-    MTTouchStateTouching = 4,
-    MTTouchStateBreakTouch = 5,
-    MTTouchStateLingerInRange = 6,
-    MTTouchStateOutOfRange = 7
-};
-
-typedef uint32_t MTTouchState;
-
-typedef struct {
-    int frame;
-    double timestamp;
-    int identifier;
-    MTTouchState state;
-    int fingerId, handId;
-    MTReadout normalized;
-    float size;
-    int zero1;
-    float angle, majorAxis, minorAxis; // ellipsoid
-    MTReadout mm;
-    int zero2[2];
-    float zDensity;
-} Finger;
-
 typedef CFTypeRef *MTDeviceRef;
 typedef int (*MTContactCallbackFunction)(MTDeviceRef, Finger*, int, double, int);
 
@@ -147,6 +117,7 @@ static int quickTabSwitching;
 static int middleClickFlag, magicMouseTwoFingerFlag, magicMouseThreeFingerFlag;
 static int trackpadNFingers, trackpadClicked;
 static MGTrackpadInteraction trackpadInteraction = {0};
+static MGTrackpadContactFrameBuilder trackpadContactFrameBuilder = {-1};
 static MGMouseClickInteraction magicMouseClickInteraction = {0};
 static MGContactOnsetTracker magicMouseContactOnsets = {0};
 static int lastLoggedMagicMouseClickContactCount = -1;
@@ -371,6 +342,7 @@ static bool familyIsMagicTrackpad(int familyID) {
 static void turnOffTrackpad() {
     trackpadNFingers = 0;
     MGTrackpadInteractionInitialize(&trackpadInteraction);
+    MGTrackpadContactFrameBuilderInitialize(&trackpadContactFrameBuilder);
     clearPendingTrackpadClick();
     [pendingTrackpadAreaClickGesture release];
     pendingTrackpadAreaClickGesture = nil;
@@ -2966,6 +2938,9 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
         MGTraceRecordTrackpadFrame(device, timestamp, frame, traceContacts, traceCount);
     }
 
+    MGContactFrame contactFrame = MGTrackpadContactFrameCreate(
+        &trackpadContactFrameBuilder, data, nFingers, enHanded);
+
     static int thumbId = -1;
     Finger *dataUnnormalized = (Finger *)malloc(sizeof(Finger) * nFingers);
     for (int i = 0; i < nFingers; i++) {
@@ -3145,6 +3120,7 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
     MGTrackpadInteractionExpireStalePhysicalClick(&trackpadInteraction, timestamp);
 
     free(dataUnnormalized);
+    MGContactFrameDestroy(&contactFrame);
     return 0;
 }
 
@@ -4267,6 +4243,9 @@ static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, do
         return 0;
     }
 
+    MGContactFrame contactFrame = MGMagicMouseContactFrameCreate(
+        data, nFingers, enMMHanded);
+
     MGMouseClickInteractionObserveRawContacts(&magicMouseClickInteraction, nFingers);
     if (MGTraceIsActive()) {
         traceCount = MIN(nFingers, 16);
@@ -4424,6 +4403,8 @@ static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, do
     if (ownerBeforeFinish != magicMouseSequence.owner)
         MGTraceRecordOwnership(@"reset", gestureOwnerName(ownerBeforeFinish),
                                gestureOwnerName(magicMouseSequence.owner), YES);
+
+    MGContactFrameDestroy(&contactFrame);
 
     return 0;
 }

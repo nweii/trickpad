@@ -199,6 +199,7 @@ clang \
   "$ROOT/src/main.m" \
   "$ROOT/src/ApplicationScopeCache.m" \
   "$ROOT/src/Config.m" \
+  "$ROOT/src/ContactFrame.m" \
   "$ROOT/src/ContactTapRecognizer.m" \
   "$ROOT/src/DeferredGestureDispatcher.m" \
   "$ROOT/src/GestureSequence.m" \
