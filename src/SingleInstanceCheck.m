@@ -104,9 +104,16 @@ int main(void) {
         // A copy that dies without unwinding still releases the lock, because
         // the kernel closes its descriptor. Killing outright is the case that
         // matters: no code of ours runs on the way out.
-        kill(first, SIGKILL);
+        require(kill(first, SIGKILL) == 0,
+                @"could not kill the instance lock holder");
         close(releaseFirst);
-        waitpid(first, NULL, 0);
+        int firstStatus = 0;
+        pid_t waitedForFirst = waitpid(first, &firstStatus, 0);
+        require(waitedForFirst == first,
+                @"could not wait for the killed instance lock holder");
+        require(waitedForFirst == first && WIFSIGNALED(firstStatus) &&
+                    WTERMSIG(firstStatus) == SIGKILL,
+                @"the instance lock holder did not terminate by SIGKILL");
 
         pid_t successor = 0;
         int releaseSuccessor = -1;
