@@ -7,20 +7,6 @@
 #import <fcntl.h>
 #import <errno.h>
 
-// The lowest process identifier wins. Both copies see the same set and compare
-// the same way, so the rule picks one survivor without either needing to talk
-// to the other. Deciding by launch time would not do that: two copies started
-// in the same instant can read identical times and both stand down.
-BOOL MGShouldYieldToExistingInstance(pid_t mine, const pid_t *others, int count) {
-    for (int i = 0; i < count; i++) {
-        if (others[i] == mine)
-            continue;
-        if (others[i] < mine)
-            return YES;
-    }
-    return NO;
-}
-
 // Held for the life of the process. A lock is what makes this reliable: asking
 // macOS which applications are running depends on each copy having registered
 // itself, and a copy that has started but not yet registered is invisible to
@@ -78,30 +64,51 @@ static BOOL seizeInstanceLock(void) {
     return NO;
 }
 
-BOOL MGAnotherInstanceOwnsThisBundle(void) {
-    const char *path = [instanceLockPath() fileSystemRepresentation];
-    instanceLockDescriptor = open(path, O_CREAT | O_RDWR, 0600);
-    if (instanceLockDescriptor < 0) {
-        // Without a lock the app still runs. A duplicate is a worse outcome
-        // than a missing guard, but refusing to start at all is worse than both.
-        NSLog(@"Could not open the instance lock at %s: %s", path, strerror(errno));
-        return NO;
-    }
+MGInstanceLockOutcome MGTakeInstanceLockAtPath(const char *path, int *descriptor) {
+    *descriptor = -1;
 
-    if (flock(instanceLockDescriptor, LOCK_EX | LOCK_NB) == 0) {
-        NSLog(@"Instance lock acquired by pid %d", getpid());
-        return NO;
+    int fd = open(path, O_CREAT | O_RDWR, 0600);
+    if (fd < 0)
+        return MGInstanceLockCouldNotOpen;
+
+    if (flock(fd, LOCK_EX | LOCK_NB) == 0) {
+        *descriptor = fd;
+        return MGInstanceLockAcquired;
     }
 
     if (errno == EWOULDBLOCK) {
-        if (isDevelopmentBundle() && seizeInstanceLock())
-            return NO;
-        NSLog(@"Standing down, another instance holds the lock; pid %d", getpid());
-        return YES;
+        *descriptor = fd;
+        return MGInstanceLockHeldByAnother;
     }
 
-    NSLog(@"Instance lock failed at %s: %s", path, strerror(errno));
-    close(instanceLockDescriptor);
-    instanceLockDescriptor = -1;
-    return NO;
+    int failure = errno;
+    close(fd);
+    errno = failure;
+    return MGInstanceLockFailed;
+}
+
+BOOL MGAnotherInstanceOwnsThisBundle(void) {
+    const char *path = [instanceLockPath() fileSystemRepresentation];
+
+    switch (MGTakeInstanceLockAtPath(path, &instanceLockDescriptor)) {
+        case MGInstanceLockAcquired:
+            NSLog(@"Instance lock acquired by pid %d", getpid());
+            return NO;
+
+        case MGInstanceLockHeldByAnother:
+            if (isDevelopmentBundle() && seizeInstanceLock())
+                return NO;
+            NSLog(@"Standing down, another instance holds the lock; pid %d", getpid());
+            return YES;
+
+        case MGInstanceLockCouldNotOpen:
+            // Without a lock the app still runs. A duplicate is a worse outcome
+            // than a missing guard, but refusing to start at all is worse than both.
+            NSLog(@"Could not open the instance lock at %s: %s", path, strerror(errno));
+            return NO;
+
+        case MGInstanceLockFailed:
+            NSLog(@"Instance lock failed at %s: %s", path, strerror(errno));
+            return NO;
+    }
 }
