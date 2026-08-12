@@ -19,7 +19,7 @@
 #define kKeyCode @"KeyCode"
 #define kEnable @"Enable"
 
-#define ADD_GESTURE(a, gesture, command) [a addObject:[NSDictionary dictionaryWithObjectsAndKeys:gesture, @"Gesture", command, @"Command", @YES, @"IsAction", @0, @"ModifierFlags", @0, @"KeyCode", [NSNumber numberWithInt:NSOnState], @"Enable", nil]];
+#define ADD_GESTURE(a, gesture, command) [a addObject:[NSDictionary dictionaryWithObjectsAndKeys:gesture, @"Gesture", command, @"Command", @YES, @"IsAction", @0, @"ModifierFlags", @0, @"KeyCode", [NSNumber numberWithInt:NSControlStateValueOn], @"Enable", nil]];
 
 NSMutableDictionary *settings;
 NSMutableDictionary *trackpadMap;

@@ -648,7 +648,7 @@ static BOOL runLaunchctl(NSArray *arguments) {
 // the row reflects a choice made there, and can undo one.
 - (void)toggleAutomaticUpdates:(id)sender {
     MGUpdaterSetUpdatesAutomatically(!MGUpdaterUpdatesAutomatically());
-    [sender setState:MGUpdaterUpdatesAutomatically() ? NSOnState : NSOffState];
+    [sender setState:MGUpdaterUpdatesAutomatically() ? NSControlStateValueOn : NSControlStateValueOff];
 }
 
 - (void)openDocs:(id)sender {
@@ -1933,7 +1933,7 @@ static NSMenuItem *MGMenuSectionHeader(NSString *title) {
                                                          action:@selector(toggleAutomaticUpdates:)
                                                   keyEquivalent:@""];
         [automaticItem setTarget:self];
-        [automaticItem setState:MGUpdaterUpdatesAutomatically() ? NSOnState : NSOffState];
+        [automaticItem setState:MGUpdaterUpdatesAutomatically() ? NSControlStateValueOn : NSControlStateValueOff];
     } else {
         NSMenuItem *downloadItem = [aboutMenu addItemWithTitle:@"Get Latest Version"
                                                         action:@selector(getLatestVersion:)
