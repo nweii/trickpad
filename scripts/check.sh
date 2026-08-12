@@ -99,6 +99,7 @@ run_compiled_check key-event run_without_arguments "${OBJC_FLAGS[@]}" -framework
 run_compiled_check deferred-gesture run_without_arguments -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/DeferredGestureDispatcher.m" "$ROOT/src/DeferredGestureDispatcherCheck.m"
 run_compiled_check contact-tap run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/ContactTapRecognizer.m" "$ROOT/src/ContactTapRecognizerCheck.m"
 run_compiled_check application-scope run_without_arguments "${OBJC_FLAGS[@]}" -framework Cocoa "$ROOT/src/ApplicationScopeCache.m" "$ROOT/src/ApplicationScopeCacheCheck.m"
+run_compiled_check multitouch-lifecycle run_without_arguments "${OBJC_FLAGS[@]}" -I"$ROOT/src/jitouch/Jitouch" -framework Foundation -framework IOKit -F"$SDKROOT/System/Library/PrivateFrameworks" -framework MultitouchSupport "$ROOT/src/jitouch/Jitouch/MultitouchDeviceLifecycle.m" "$ROOT/src/MultitouchDeviceLifecycleCheck.m"
 run_compiled_check gesture-sequence run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/GestureSequence.m" "$ROOT/src/GestureSequenceCheck.m"
 run_compiled_check single-instance run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation -framework AppKit "$ROOT/src/SingleInstance.m" "$ROOT/src/SingleInstanceCheck.m"
 run_compiled_check mouse-contact-filter run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/MouseContactFilter.m" "$ROOT/src/MouseContactFilterCheck.m"
