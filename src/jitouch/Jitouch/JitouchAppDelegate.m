@@ -27,7 +27,8 @@ static NSMenuItem *MGMenuSectionHeader(NSString *title);
 #include <unistd.h>
 #include <fcntl.h>
 
-static NSArray *lastConfigProblems = nil;
+static NSArray *lastConfigDiagnostics = nil;
+static ConfigResult *lastAppliedConfigResult = nil;
 static NSInteger lastConfigBindingCount = 0;
 static NSArray *lastConfigConflicts = nil;
 static BOOL lastConfigRejected = NO;
@@ -482,28 +483,27 @@ static BOOL runLaunchctl(NSArray *arguments) {
         return;
     }
 
-    NSArray *problems = nil;
-    NSDictionary *parsed = [Config settingsFromFile:path problems:&problems];
+    ConfigResult *result = [Config resultFromFile:path];
+    NSDictionary *parsed = [result settings];
     if (parsed == nil) {
-        [self setConfigProblems:problems];
-        lastConfigRejected = YES;
+        [self setConfigResult:result];
         [self refreshMenu];
-        NSString *detail = [problems count] > 0
-            ? [[problems componentsJoinedByString:@"\n\n"] stringByAppendingString:@"\n\nNothing changed."]
+        NSArray *messages = [[result diagnostics] valueForKey:@"Message"];
+        NSString *detail = [messages count] > 0
+            ? [[messages componentsJoinedByString:@"\n\n"] stringByAppendingString:@"\n\nNothing changed."]
             : [NSString stringWithFormat:@"%@ could not be opened. Nothing changed.", path];
         [self reportFailure:@"Could not apply the configuration." detail:detail];
         return;
     }
 
-    [self setConfigProblems:problems];
-    lastConfigRejected = NO;
+    [self setConfigResult:result];
     [self adoptConfiguration:parsed];
     [Settings loadSettings2:parsed];
     [self refreshMenu];
     if (!enAll)
         turnOffGestures();
 
-    if ([problems count] > 0)
+    if ([[result diagnostics] count] > 0)
         [self showConfigProblems:nil];
 }
 
@@ -513,16 +513,14 @@ static BOOL runLaunchctl(NSArray *arguments) {
     NSString *path = [Config resolvedPath];
     if (path == nil)
         return;
-    NSArray *problems = nil;
-    NSDictionary *parsed = [Config settingsFromFile:path problems:&problems];
+    ConfigResult *result = [Config resultFromFile:path];
+    NSDictionary *parsed = [result settings];
     if (parsed == nil) {
-        [self setConfigProblems:problems];
-        lastConfigRejected = YES;
+        [self setConfigResult:result];
         [self refreshMenu];
         return;
     }
-    [self setConfigProblems:problems];
-    lastConfigRejected = NO;
+    [self setConfigResult:result];
     [self adoptConfiguration:parsed];
     [Settings loadSettings2:parsed];
     [self refreshMenu];
@@ -566,10 +564,17 @@ static BOOL runLaunchctl(NSArray *arguments) {
     dispatch_resume(source);
 }
 
-- (void)setConfigProblems:(NSArray *)problems {
-    [problems retain];
-    [lastConfigProblems release];
-    lastConfigProblems = problems;
+- (void)setConfigResult:(ConfigResult *)result {
+    NSArray *diagnostics = [result diagnostics];
+    [diagnostics retain];
+    [lastConfigDiagnostics release];
+    lastConfigDiagnostics = diagnostics;
+    lastConfigRejected = [result settings] == nil;
+    if (!lastConfigRejected) {
+        [result retain];
+        [lastAppliedConfigResult release];
+        lastAppliedConfigResult = result;
+    }
 }
 
 // Every path that puts a parsed configuration into service records what the
@@ -608,14 +613,15 @@ static BOOL runLaunchctl(NSArray *arguments) {
 // Skipped lines are the common failure in a hand-edited file, and nothing else
 // in the app would show them.
 - (void)showConfigProblems:(id)sender {
-    if ([lastConfigProblems count] == 0)
+    if ([lastConfigDiagnostics count] == 0)
         return;
 
-    NSString *body = [lastConfigProblems componentsJoinedByString:@"\n\n"];
+    NSString *body = [[lastConfigDiagnostics valueForKey:@"Message"]
+        componentsJoinedByString:@"\n\n"];
     NSAlert *alert = [[NSAlert alloc] init];
     [alert setMessageText:[NSString stringWithFormat:@"%lu line%@ skipped in config.toml",
-                           (unsigned long)[lastConfigProblems count],
-                           [lastConfigProblems count] == 1 ? @"" : @"s"]];
+                           (unsigned long)[lastConfigDiagnostics count],
+                           [lastConfigDiagnostics count] == 1 ? @"" : @"s"]];
     [alert setInformativeText:[NSString stringWithFormat:@"%@\n\nEverything else was applied.", body]];
     [alert setAlertStyle:NSAlertStyleWarning];
     [alert addButtonWithTitle:@"OK"];
@@ -684,7 +690,7 @@ static BOOL runLaunchctl(NSArray *arguments) {
     if (item == nil)
         return;
 
-    NSUInteger n = [lastConfigProblems count];
+    NSUInteger n = [lastConfigDiagnostics count];
     if (lastConfigRejected) {
         [item setTitle:[NSString stringWithFormat:@"Reload failed, %ld binding%@ still active",
                         (long)lastConfigBindingCount,
@@ -716,141 +722,6 @@ static BOOL runLaunchctl(NSArray *arguments) {
                     (unsigned long)n, n == 1 ? @"" : @"s"]];
 }
 
-// The trailing comment of one line, with # inside quoted TOML strings left
-// alone.
-static NSString *trailingLineComment(NSString *line) {
-    BOOL inBasic = NO, inLiteral = NO, escaped = NO;
-    for (NSUInteger i = 0; i < [line length]; i++) {
-        unichar c = [line characterAtIndex:i];
-        if (inBasic) {
-            if (escaped) escaped = NO;
-            else if (c == '\\') escaped = YES;
-            else if (c == '"') inBasic = NO;
-        } else if (inLiteral) {
-            if (c == '\'') inLiteral = NO;
-        } else if (c == '"') {
-            inBasic = YES;
-        } else if (c == '\'') {
-            inLiteral = YES;
-        } else if (c == '#') {
-            return [[line substringFromIndex:i + 1] stringByTrimmingCharactersInSet:
-                    [NSCharacterSet whitespaceCharacterSet]];
-        }
-    }
-    return nil;
-}
-
-// The comment on a binding's own configuration line, located by its section
-// and key rather than a recorded line number: parsing reconstructs the file
-// out of order in places, so recorded numbers can drift, while a TOML table
-// cannot repeat a key. Costs one pass over the small file per menu rebuild,
-// at launch and on reload, never during gesture recognition.
-static NSString *commentForBindingLine(NSArray *configLines, NSString *device,
-                                       NSString *application, NSString *bindingKey) {
-    if ([bindingKey length] == 0)
-        return nil;
-    NSCharacterSet *whitespace = [NSCharacterSet whitespaceCharacterSet];
-    BOOL inSection = NO;
-    for (NSString *raw in configLines) {
-        NSString *line = [raw stringByTrimmingCharactersInSet:whitespace];
-        if ([line hasPrefix:@"["]) {
-            NSRange close = [line rangeOfString:@"]"];
-            if (close.location == NSNotFound) { inSection = NO; continue; }
-            NSString *header = [line substringWithRange:NSMakeRange(1, close.location - 1)];
-            NSString *sectionDevice = header;
-            NSString *sectionApp = nil;
-            NSRange dot = [header rangeOfString:@"."];
-            if (dot.location != NSNotFound) {
-                sectionDevice = [header substringToIndex:dot.location];
-                sectionApp = [[header substringFromIndex:dot.location + 1]
-                    stringByTrimmingCharactersInSet:
-                        [NSCharacterSet characterSetWithCharactersInString:@"\"'"]];
-            }
-            BOOL deviceMatches = [sectionDevice caseInsensitiveCompare:device] == NSOrderedSame;
-            BOOL appMatches = [application isEqualToString:@"All Applications"]
-                ? sectionApp == nil
-                : (sectionApp != nil && [sectionApp isEqualToString:application]);
-            inSection = deviceMatches && appMatches;
-            continue;
-        }
-        if (!inSection || ![line hasPrefix:bindingKey])
-            continue;
-        NSString *afterKey = [line substringFromIndex:[bindingKey length]];
-        if ([afterKey length] == 0 ||
-            !([afterKey hasPrefix:@"="] || [afterKey hasPrefix:@" "] ||
-              [afterKey hasPrefix:@"\t"]))
-            continue;
-        return trailingLineComment(raw);
-    }
-    return nil;
-}
-
-// Where a skipped line belongs in the Current Gestures list, from its problem
-// report ("line N:  text\n          reason"). Recorded line numbers can drift
-// from the file, so placement demands the file still show a matching
-// binding-shaped line at that number inside a device section; a problem that
-// fails the match stays behind the details row rather than landing on the
-// wrong group. Returns nil, or @{@"Device", @"Title", @"Reason"}.
-static NSDictionary *skippedLinePlacement(NSString *problem, NSArray *configLines) {
-    if (![problem hasPrefix:@"line "])
-        return nil;
-    NSRange newline = [problem rangeOfString:@"\n"];
-    NSRange colon = [problem rangeOfString:@":  "];
-    if (newline.location == NSNotFound || colon.location == NSNotFound ||
-        colon.location > newline.location)
-        return nil;
-    NSInteger lineNumber = [[problem substringWithRange:
-        NSMakeRange(5, colon.location - 5)] integerValue];
-    NSCharacterSet *whitespace = [NSCharacterSet whitespaceCharacterSet];
-    NSString *text = [[problem substringWithRange:
-        NSMakeRange(colon.location + 3, newline.location - colon.location - 3)]
-        stringByTrimmingCharactersInSet:whitespace];
-    NSString *reason = [[problem substringFromIndex:newline.location + 1]
-        stringByTrimmingCharactersInSet:whitespace];
-    if (lineNumber < 1 || (NSUInteger)lineNumber > [configLines count])
-        return nil;
-
-    // A binding line names a key before = or {; section headers and prose from
-    // the structural checks do not qualify.
-    if ([text hasPrefix:@"["])
-        return nil;
-    NSUInteger keyEnd = NSNotFound;
-    for (NSUInteger i = 0; i < [text length]; i++) {
-        unichar c = [text characterAtIndex:i];
-        if (c == '=' || c == '{' || [whitespace characterIsMember:c]) { keyEnd = i; break; }
-    }
-    if (keyEnd == NSNotFound || keyEnd == 0)
-        return nil;
-    NSString *key = [text substringToIndex:keyEnd];
-    NSString *fileLine = [configLines[(NSUInteger)lineNumber - 1]
-        stringByTrimmingCharactersInSet:whitespace];
-    if (![fileLine hasPrefix:key])
-        return nil;
-
-    for (NSInteger i = lineNumber - 1; i >= 0; i--) {
-        NSString *line = [configLines[(NSUInteger)i]
-            stringByTrimmingCharactersInSet:whitespace];
-        if (![line hasPrefix:@"["])
-            continue;
-        NSString *header = [[line substringFromIndex:1] uppercaseString];
-        if ([header hasPrefix:@"MOUSE"])
-            return @{@"Device": @"Mouse", @"Title": text, @"Reason": reason};
-        if ([header hasPrefix:@"TRACKPAD"])
-            return @{@"Device": @"Trackpad", @"Title": text, @"Reason": reason};
-        return nil;
-    }
-    return nil;
-}
-
-static NSArray *configFileLines(void) {
-    NSString *path = [Config resolvedPath];
-    NSString *text = path != nil
-        ? [NSString stringWithContentsOfFile:path
-                                    encoding:NSUTF8StringEncoding error:NULL]
-        : nil;
-    return text != nil ? [text componentsSeparatedByString:@"\n"] : @[];
-}
-
 - (void)refreshBindingsSubmenu {
     NSMenuItem *parent = [theMenu itemWithTag:kMenuTagBindings];
     if (parent == nil)
@@ -861,14 +732,12 @@ static NSArray *configFileLines(void) {
     // out. They stay enabled so the text reads at full contrast; clicking one
     // does nothing. Section headers and the empty row opt out individually.
     [sub setAutoenablesItems:NO];
-    NSArray *configLines = configFileLines();
-
-    if (lastConfigRejected || [lastConfigProblems count] > 0) {
+    if (lastConfigRejected || [lastConfigDiagnostics count] > 0) {
         NSString *detailsTitle = lastConfigRejected
             ? @"Reload failed — details…"
             : [NSString stringWithFormat:@"%lu line%@ skipped — details…",
-               (unsigned long)[lastConfigProblems count],
-               [lastConfigProblems count] == 1 ? @"" : @"s"];
+               (unsigned long)[lastConfigDiagnostics count],
+               [lastConfigDiagnostics count] == 1 ? @"" : @"s"];
         NSMenuItem *details = [sub addItemWithTitle:detailsTitle
                                              action:@selector(showConfigProblems:)
                                       keyEquivalent:@""];
@@ -885,16 +754,16 @@ static NSArray *configFileLines(void) {
     // rejected file, stay behind the details row alone.
     NSMutableDictionary *skippedByDevice = [NSMutableDictionary dictionary];
     if (!lastConfigRejected) {
-        for (NSString *problem in lastConfigProblems) {
-            NSDictionary *placed = skippedLinePlacement(problem, configLines);
-            if (placed == nil)
+        for (NSDictionary *diagnostic in lastConfigDiagnostics) {
+            NSString *device = [diagnostic objectForKey:@"Device"];
+            if (device == nil)
                 continue;
-            NSMutableArray *rows = [skippedByDevice objectForKey:placed[@"Device"]];
+            NSMutableArray *rows = [skippedByDevice objectForKey:device];
             if (rows == nil) {
                 rows = [NSMutableArray array];
-                [skippedByDevice setObject:rows forKey:placed[@"Device"]];
+                [skippedByDevice setObject:rows forKey:device];
             }
-            [rows addObject:placed];
+            [rows addObject:diagnostic];
         }
     }
 
@@ -917,11 +786,9 @@ static NSArray *configFileLines(void) {
                 if ([fires length] == 0)
                     continue;
                 [seenGestures addObject:gestureName];
-                NSString *sourceText = [g objectForKey:@"SourceText"] ?: @"";
-                NSString *bindingKey = [[sourceText componentsSeparatedByCharactersInSet:
-                    [NSCharacterSet whitespaceCharacterSet]] firstObject] ?: @"";
-                NSString *comment = commentForBindingLine(configLines, pair[0],
-                                                          application, bindingKey);
+                NSString *comment = [lastAppliedConfigResult commentForDevice:pair[0]
+                                                                  application:application
+                                                                      gesture:gestureName];
                 [appLines insertObject:@[[NSString stringWithFormat:@"%@%@  →  %@", scope,
                                           [Config humanNameForGesture:gestureName], fires],
                                          comment ?: @""]
@@ -1019,7 +886,7 @@ static NSArray *configFileLines(void) {
         AXIsProcessTrusted() ? @"granted" : @"needed",
         configPath,
         (long)lastConfigBindingCount, lastConfigBindingCount == 1 ? @"" : @"s",
-        (unsigned long)[lastConfigProblems count], [lastConfigProblems count] == 1 ? @"" : @"s",
+        (unsigned long)[lastConfigDiagnostics count], [lastConfigDiagnostics count] == 1 ? @"" : @"s",
         enAll ? @"on" : @"off",
         enMMAll ? @"on" : @"off",
         enTPAll ? @"on" : @"off",
@@ -2173,19 +2040,19 @@ void languageChanged(CFNotificationCenterRef center, void *observer, CFStringRef
 
     NSString *configPath = [Config resolvedPath];
     if (configPath != nil) {
-        NSArray *problems = nil;
-        NSDictionary *parsed = [Config settingsFromFile:configPath problems:&problems];
-        [self setConfigProblems:problems];
+        ConfigResult *result = [Config resultFromFile:configPath];
+        NSDictionary *parsed = [result settings];
+        [self setConfigResult:result];
         if (parsed != nil) {
-            lastConfigRejected = NO;
             [self adoptConfiguration:parsed];
             [Settings loadSettings2:parsed];
-        } else if ([problems count] > 0) {
-            lastConfigRejected = YES;
+        } else if ([[result diagnostics] count] > 0) {
             [self adoptConfiguration:nil];
+            NSString *detail = [[[[result diagnostics] valueForKey:@"Message"]
+                componentsJoinedByString:@"\n\n"]
+                stringByAppendingString:@"\n\nNo gestures were loaded."];
             [self reportFailure:@"Could not apply the configuration."
-                         detail:[[problems componentsJoinedByString:@"\n\n"]
-                                 stringByAppendingString:@"\n\nNo gestures were loaded."]];
+                         detail:detail];
         }
     } else {
         lastConfigRejected = NO;

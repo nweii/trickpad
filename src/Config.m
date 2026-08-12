@@ -13,12 +13,40 @@
 #import "SystemGestureClaims.h"
 #import "tomlc17.h"
 
+@interface ConfigResult ()
+@property(nonatomic, readwrite, retain) NSDictionary *settings;
+@property(nonatomic, readwrite, retain) NSArray *diagnostics;
+@property(nonatomic, readwrite, retain) NSDictionary *sourceComments;
+@end
+
+@implementation ConfigResult
+
+@synthesize settings = _settings;
+@synthesize diagnostics = _diagnostics;
+@synthesize sourceComments = _sourceComments;
+
+- (NSString *)commentForDevice:(NSString *)device
+                   application:(NSString *)application
+                       gesture:(NSString *)gesture {
+    return [[[_sourceComments objectForKey:device] objectForKey:application]
+        objectForKey:gesture];
+}
+
+- (void)dealloc {
+    [_settings release];
+    [_diagnostics release];
+    [_sourceComments release];
+    [super dealloc];
+}
+
+@end
+
 // The tables accept common alternative spellings because people and coding
 // agents may use different names for the same value.
 
 @interface Config ()
 + (NSDictionary *)settingsFromLegacyText:(NSString *)text
-                                 problems:(NSMutableArray *)problems;
+                              diagnostics:(NSMutableArray *)diagnostics;
 @end
 
 @implementation Config
@@ -1113,6 +1141,76 @@ static NSString *legacyInlineTable(toml_datum_t table) {
     return [NSString stringWithFormat:@"{ %@ }", [properties componentsJoinedByString:@", "]];
 }
 
+static void addDiagnostic(NSMutableArray *diagnostics, NSString *message,
+                          NSString *device, NSString *title, NSString *reason) {
+    NSMutableDictionary *diagnostic = [NSMutableDictionary dictionaryWithObject:message
+                                                                          forKey:@"Message"];
+    if (device != nil) [diagnostic setObject:device forKey:@"Device"];
+    if (title != nil) [diagnostic setObject:title forKey:@"Title"];
+    if (reason != nil) [diagnostic setObject:reason forKey:@"Reason"];
+    [diagnostics addObject:diagnostic];
+}
+
+// Extracts trailing TOML comments once while Config owns the source. tomlc17's
+// line numbers then attach each comment to the binding parsed from that line.
+static NSArray *sourceComments(NSString *text) {
+    NSMutableArray *comments = [NSMutableArray array];
+    for (NSString *line in [text componentsSeparatedByString:@"\n"]) {
+        BOOL inBasic = NO, inLiteral = NO, escaped = NO;
+        NSString *comment = @"";
+        for (NSUInteger i = 0; i < [line length]; i++) {
+            unichar c = [line characterAtIndex:i];
+            if (inBasic) {
+                if (escaped) escaped = NO;
+                else if (c == '\\') escaped = YES;
+                else if (c == '"') inBasic = NO;
+            } else if (inLiteral) {
+                if (c == '\'') inLiteral = NO;
+            } else if (c == '"') {
+                inBasic = YES;
+            } else if (c == '\'') {
+                inLiteral = YES;
+            } else if (c == '#') {
+                // whitespaceAndNewlineCharacterSet: under CRLF endings each line
+                // keeps a trailing CR that whitespaceCharacterSet would preserve,
+                // and a CR appended into the reconstructed text becomes a phantom
+                // line inflating every later diagnostic's reported line number.
+                comment = [[line substringFromIndex:i + 1]
+                    stringByTrimmingCharactersInSet:
+                        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                break;
+            }
+        }
+        [comments addObject:comment];
+    }
+    return comments;
+}
+
+// Removes parser-only comments from the engine dictionary and indexes them by
+// the same device, application, and gesture names the menu already receives.
+static NSDictionary *detachSourceComments(NSDictionary *settings) {
+    NSMutableDictionary *result = [NSMutableDictionary dictionary];
+    for (NSArray *pair in @[@[@"Mouse", @"MagicMouseCommands"],
+                             @[@"Trackpad", @"TrackpadCommands"]]) {
+        NSMutableDictionary *applications = [NSMutableDictionary dictionary];
+        for (NSDictionary *application in [settings objectForKey:pair[1]]) {
+            NSMutableDictionary *gestures = [NSMutableDictionary dictionary];
+            for (NSMutableDictionary *binding in [application objectForKey:@"Gestures"]) {
+                NSString *comment = [binding objectForKey:@"SourceComment"];
+                if (comment != nil) {
+                    [gestures setObject:comment forKey:[binding objectForKey:@"Gesture"]];
+                    [binding removeObjectForKey:@"SourceComment"];
+                }
+            }
+            if ([gestures count] > 0)
+                [applications setObject:gestures forKey:[application objectForKey:@"Application"]];
+        }
+        if ([applications count] > 0)
+            [result setObject:applications forKey:pair[0]];
+    }
+    return result;
+}
+
 static void appendLegacyLine(NSMutableString *output, NSInteger *currentLine,
                              NSInteger sourceLine, NSString *line) {
     while (*currentLine < MAX(1, sourceLine)) {
@@ -1125,7 +1223,7 @@ static void appendLegacyLine(NSMutableString *output, NSInteger *currentLine,
 
 static void appendTOMLTable(NSMutableString *output, NSInteger *currentLine,
                             NSString *section, NSString *application,
-                            toml_datum_t table) {
+                            toml_datum_t table, NSArray *comments) {
     NSString *header = application == nil
         ? [NSString stringWithFormat:@"[%@]", [section lowercaseString]]
         : [NSString stringWithFormat:@"[%@ %@]", [section lowercaseString],
@@ -1155,29 +1253,35 @@ static void appendTOMLTable(NSMutableString *output, NSInteger *currentLine,
         NSString *line = value.type == TOML_TABLE
             ? [NSString stringWithFormat:@"%@ %@", key, rendered]
             : [NSString stringWithFormat:@"%@ = %@", key, rendered];
+        if (value.lineno > 0 && (NSUInteger)value.lineno <= [comments count]) {
+            NSString *comment = [comments objectAtIndex:(NSUInteger)value.lineno - 1];
+            if ([comment length] > 0)
+                line = [line stringByAppendingFormat:@" # %@", comment];
+        }
         appendLegacyLine(output, currentLine, value.lineno, line);
     }
 }
 
-static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems) {
+static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnostics,
+                                    NSArray *comments) {
     NSMutableString *output = [NSMutableString string];
     NSInteger currentLine = 1;
     for (int i = 0; i < root.u.tab.size; i++) {
         NSString *section = [NSString stringWithUTF8String:root.u.tab.key[i]];
         toml_datum_t table = root.u.tab.value[i];
         if (table.type != TOML_TABLE) {
-            [problems addObject:[NSString stringWithFormat:
+            addDiagnostic(diagnostics, [NSString stringWithFormat:
                 @"line %d:  %@\n          settings must be inside [GENERAL], [MOUSE], or [TRACKPAD]",
-                table.lineno, section]];
+                table.lineno, section], nil, nil, nil);
             continue;
         }
         if (![@[@"GENERAL", @"MOUSE", @"TRACKPAD"] containsObject:section]) {
-            [problems addObject:[NSString stringWithFormat:
+            addDiagnostic(diagnostics, [NSString stringWithFormat:
                 @"line %d:  [%@]\n          no section named \"%@\"; TOML table names are case-sensitive",
-                table.lineno, section, section]];
+                table.lineno, section, section], nil, nil, nil);
             continue;
         }
-        appendTOMLTable(output, &currentLine, section, nil, table);
+        appendTOMLTable(output, &currentLine, section, nil, table, comments);
         if ([section isEqualToString:@"MOUSE"] || [section isEqualToString:@"TRACKPAD"]) {
             for (int j = 0; j < table.u.tab.size; j++) {
                 toml_datum_t application = table.u.tab.value[j];
@@ -1185,20 +1289,22 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
                     (application.flag & TOML_FLAG_INLINED))
                     continue;
                 NSString *name = [NSString stringWithUTF8String:table.u.tab.key[j]];
-                appendTOMLTable(output, &currentLine, section, name, application);
+                appendTOMLTable(output, &currentLine, section, name, application, comments);
                 for (int k = 0; k < application.u.tab.size; k++) {
                     toml_datum_t nested = application.u.tab.value[k];
                     if (nested.type == TOML_TABLE && !(nested.flag & TOML_FLAG_INLINED))
-                        [problems addObject:[NSString stringWithFormat:
-                            @"line %d:  nested application tables are not supported", nested.lineno]];
+                        addDiagnostic(diagnostics, [NSString stringWithFormat:
+                            @"line %d:  nested application tables are not supported", nested.lineno],
+                            nil, nil, nil);
                 }
             }
         } else {
             for (int j = 0; j < table.u.tab.size; j++) {
                 toml_datum_t nested = table.u.tab.value[j];
                 if (nested.type == TOML_TABLE && !(nested.flag & TOML_FLAG_INLINED))
-                    [problems addObject:[NSString stringWithFormat:
-                        @"line %d:  [GENERAL] does not contain nested tables", nested.lineno]];
+                    addDiagnostic(diagnostics, [NSString stringWithFormat:
+                        @"line %d:  [GENERAL] does not contain nested tables", nested.lineno],
+                        nil, nil, nil);
             }
         }
     }
@@ -1206,38 +1312,50 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
 }
 
 + (NSDictionary *)settingsFromFile:(NSString *)path {
-    return [Config settingsFromFile:path problems:NULL];
+    return [[Config resultFromFile:path] settings];
 }
 
 + (NSDictionary *)settingsFromFile:(NSString *)path problems:(NSArray **)outProblems {
-    NSMutableArray *problems = [NSMutableArray array];
-    if (outProblems != NULL)
-        *outProblems = problems;
+    ConfigResult *result = [Config resultFromFile:path];
+    if (outProblems != NULL) {
+        NSMutableArray *messages = [NSMutableArray array];
+        for (NSDictionary *diagnostic in [result diagnostics])
+            [messages addObject:[diagnostic objectForKey:@"Message"]];
+        *outProblems = messages;
+    }
+    return [result settings];
+}
+
++ (ConfigResult *)resultFromFile:(NSString *)path {
+    ConfigResult *result = [[[ConfigResult alloc] init] autorelease];
+    NSMutableArray *diagnostics = [NSMutableArray array];
+    result.diagnostics = diagnostics;
     NSData *data = [NSData dataWithContentsOfFile:path];
     if (data == nil)
-        return nil;
+        return result;
     NSString *text = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
     if (text == nil) {
-        [problems addObject:@"config.toml must be valid UTF-8"];
-        return nil;
+        addDiagnostic(diagnostics, @"config.toml must be valid UTF-8", nil, nil, nil);
+        return result;
     }
     toml_result_t parsed = toml_parse_named(
         [text UTF8String], (int)[text lengthOfBytesUsingEncoding:NSUTF8StringEncoding],
         [path UTF8String]);
     if (!parsed.ok) {
-        [problems addObject:[NSString stringWithUTF8String:parsed.errmsg]];
+        addDiagnostic(diagnostics, [NSString stringWithUTF8String:parsed.errmsg], nil, nil, nil);
         toml_free(parsed);
-        return nil;
+        return result;
     }
-    NSString *legacy = legacyTextFromTOML(parsed.toptab, problems);
+    NSString *legacy = legacyTextFromTOML(parsed.toptab, diagnostics, sourceComments(text));
     toml_free(parsed);
-    NSDictionary *settings = [Config settingsFromLegacyText:legacy problems:problems];
-    if (outProblems != NULL)
-        *outProblems = problems;
-    return settings;
+    NSDictionary *settings = [Config settingsFromLegacyText:legacy diagnostics:diagnostics];
+    if (settings != nil)
+        result.sourceComments = detachSourceComments(settings);
+    result.settings = settings;
+    return result;
 }
 
-+ (NSDictionary *)settingsFromLegacyText:(NSString *)text problems:(NSMutableArray *)problems {
++ (NSDictionary *)settingsFromLegacyText:(NSString *)text diagnostics:(NSMutableArray *)diagnostics {
     NSMutableArray *mouse = [NSMutableArray array];
     NSMutableArray *trackpad = [NSMutableArray array];
     NSMutableDictionary *mouseScopes = [NSMutableDictionary dictionaryWithObject:mouse
@@ -1247,7 +1365,7 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
     NSMutableArray *mouseScopeOrder = [NSMutableArray arrayWithObject:@"All Applications"];
     NSMutableArray *trackpadScopeOrder = [NSMutableArray arrayWithObject:@"All Applications"];
     NSMutableDictionary *general = [NSMutableDictionary dictionary];
-    NSString *section = @"general";
+    __block NSString *section = @"general";
     NSString *application = nil;
     NSMutableSet *activeBindingKeys = [NSMutableSet set];
     __block NSInteger lineNumber = 0;
@@ -1257,13 +1375,18 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
     __block BOOL unsupportedVersion = NO;
 
     void (^report)(NSString *, NSString *) = ^(NSString *text, NSString *reason) {
-        [problems addObject:[NSString stringWithFormat:@"line %ld:  %@\n          %@",
-                             (long)lineNumber, text, reason]];
+        NSString *device = [section isEqualToString:@"mouse"] ? @"Mouse" :
+            ([section isEqualToString:@"trackpad"] ? @"Trackpad" : nil);
+        addDiagnostic(diagnostics,
+                      [NSString stringWithFormat:@"line %ld:  %@\n          %@",
+                       (long)lineNumber, text, reason], device,
+                      device == nil ? nil : text, device == nil ? nil : reason);
     };
 
     for (NSString *rawLine in [text componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]]) {
         physicalLineNumber++;
         NSString *line = rawLine;
+        NSString *sourceComment = nil;
         // The TOML parser already handled comments. This second pass only
         // supports the canonical text consumed by the legacy semantic layer;
         // keep # characters inside the adapter's quoted strings intact.
@@ -1276,6 +1399,8 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
             if (character == '#' && !quoted &&
                 (i == 0 || [[NSCharacterSet whitespaceCharacterSet]
                             characterIsMember:[line characterAtIndex:i - 1]])) {
+                sourceComment = [[line substringFromIndex:i + 1]
+                    stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
                 line = [line substringToIndex:i];
                 break;
             }
@@ -1554,6 +1679,8 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
                 [g setObject:name forKey:@"Gesture"];
                 [g setObject:@(lineNumber) forKey:@"SourceLine"];
                 [g setObject:line forKey:@"SourceText"];
+                if ([sourceComment length] > 0)
+                    [g setObject:sourceComment forKey:@"SourceComment"];
                 if ([[binding objectForKey:@"InheritAction"] boolValue])
                     [g setObject:declarationKey forKey:@"SourceBindingKey"];
                 if (expandedDefer != nil)
@@ -1657,9 +1784,13 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
                         [activeBindingKeys removeObject:sourceKey];
                         if (![reportedMissingActions containsObject:sourceKey]) {
                             [reportedMissingActions addObject:sourceKey];
-                            [problems addObject:[NSString stringWithFormat:
+                            NSString *device = scopes == mouseScopes ? @"Mouse" : @"Trackpad";
+                            NSString *title = [binding objectForKey:@"SourceText"];
+                            NSString *reason = @"app property overrides require a global action for the same gesture";
+                            addDiagnostic(diagnostics, [NSString stringWithFormat:
                                 @"line %@:  %@\n          app property overrides require a global action for the same gesture",
-                                [binding objectForKey:@"SourceLine"], [binding objectForKey:@"SourceText"]]];
+                                [binding objectForKey:@"SourceLine"], title],
+                                device, title, reason);
                         }
                         continue;
                     }
@@ -1668,6 +1799,10 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *problems)
                         if (![@[@"InheritAction", @"SourceLine", @"SourceText", @"SourceBindingKey"] containsObject:key])
                             [merged setObject:[binding objectForKey:key] forKey:key];
                     }
+                    if ([binding objectForKey:@"SourceComment"] == nil)
+                        [merged removeObjectForKey:@"SourceComment"];
+                    [merged setObject:[binding objectForKey:@"SourceLine"] forKey:@"SourceLine"];
+                    [merged setObject:[binding objectForKey:@"SourceText"] forKey:@"SourceText"];
                     [resolved addObject:merged];
                 }
                 [result addObject:@{@"Application": app,
