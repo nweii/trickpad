@@ -49,6 +49,7 @@ Jitouch reads the private `MultitouchSupport.framework`, which is undocumented a
 
 ```bash
 ./scripts/build.sh             # single clang call, no Xcode project
+./scripts/build.sh --dev       # development bundle that installs beside the release copy
 ./scripts/check.sh             # configuration parser checks
 ./scripts/stop.sh && ./scripts/start.sh
 ./scripts/update.sh            # preview and install a source update
@@ -66,9 +67,9 @@ The Accessibility grant binds to the bundle path plus the designated requirement
 
 ### Development bundle
 
-`./scripts/build.sh --dev` produces `build/Trickpad DEV.app`, which installs and runs beside the released copy instead of replacing it. It carries the bundle identifier `fyi.thirdwind.trickpad.dev`, the display name Trickpad DEV, and the icon from `Trickpad DEV.icon` at the repository root. The separate identifier keys separate user defaults, separate updater state, and a separate Accessibility grant, so a development build needs its own grant before gestures work.
+Test source changes through a development bundle rather than over the installed release. The loop: `./scripts/build.sh --dev`, open `build/Trickpad DEV.app`, test against the live bindings, quit when done. Launching it takes over from the running released copy, and quitting hands back on its own — the login agent's `KeepAlive` restarts the released copy, which takes the freed lock. There is one source tree; a change proven in the development bundle reaches the release build through the normal release path, with nothing to port.
 
-Everything else is shared. Both builds read `~/.config/trickpad/config.toml`, so a development build exercises the bindings actually in use, and both take the same instance lock, keyed on that configuration folder, so one copy runs at a time. A development build finding the lock held asks the holder to quit and takes over; the released copy never does this in reverse. Quitting the development build needs no handback step: the login agent's `KeepAlive` restarts the released copy, which takes the freed lock. While a development build runs, that same restart loop produces one short-lived stood-down process every ten seconds or so, which is log noise rather than a problem.
+The bundle identifier `fyi.thirdwind.trickpad.dev` keys its own user defaults, updater state, and Accessibility grant, so repeated test installs leave no state behind for the released copy — and a fresh development build needs its own Accessibility grant before gestures dispatch. Both builds read `~/.config/trickpad/config.toml` and share one instance lock keyed on that folder, so one copy runs at a time and a configuration change under test runs against the user's real file. While a development build holds the lock, the restarted released copy stands down and exits every ten seconds or so; that is log noise, not a defect.
 
 ## Menu bar item
 
