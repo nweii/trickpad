@@ -1258,8 +1258,8 @@ int main(void) {
                 @"gestureMagicMouseOneFingerTap(tapData, tapContactCount, timestamp)",
                 @"gestureMagicMouseOneFixOneTap(tapData, tapContactCount, timestamp)",
                 @"gestureMagicMouseTwoFingerSwipe(data, nFingers, timestamp, thumbPresent)",
-                @"gestureTrackpadTwoFingerTap(data, nFingers,",
-                @"gestureTrackpadHoldSlide(data, nFingers)",
+                @"gestureTrackpadTwoFingerTap(filteredData, filteredCount,",
+                @"gestureTrackpadHoldSlide(filteredData, filteredCount)",
             ];
             for (NSString *invocation in invocations) {
                 if ([engine rangeOfString:invocation].location == NSNotFound)

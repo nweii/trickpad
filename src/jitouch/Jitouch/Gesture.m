@@ -2922,44 +2922,38 @@ static void gestureTrackpadAutoScroll(const Finger *data, int nFingers, double t
 
 static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, double timestamp, int frame) {
     if (DEBUG && logLevel >= LOG_LEVEL_TRACE) NSLog(@"TrackpadCallback %p", device);
-    trackpadNFingers = nFingers;
-    int activeTrackpadContactCount = nFingers;
+    MGContactFrame contactFrame = MGTrackpadContactFrameCreate(
+        &trackpadContactFrameBuilder, data, nFingers, enHanded);
+    const Finger *rawData = contactFrame.raw.contacts;
+    int rawCount = contactFrame.raw.count;
+    const Finger *filteredData = contactFrame.thumbFiltered.contacts;
+    int filteredCount = contactFrame.thumbFiltered.count;
+    trackpadNFingers = rawCount;
 
     // Raw trackpad frames feed candidate-gesture trace sessions. Nothing here
     // recognizes or suppresses; the recorder ignores frames when idle.
     if (MGTraceIsActive()) {
         MGTraceContact traceContacts[16];
-        int traceCount = MIN(nFingers, 16);
+        int traceCount = MIN(rawCount, 16);
         for (int i = 0; i < traceCount; i++) {
-            traceContacts[i] = (MGTraceContact){data[i].identifier, data[i].state,
-                data[i].px, data[i].py, data[i].size, data[i].majorAxis,
-                data[i].minorAxis, data[i].zDensity};
+            traceContacts[i] = (MGTraceContact){rawData[i].identifier, rawData[i].state,
+                rawData[i].px, rawData[i].py, rawData[i].size, rawData[i].majorAxis,
+                rawData[i].minorAxis, rawData[i].zDensity};
         }
         MGTraceRecordTrackpadFrame(device, timestamp, frame, traceContacts, traceCount);
     }
 
-    MGContactFrame contactFrame = MGTrackpadContactFrameCreate(
-        &trackpadContactFrameBuilder, data, nFingers, enHanded);
-
     static int thumbId = -1;
-    Finger *dataUnnormalized = (Finger *)malloc(sizeof(Finger) * nFingers);
-    for (int i = 0; i < nFingers; i++) {
-        dataUnnormalized[i] = data[i];
-        dataUnnormalized[i].px /= 1;
-        dataUnnormalized[i].py /= 1;
-    }
-
-    if (nFingers == 0) {
+    if (nFingers == 0)
         thumbId = -1;
-    }
 
     if (enAll && enTPAll) {
         if (enCharRegTP) {
             // IMPORTANT : DO NOT CHANGE ORDER
             if (enTwoDrawing)
-                trackpadRecognizerTwo(dataUnnormalized, nFingers, timestamp);
+                trackpadRecognizerTwo(rawData, rawCount, timestamp);
             if (enOneDrawing)
-                trackpadRecognizerOne(data, nFingers, timestamp);
+                trackpadRecognizerOne(rawData, rawCount, timestamp);
         }
 
         // remove hovering and other touch events
@@ -2975,31 +2969,29 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
                 data[i--] = data[--nFingers];
             }
         }
-        activeTrackpadContactCount = nFingers;
-
         float rawContactMajorAxes[16], rawContactYs[16];
         MGTrackpadContact rawInteractionContacts[16];
-        int rawContactCount = MIN(nFingers, 16);
+        int rawContactCount = MIN(rawCount, 16);
         for (int i = 0; i < rawContactCount; i++) {
-            if (logLevel >= LOG_LEVEL_TRACE) NSLog(@"MTTouch raw id=%d state=%d x=%f y=%f major=%f minor=%f size=%f", data[i].identifier, data[i].state, data[i].px, data[i].py, data[i].majorAxis, data[i].minorAxis, data[i].size);
-            rawContactMajorAxes[i] = data[i].majorAxis;
-            rawContactYs[i] = data[i].py;
+            if (logLevel >= LOG_LEVEL_TRACE) NSLog(@"MTTouch raw id=%d state=%d x=%f y=%f major=%f minor=%f size=%f", rawData[i].identifier, rawData[i].state, rawData[i].px, rawData[i].py, rawData[i].majorAxis, rawData[i].minorAxis, rawData[i].size);
+            rawContactMajorAxes[i] = rawData[i].majorAxis;
+            rawContactYs[i] = rawData[i].py;
             rawInteractionContacts[i] = (MGTrackpadContact){
-                data[i].identifier,
-                data[i].px,
-                data[i].py,
-                data[i].majorAxis,
+                rawData[i].identifier,
+                rawData[i].px,
+                rawData[i].py,
+                rawData[i].majorAxis,
             };
         }
         MGTrackpadInteractionObserveRawContacts(&trackpadInteraction,
                                                 rawInteractionContacts,
                                                 rawContactCount, timestamp);
         gestureTrackpadFiveFingerTap(
-            data, nFingers,
+            filteredData, filteredCount,
             MGTrackpadInteractionFiveFingerContactsAreEligible(
                 rawContactMajorAxes, rawContactYs, rawContactCount) &&
-            (nFingers != 5 || trackpadContactsArrivedTogether(
-                data, 5, kTrackpadSimultaneousTapMaximumOnsetSpread)),
+            (filteredCount != 5 || trackpadContactsArrivedTogether(
+                filteredData, 5, kTrackpadSimultaneousTapMaximumOnsetSpread)),
             timestamp);
 
         // detect thumb & palm resting
@@ -3061,19 +3053,19 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
         }
 
         if (logLevel >= LOG_LEVEL_TRACE) {
-            for (int i = 0; i < nFingers; i++) {
-                NSLog(@"MTTouch filtered id=%d state=%d x=%f y=%f major=%f minor=%f size=%f", data[i].identifier, data[i].state, data[i].px, data[i].py, data[i].majorAxis, data[i].minorAxis, data[i].size);
+            for (int i = 0; i < filteredCount; i++) {
+                NSLog(@"MTTouch filtered id=%d state=%d x=%f y=%f major=%f minor=%f size=%f", filteredData[i].identifier, filteredData[i].state, filteredData[i].px, filteredData[i].py, filteredData[i].majorAxis, filteredData[i].minorAxis, filteredData[i].size);
             }
         }
 
         MGTrackpadContact interactionContacts[16];
-        int interactionContactCount = MIN(nFingers, 16);
+        int interactionContactCount = MIN(filteredCount, 16);
         for (int i = 0; i < interactionContactCount; i++) {
             interactionContacts[i] = (MGTrackpadContact){
-                data[i].identifier,
-                data[i].px,
-                data[i].py,
-                data[i].majorAxis,
+                filteredData[i].identifier,
+                filteredData[i].px,
+                filteredData[i].py,
+                filteredData[i].majorAxis,
             };
         }
         MGTrackpadInteractionObserveContacts(&trackpadInteraction, interactionContacts,
@@ -3081,9 +3073,7 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
         // A resting palm reaches this callback as an ordinary contact, so the
         // swipe family counts fingertip-scale contacts: two fingers plus a
         // palm heel must scroll, not arm three-finger scroll suppression.
-        observeBoundSwipeFamilies(TRACKPAD,
-            MGTrackpadInteractionFingertipScaleContactCount(interactionContacts,
-                                                            interactionContactCount));
+        observeBoundSwipeFamilies(TRACKPAD, contactFrame.fingertipScale.count);
         BOOL contactsFormTapGroup = MGTrackpadInteractionContactsFormTapGroup(
             interactionContacts, interactionContactCount);
 
@@ -3091,35 +3081,34 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
             for (int i = 0; i < nFingers; i++)
                 data[i].px = 1 - data[i].px;
 
-        if (!gestureTrackpadMoveResize(data, nFingers, timestamp)) {
+        if (!gestureTrackpadMoveResize(filteredData, filteredCount, timestamp)) {
             if (!isTrackpadRecognizing) {
-                gestureTrackpadAutoScroll(data, nFingers, timestamp);
+                gestureTrackpadAutoScroll(filteredData, filteredCount, timestamp);
 
-                gestureTrackpadOneFixOneTap(data, nFingers, timestamp);
+                gestureTrackpadOneFixOneTap(filteredData, filteredCount, timestamp);
 
-                gestureTrackpadTwoFingerTap(data, nFingers, contactsFormTapGroup, timestamp);
-                gestureTrackpadHoldSlide(data, nFingers);
-                gestureTrackpadThreeFingerTap(data, nFingers, contactsFormTapGroup, timestamp);
+                gestureTrackpadTwoFingerTap(filteredData, filteredCount, contactsFormTapGroup, timestamp);
+                gestureTrackpadHoldSlide(filteredData, filteredCount);
+                gestureTrackpadThreeFingerTap(filteredData, filteredCount, contactsFormTapGroup, timestamp);
 
-                gestureTrackpadOneFixTwoSlide(data, nFingers, timestamp);
-                gestureTrackpadChangeSpace(data, nFingers);
+                gestureTrackpadOneFixTwoSlide(filteredData, filteredCount, timestamp);
+                gestureTrackpadChangeSpace(filteredData, filteredCount);
 
-                gestureTrackpadTab4(data, nFingers, timestamp, 0);
-                gestureTrackpadTab4(data, nFingers, timestamp, 1);
-                gestureTrackpadFourFingerTap(data, nFingers, timestamp);
+                gestureTrackpadTab4(filteredData, filteredCount, timestamp, 0);
+                gestureTrackpadTab4(filteredData, filteredCount, timestamp, 1);
+                gestureTrackpadFourFingerTap(filteredData, filteredCount, timestamp);
                 trackpadTab4Triggered = FALSE;
 
-                gestureTrackpadSwipeThreeFingers(data, nFingers);
-                gestureTrackpadSwipeFourFingers(data, nFingers);
+                gestureTrackpadSwipeThreeFingers(filteredData, filteredCount);
+                gestureTrackpadSwipeFourFingers(filteredData, filteredCount);
             }
-            gestureTrackpadTwoFixOneDoubleTap(data, nFingers, timestamp);
+            gestureTrackpadTwoFixOneDoubleTap(filteredData, filteredCount, timestamp);
         }
     }
 
-    MGTrackpadInteractionFinishFrame(&trackpadInteraction, activeTrackpadContactCount);
+    MGTrackpadInteractionFinishFrame(&trackpadInteraction, rawCount);
     MGTrackpadInteractionExpireStalePhysicalClick(&trackpadInteraction, timestamp);
 
-    free(dataUnnormalized);
     MGContactFrameDestroy(&contactFrame);
     return 0;
 }
