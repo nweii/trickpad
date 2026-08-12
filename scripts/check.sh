@@ -99,6 +99,7 @@ run_compiled_check key-event run_without_arguments "${OBJC_FLAGS[@]}" -framework
 run_compiled_check deferred-gesture run_without_arguments -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/DeferredGestureDispatcher.m" "$ROOT/src/DeferredGestureDispatcherCheck.m"
 run_compiled_check contact-tap run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/ContactTapRecognizer.m" "$ROOT/src/ContactTapRecognizerCheck.m"
 run_compiled_check application-scope run_without_arguments "${OBJC_FLAGS[@]}" -framework Cocoa "$ROOT/src/ApplicationScopeCache.m" "$ROOT/src/ApplicationScopeCacheCheck.m"
+run_compiled_check multitouch-lifecycle run_without_arguments "${OBJC_FLAGS[@]}" -I"$ROOT/src/jitouch/Jitouch" -framework Foundation -framework IOKit -F"$SDKROOT/System/Library/PrivateFrameworks" -framework MultitouchSupport "$ROOT/src/jitouch/Jitouch/MultitouchDeviceLifecycle.m" "$ROOT/src/MultitouchDeviceLifecycleCheck.m"
 run_compiled_check gesture-sequence run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/GestureSequence.m" "$ROOT/src/GestureSequenceCheck.m"
 run_compiled_check single-instance run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation -framework AppKit "$ROOT/src/SingleInstance.m" "$ROOT/src/SingleInstanceCheck.m"
 run_compiled_check mouse-contact-filter run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/MouseContactFilter.m" "$ROOT/src/MouseContactFilterCheck.m"
@@ -322,8 +323,7 @@ source_has 'MGApplicationScopeCacheObserveApplicationActivation();' "$APP_SRC" |
 
 source_has 'NSWorkspaceDidWakeNotification' "$APP_SRC" || wake_fail "the app does not observe wake notifications"
 source_has '\[self reload\]' "$APP_SRC" || wake_fail "the wake handler does not reload gesture devices"
-for token in turnOffMagicMouse turnOffTrackpad MTUnregisterContactFrameCallback \
-  MTDeviceStop MTDeviceCreateList MTRegisterContactFrameCallback MTDeviceStart; do
+for token in turnOffMagicMouse turnOffTrackpad '\[multitouchDevices rebuild\]'; do
   source_section_has "$token" "$ROOT/src/jitouch/Jitouch/Gesture.m" '/^- (void)reload {/,/^}/' ||
     wake_fail "Gesture reload is missing $token"
 done

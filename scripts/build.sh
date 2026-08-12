@@ -205,6 +205,7 @@ clang \
   "$ROOT/src/KeyEventSequence.m" \
   "$ROOT/src/MouseContactFilter.m" \
   "$ROOT/src/MouseClickInteraction.m" \
+  "$SRC_ROOT/MultitouchDeviceLifecycle.m" \
   "$ROOT/src/ContactOnsetTracker.m" \
   "$ROOT/src/ScriptRunner.m" \
   "$ROOT/src/SystemGestureClaims.m" \
