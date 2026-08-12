@@ -11,6 +11,27 @@
 
 #import <Foundation/Foundation.h>
 
+@interface ConfigResult : NSObject {
+    NSDictionary *_settings;
+    NSArray *_diagnostics;
+    NSDictionary *_sourceComments;
+}
+
+// The settings dictionary keeps the exact shape the gesture engine consumes.
+// It is nil when the file cannot be read or the complete reload is rejected.
+@property(nonatomic, readonly, retain) NSDictionary *settings;
+
+// Each diagnostic carries Message. A skipped binding also carries Device,
+// Title, and Reason so presentation code does not interpret the message.
+@property(nonatomic, readonly, retain) NSArray *diagnostics;
+
+// Returns the trailing comment for one configured engine binding.
+- (NSString *)commentForDevice:(NSString *)device
+                   application:(NSString *)application
+                       gesture:(NSString *)gesture;
+
+@end
+
 @interface Config : NSObject
 
 // ~/.config/trickpad/config.toml, or the path in TRICKPAD_CONFIG. Returns nil
@@ -19,6 +40,10 @@
 
 // ~/.config/trickpad, where the configuration and its agent notes live.
 + (NSString *)configDirectory;
+
+// Parses one source file into the engine settings and the source metadata used
+// to explain that reload.
++ (ConfigResult *)resultFromFile:(NSString *)path;
 
 // Parses the file at `path` into a settings dictionary shaped like the plist
 // that Settings loadSettings2: expects. Returns nil if the file cannot be read

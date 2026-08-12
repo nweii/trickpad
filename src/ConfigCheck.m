@@ -125,6 +125,12 @@ static NSDictionary *parseRawTOML(NSString *text, NSArray **problems) {
     return [Config settingsFromFile:path problems:problems];
 }
 
+static ConfigResult *parseResult(NSString *text) {
+    NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:@"mg-check.toml"];
+    [text writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+    return [Config resultFromFile:path];
+}
+
 static NSString *section(NSString *text, NSString *start, NSString *end) {
     NSRange startRange = [text rangeOfString:start];
     if (startRange.location == NSNotFound)
@@ -258,6 +264,48 @@ int main(void) {
             ![[tomlAppBinding objectForKey:@"Defer"] boolValue])
             fail(@"TOML application table and inline options",
                  @"a deferred URL binding", tomlAppBinding ?: @"missing");
+
+        ConfigResult *sourceResult = parseResult(
+            @"[MOUSE]\n"
+             @"two-finger-click = \"escape\" # close the overlay\n"
+             @"made-up-gesture = \"return\" # needs a recognizer\n"
+             @"[TRACKPAD]\n"
+             @"three-finger-click = \"escape\" # global trackpad note\n"
+             @"[TRACKPAD.\"Safari\"]\n"
+             @"three-finger-click = \"off\" # keep Safari's click\n"
+             @"[TRACKPAD.\"Chrome\"]\n"
+             @"three-finger-click = { haptic = false }\n");
+        NSDictionary *commentedBinding = bindingFor(
+            [sourceResult settings], @"MagicMouseCommands", @"Two-Finger Click");
+        NSString *comment = [sourceResult commentForDevice:@"Mouse"
+                                               application:@"All Applications"
+                                                   gesture:@"Two-Finger Click"];
+        if (![comment isEqualToString:@"close the overlay"] ||
+            [commentedBinding objectForKey:@"SourceComment"] != nil)
+            fail(@"configuration result carries binding comments",
+                 @"comment outside the settings dictionary", comment ?: @"missing");
+        NSDictionary *diagnostic = [[sourceResult diagnostics] firstObject];
+        if (![[diagnostic objectForKey:@"Device"] isEqualToString:@"Mouse"] ||
+            ![[diagnostic objectForKey:@"Title"] hasPrefix:@"made-up-gesture"] ||
+            ![[diagnostic objectForKey:@"Reason"] containsString:@"no mouse gesture"] ||
+            ![[diagnostic objectForKey:@"Message"] containsString:@"line 3"])
+            fail(@"configuration result carries structured skipped binding details",
+                 @"Mouse, source title, reason, and message", diagnostic ?: @"missing");
+        NSDictionary *offBinding = bindingForApplication(
+            [sourceResult settings], @"TrackpadCommands", @"Safari", @"Three-Finger Click");
+        comment = [sourceResult commentForDevice:@"Trackpad"
+                                     application:@"Safari"
+                                         gesture:@"Three-Finger Click"];
+        if (![comment isEqualToString:@"keep Safari's click"] ||
+            [[offBinding objectForKey:@"Enable"] boolValue])
+            fail(@"configuration result preserves scoped Off comments",
+                 @"disabled binding with its comment", offBinding ?: @"missing");
+        comment = [sourceResult commentForDevice:@"Trackpad"
+                                     application:@"Chrome"
+                                         gesture:@"Three-Finger Click"];
+        if (comment != nil)
+            fail(@"an uncommented app override does not inherit the global comment",
+                 @"no comment", comment);
 
         tomlSettings = parseRawTOML(@"[MOUSE]\nhold-right-tap-left = return\n",
                                     &tomlProblems);
