@@ -296,7 +296,8 @@ int main(void) {
         comment = [sourceResult commentForDevice:@"Trackpad"
                                      application:@"Safari"
                                          gesture:@"Three-Finger Click"];
-        if (![comment isEqualToString:@"keep Safari's click"] ||
+        if (offBinding == nil ||
+            ![comment isEqualToString:@"keep Safari's click"] ||
             [[offBinding objectForKey:@"Enable"] boolValue])
             fail(@"configuration result preserves scoped Off comments",
                  @"disabled binding with its comment", offBinding ?: @"missing");
@@ -306,6 +307,23 @@ int main(void) {
         if (comment != nil)
             fail(@"an uncommented app override does not inherit the global comment",
                  @"no comment", comment);
+
+        // CRLF endings: a comment must not smuggle its carriage return into the
+        // reconstructed text, where it becomes a phantom line that inflates the
+        // reported line number of every diagnostic after it.
+        ConfigResult *crlfResult = parseResult(
+            @"[MOUSE]\r\n"
+             @"two-finger-click = \"escape\" # close the overlay\r\n"
+             @"made-up-gesture = \"return\"\r\n");
+        NSString *crlfComment = [crlfResult commentForDevice:@"Mouse"
+                                                 application:@"All Applications"
+                                                     gesture:@"Two-Finger Click"];
+        NSDictionary *crlfDiagnostic = [[crlfResult diagnostics] firstObject];
+        if (![crlfComment isEqualToString:@"close the overlay"] ||
+            ![[crlfDiagnostic objectForKey:@"Message"] containsString:@"line 3"])
+            fail(@"CRLF comments keep line numbers and comments intact",
+                 @"comment attached and diagnostic on line 3",
+                 [crlfDiagnostic objectForKey:@"Message"] ?: @"missing");
 
         tomlSettings = parseRawTOML(@"[MOUSE]\nhold-right-tap-left = return\n",
                                     &tomlProblems);

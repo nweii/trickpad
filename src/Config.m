@@ -1171,8 +1171,13 @@ static NSArray *sourceComments(NSString *text) {
             } else if (c == '\'') {
                 inLiteral = YES;
             } else if (c == '#') {
+                // whitespaceAndNewlineCharacterSet: under CRLF endings each line
+                // keeps a trailing CR that whitespaceCharacterSet would preserve,
+                // and a CR appended into the reconstructed text becomes a phantom
+                // line inflating every later diagnostic's reported line number.
                 comment = [[line substringFromIndex:i + 1]
-                    stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+                    stringByTrimmingCharactersInSet:
+                        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
                 break;
             }
         }
