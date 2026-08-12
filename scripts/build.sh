@@ -3,6 +3,19 @@ set -euo pipefail
 
 APP_NAME="Trickpad"
 BUNDLE_ID="fyi.thirdwind.trickpad"
+
+# --dev builds a development bundle that installs beside the released copy:
+# its own name, bundle identifier, and icon, everything else shared. The
+# separate identifier keys separate user defaults, a separate Accessibility
+# grant, and separate updater state, so repeated test installs leave no state
+# behind for the released copy. Both builds read the same config.toml, and
+# SingleInstance.m keeps one copy running: a development build takes the
+# shared instance lock over a running release copy.
+if [[ "${1:-}" == "--dev" ]]; then
+  APP_NAME="Trickpad DEV"
+  BUNDLE_ID="fyi.thirdwind.trickpad.dev"
+fi
+
 APP_VERSION="0.9.1"
 APP_BUILD_NUMBER="18"
 MIN_MACOS_VERSION="11.0"
@@ -25,8 +38,8 @@ SPARKLE_FRAMEWORK="$ROOT/third_party/sparkle/Sparkle.framework"
 # with no updater rather than one that cannot verify what it downloads.
 SPARKLE_FEED_URL="https://updates.thirdwind.fyi/trickpad/9zvff4/appcast.xml"
 SPARKLE_PUBLIC_KEY="PRUR58SW8YdEJmAFlzV+LxGjQR1xS8txBGJdU8ZOeyw="
-ICON_SOURCE="$ROOT/Trickpad.icon"
-ICON_BUILD_SOURCE="$BUILD_ROOT/Trickpad.icon"
+ICON_SOURCE="$ROOT/$APP_NAME.icon"
+ICON_BUILD_SOURCE="$BUILD_ROOT/$APP_NAME.icon"
 ICON_INFO="$BUILD_ROOT/TrickpadIconInfo.plist"
 
 mkdir -p "$MACOS_DIR" "$RES_DIR"
@@ -120,11 +133,11 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key>
   <string>$APP_NAME</string>
   <key>CFBundleDisplayName</key>
-  <string>Trickpad</string>
+  <string>$APP_NAME</string>
   <key>CFBundleIconFile</key>
-  <string>Trickpad</string>
+  <string>$APP_NAME</string>
   <key>CFBundleIconName</key>
-  <string>Trickpad</string>
+  <string>$APP_NAME</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

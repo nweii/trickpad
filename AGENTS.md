@@ -53,6 +53,7 @@ Jitouch reads the private `MultitouchSupport.framework`, which is undocumented a
 
 ```bash
 ./scripts/build.sh             # single clang call, no Xcode project
+./scripts/build.sh --dev       # development bundle that installs beside the release copy
 ./scripts/check.sh             # configuration parser checks
 ./scripts/stop.sh && ./scripts/start.sh
 ./scripts/update.sh            # preview and install a source update
@@ -67,6 +68,12 @@ The app observes `NSWorkspaceDidWakeNotification` and fully rebuilds its device 
 `update.sh` requires a clean checkout, fetches public `origin/main`, previews the incoming commits, and asks before a fast-forward update. After approval it runs the checks, rebuilds, and restarts. `--yes` skips only the prompt and is for an agent to use after the user has approved the displayed update.
 
 The Accessibility grant binds to the bundle path plus the designated requirement that `scripts/build.sh` pins. Keep both stable and the grant survives every rebuild.
+
+### Development bundle
+
+Test source changes through a development bundle rather than over the installed release. The loop: `./scripts/build.sh --dev`, open `build/Trickpad DEV.app`, test against the live bindings, quit when done. Launching it takes over from the running released copy, and quitting hands back on its own — the login agent's `KeepAlive` restarts the released copy, which takes the freed lock. There is one source tree; a change proven in the development bundle reaches the release build through the normal release path, with nothing to port.
+
+The bundle identifier `fyi.thirdwind.trickpad.dev` keys its own user defaults, updater state, and Accessibility grant, so repeated test installs leave no state behind for the released copy — and a fresh development build needs its own Accessibility grant before gestures dispatch. Both builds read `~/.config/trickpad/config.toml` and share one instance lock keyed on that folder, so one copy runs at a time and a configuration change under test runs against the user's real file. While a development build holds the lock, the restarted released copy stands down and exits every ten seconds or so; that is log noise, not a defect.
 
 ## Menu bar item
 
