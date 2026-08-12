@@ -313,6 +313,8 @@ source_has 'if (filteredCount == 0 &&' "$GESTURE_SRC" ||
   gesture_fail "Magic Mouse tap suppression is not released by the tap-eligible contacts lifting"
 source_has 'int filteredCount = contactFrame.thumbFiltered.count;' "$GESTURE_SRC" ||
   gesture_fail "Magic Mouse tap suppression release ignores the filtered frame view"
+source_has 'Trackpad contact frame raw=%d thumb-filtered=%d fingertip-scale=%d' "$GESTURE_SRC" ||
+  gesture_fail "verbose logging cannot distinguish the three trackpad contact counts"
 [[ "$(source_count 'if (magicMouseTapsSuppressedUntilLift ||' "$GESTURE_SRC")" -eq 4 ]] ||
   gesture_fail "a Magic Mouse tap recognizer ignores post-click suppression"
 

@@ -2940,6 +2940,9 @@ static int trackpadCallback(MTDeviceRef device, Finger *data, int nFingers, doub
     const Finger *filteredData = contactFrame.thumbFiltered.contacts;
     int filteredCount = contactFrame.thumbFiltered.count;
     trackpadNFingers = rawCount;
+    if (logLevel >= LOG_LEVEL_TRACE)
+        NSLog(@"Trackpad contact frame raw=%d thumb-filtered=%d fingertip-scale=%d",
+              rawCount, filteredCount, contactFrame.fingertipScale.count);
 
     // Raw trackpad frames feed candidate-gesture trace sessions. Nothing here
     // recognizes or suppresses; the recorder ignores frames when idle.
