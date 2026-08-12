@@ -7,6 +7,10 @@ run/
 .scratch/
 .claude/
 
+# Vendored frameworks carry nested application bundles that belong in the
+# repository, so a clean checkout builds without downloading anything.
+!third_party/**/*.app
+
 # Sparkle release tools. Needed to publish a release, not to build the app.
 # third_party/sparkle/README.md records where to get them.
 third_party/sparkle/bin/
