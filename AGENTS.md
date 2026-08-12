@@ -64,6 +64,12 @@ The app observes `NSWorkspaceDidWakeNotification` and fully rebuilds its device 
 
 The Accessibility grant binds to the bundle path plus the designated requirement that `scripts/build.sh` pins. Keep both stable and the grant survives every rebuild.
 
+### Development bundle
+
+`./scripts/build.sh --dev` produces `build/Trickpad DEV.app`, which installs and runs beside the released copy instead of replacing it. It carries the bundle identifier `fyi.thirdwind.trickpad.dev`, the display name Trickpad DEV, and the icon from `Trickpad DEV.icon` at the repository root. The separate identifier keys separate user defaults, separate updater state, and a separate Accessibility grant, so a development build needs its own grant before gestures work.
+
+Everything else is shared. Both builds read `~/.config/trickpad/config.toml`, so a development build exercises the bindings actually in use, and both take the same instance lock, keyed on that configuration folder, so one copy runs at a time. A development build finding the lock held asks the holder to quit and takes over; the released copy never does this in reverse. Quitting the development build needs no handback step: the login agent's `KeepAlive` restarts the released copy, which takes the freed lock. While a development build runs, that same restart loop produces one short-lived stood-down process every ten seconds or so, which is log noise rather than a problem.
+
 ## Menu bar item
 
 About opens a submenu carrying the version, read from the running bundle, plus a link to the product website.
