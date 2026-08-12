@@ -317,6 +317,14 @@ source_has 'Trackpad contact frame raw=%d thumb-filtered=%d fingertip-scale=%d' 
   gesture_fail "verbose logging cannot distinguish the three trackpad contact counts"
 [[ "$(source_count 'if (magicMouseTapsSuppressedUntilLift ||' "$GESTURE_SRC")" -eq 4 ]] ||
   gesture_fail "a Magic Mouse tap recognizer ignores post-click suppression"
+grep -Fq '// Based on the code at http://steike.com/code/multitouch' "$ROOT/src/ContactFrame.h" ||
+  gesture_fail "the contact layout lost its steike.com attribution"
+grep -Fq '// ellipsoid' "$ROOT/src/ContactFrame.h" ||
+  gesture_fail "the contact axes lost their ellipsoid description"
+grep -Fq '// remove hovering and other touch events' "$ROOT/src/ContactFrame.m" ||
+  gesture_fail "the active-contact filter lost its hover-removal description"
+grep -Fq '// detect thumb & palm resting' "$ROOT/src/ContactFrame.m" ||
+  gesture_fail "the trackpad filter lost its thumb-and-palm description"
 
 # Binding lookups run several times per touch frame, so they must read the
 # cached application candidates rather than Accessibility, and both events that

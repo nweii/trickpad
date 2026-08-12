@@ -46,6 +46,7 @@ static MGContactList trackpadRawContacts(
     MGContactFrameFilterObserver observer, void *context) {
     MGContactList list = copyContacts(contacts, contactCount);
     Finger *filtered = (Finger *)list.contacts;
+    // remove hovering and other touch events
     for (int i = 0; i < list.count; i++) {
         if (!contactIsActive(&filtered[i])) {
             if (observer)
@@ -60,6 +61,7 @@ static MGContactList trackpadThumbFilteredContacts(
     MGTrackpadContactFrameBuilder *builder, const Finger *contacts,
     int contactCount, int hardwareContactCount, BOOL leftHanded,
     MGContactFrameFilterObserver observer, void *context) {
+    // detect thumb & palm resting
     MGContactList list = copyContacts(contacts, contactCount);
     Finger *filtered = (Finger *)list.contacts;
     if (hardwareContactCount == 0)

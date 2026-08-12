@@ -2,6 +2,7 @@
 
 #import <Foundation/Foundation.h>
 
+// Based on the code at http://steike.com/code/multitouch
 typedef struct { float x, y; } MTPoint;
 typedef struct { MTPoint pos, vel; } MTReadout;
 
@@ -27,7 +28,7 @@ typedef struct {
     MTReadout normalized;
     float size;
     int zero1;
-    float angle, majorAxis, minorAxis;
+    float angle, majorAxis, minorAxis; // ellipsoid
     MTReadout mm;
     int zero2[2];
     float zDensity;
