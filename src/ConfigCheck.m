@@ -1254,10 +1254,10 @@ int main(void) {
             }
 
             NSArray *invocations = @[
-                @"gestureMagicMouseThreeFingerTap(tapData, tapContactCount, timestamp, 0)",
-                @"gestureMagicMouseOneFingerTap(tapData, tapContactCount, timestamp)",
-                @"gestureMagicMouseOneFixOneTap(tapData, tapContactCount, timestamp)",
-                @"gestureMagicMouseTwoFingerSwipe(data, nFingers, timestamp, thumbPresent)",
+                @"gestureMagicMouseThreeFingerTap(filteredData, filteredCount, timestamp)",
+                @"gestureMagicMouseOneFingerTap(filteredData, filteredCount, timestamp)",
+                @"gestureMagicMouseOneFixOneTap(filteredData, filteredCount, timestamp)",
+                @"gestureMagicMouseTwoFingerSwipe(filteredData, filteredCount, timestamp, 0)",
                 @"gestureTrackpadTwoFingerTap(filteredData, filteredCount,",
                 @"gestureTrackpadHoldSlide(filteredData, filteredCount)",
             ];
@@ -1281,9 +1281,9 @@ int main(void) {
             NSString *mouseCallback = section(engine,
                 @"static int magicMouseCallback", @"static void turnOffMagicMouse");
             NSRange threeTapCall = [mouseCallback rangeOfString:
-                @"gestureMagicMouseThreeFingerTap(tapData, tapContactCount, timestamp, 0)"];
+                @"gestureMagicMouseThreeFingerTap(filteredData, filteredCount, timestamp)"];
             NSRange twoTapCall = [mouseCallback rangeOfString:
-                @"gestureMagicMouseTwoFingerTap(tapData, tapContactCount, timestamp, 0)"];
+                @"gestureMagicMouseTwoFingerTap(filteredData, filteredCount, timestamp)"];
             if (threeTapCall.location == NSNotFound || twoTapCall.location == NSNotFound ||
                 threeTapCall.location >= twoTapCall.location)
                 fail(@"mouse tap discriminator evaluates exact higher count first",

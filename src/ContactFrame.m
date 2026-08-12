@@ -146,6 +146,18 @@ static int magicMouseThumbIndex(const MGContactList contacts) {
         nextLowestY, contacts.count) ? lowestIndex : -1;
 }
 
+static MGContactList fingertipScaleMagicMouseContacts(MGContactList source) {
+    MGContactList result = copyContacts(source.contacts, source.count);
+    Finger *contacts = (Finger *)result.contacts;
+    int destination = 0;
+    for (int i = 0; i < source.count; i++) {
+        if (source.contacts[i].size <= kMagicMousePalmMinimumSize)
+            contacts[destination++] = source.contacts[i];
+    }
+    result.count = destination;
+    return result;
+}
+
 void MGTrackpadContactFrameBuilderInitialize(MGTrackpadContactFrameBuilder *builder) {
     builder->thumbIdentifier = -1;
 }
@@ -172,11 +184,9 @@ MGContactFrame MGMagicMouseContactFrameCreate(const Finger *contacts,
     int thumbIndex = magicMouseThumbIndex(normalized);
 
     frame.thumbFiltered = copyContacts(normalized.contacts, normalized.count);
-    frame.fingertipScale = copyContacts(normalized.contacts, normalized.count);
+    frame.fingertipScale = (MGContactList){0};
     Finger *filteredContacts = (Finger *)frame.thumbFiltered.contacts;
-    Finger *fingertipContacts = (Finger *)frame.fingertipScale.contacts;
     int filteredDestination = 0;
-    int fingertipDestination = 0;
     for (int i = 0; i < normalized.count; i++) {
         if (i == thumbIndex)
             continue;
@@ -185,11 +195,9 @@ MGContactFrame MGMagicMouseContactFrameCreate(const Finger *contacts,
                                                   candidate.size,
                                                   candidate.minorAxis))
             filteredContacts[filteredDestination++] = candidate;
-        if (candidate.size <= kMagicMousePalmMinimumSize)
-            fingertipContacts[fingertipDestination++] = candidate;
     }
     frame.thumbFiltered.count = filteredDestination;
-    frame.fingertipScale.count = fingertipDestination;
+    frame.fingertipScale = fingertipScaleMagicMouseContacts(frame.thumbFiltered);
     free((void *)normalized.contacts);
     return frame;
 }

@@ -3276,7 +3276,7 @@ static void gestureMagicMouseTwoFingerSwipe(const Finger *data, int nFingers, do
     }
 }
 
-static void gestureMagicMouseTwoFingerTap(Finger *data, int nFingers, double timestamp, int thumbPresent) {
+static void gestureMagicMouseTwoFingerTap(const Finger *data, int nFingers, double timestamp) {
     enum {
         kTwoFingerTapIdle = 0,
         kTwoFingerTapTracking = 1,
@@ -3301,12 +3301,6 @@ static void gestureMagicMouseTwoFingerTap(Finger *data, int nFingers, double tim
         step = nFingers == 0 ? kTwoFingerTapIdle : kTwoFingerTapRejectedUntilLift;
         startTime = -1;
         return;
-    }
-
-    if (thumbPresent) {
-        Finger tmp = data[thumbPresent - 1];
-        data[thumbPresent - 1] = data[--nFingers];
-        data[nFingers] = tmp;
     }
 
     if (nFingers >= 3) {
@@ -3378,14 +3372,9 @@ static void gestureMagicMouseTwoFingerTap(Finger *data, int nFingers, double tim
         startTime = -1;
     }
 
-    if (thumbPresent) {
-        Finger tmp = data[thumbPresent - 1];
-        data[thumbPresent - 1] = data[nFingers];
-        data[nFingers] = tmp;
-    }
 }
 
-static void gestureMagicMouseThreeFingerTap(Finger *data, int nFingers, double timestamp, int thumbPresent) {
+static void gestureMagicMouseThreeFingerTap(const Finger *data, int nFingers, double timestamp) {
     enum {
         kThreeFingerTapIdle = 0,
         kThreeFingerTapTracking = 1,
@@ -3405,12 +3394,6 @@ static void gestureMagicMouseThreeFingerTap(Finger *data, int nFingers, double t
         step = kThreeFingerTapIdle;
         startTime = -1;
         return;
-    }
-
-    if (thumbPresent) {
-        Finger tmp = data[thumbPresent - 1];
-        data[thumbPresent - 1] = data[--nFingers];
-        data[nFingers] = tmp;
     }
 
     if (nFingers > 3) {
@@ -3469,11 +3452,6 @@ static void gestureMagicMouseThreeFingerTap(Finger *data, int nFingers, double t
         }
     }
 
-    if (thumbPresent) {
-        Finger tmp = data[thumbPresent - 1];
-        data[thumbPresent - 1] = data[nFingers];
-        data[nFingers] = tmp;
-    }
 }
 
 static void gestureMagicMouseRightFrontTap(const Finger *data, int nFingers, double timestamp) {
@@ -4217,8 +4195,6 @@ static int gestureMagicMouseOneFixOneTap(const Finger *data, int nFingers, doubl
 
 static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, double timestamp, int frame) {
     int ignore = 0;
-    int activeMagicMouseContactCount = nFingers;
-    int eligibleTapContactCount = nFingers;
     int eligibleClickContactCount = 0;
     int completedClickContactCount = 0;
     MGTraceContact traceContacts[16];
@@ -4234,57 +4210,56 @@ static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, do
 
     MGContactFrame contactFrame = MGMagicMouseContactFrameCreate(
         data, nFingers, enMMHanded);
+    const Finger *rawData = contactFrame.raw.contacts;
+    int rawCount = contactFrame.raw.count;
+    const Finger *filteredData = contactFrame.thumbFiltered.contacts;
+    int filteredCount = contactFrame.thumbFiltered.count;
+    const Finger *fingertipData = contactFrame.fingertipScale.contacts;
+    int fingertipCount = contactFrame.fingertipScale.count;
 
-    MGMouseClickInteractionObserveRawContacts(&magicMouseClickInteraction, nFingers);
+    MGMouseClickInteractionObserveRawContacts(&magicMouseClickInteraction, rawCount);
     if (MGTraceIsActive()) {
-        traceCount = MIN(nFingers, 16);
+        traceCount = MIN(rawCount, 16);
         for (int i = 0; i < traceCount; i++) {
-            traceContacts[i] = (MGTraceContact){data[i].identifier, data[i].state,
-                data[i].px, data[i].py, data[i].size, data[i].majorAxis,
-                data[i].minorAxis, data[i].zDensity};
+            traceContacts[i] = (MGTraceContact){rawData[i].identifier, rawData[i].state,
+                rawData[i].px, rawData[i].py, rawData[i].size, rawData[i].majorAxis,
+                rawData[i].minorAxis, rawData[i].zDensity};
         }
     }
 
     int identifiers[16];
-    int identifierCount = MIN(nFingers, 16);
+    int identifierCount = MIN(rawCount, 16);
     for (int i = 0; i < identifierCount; i++)
-        identifiers[i] = data[i].identifier;
+        identifiers[i] = rawData[i].identifier;
     MGContactOnsetTrackerObserve(&magicMouseContactOnsets, identifiers,
                                  identifierCount, timestamp);
 
-    if (nFingers > 1) {
-        for (int i = 0; i < nFingers; i++) {
-            if (data[i].size > 5.5) {
+    if (rawCount > 1) {
+        for (int i = 0; i < rawCount; i++) {
+            if (rawData[i].size > 5.5) {
                 ignore = 1;
                 break;
             }
         }
     }
 
-    if (enMMHanded) {
-        for (int i = 0; i < nFingers; i++)
-            data[i].px = 1 - data[i].px;
-    }
-
     magicMouseTwoFingerFlag = 0;
     magicMouseThreeFingerFlag = 0;
     disableHorizontalScroll = 0;
     if (!ignore) {
-        int thumbPresent = gestureMagicMouseThumb(data, nFingers);
-        observeBoundSwipeFamilies(MAGICMOUSE, nFingers - (thumbPresent ? 1 : 0));
+        int thumbPresent = gestureMagicMouseThumb(rawData, rawCount);
+        observeBoundSwipeFamilies(MAGICMOUSE, fingertipCount);
 
         float clickXs[8], clickYs[8];
         float physicalXs[16], physicalYs[16];
         MGMagicMouseContactDecision physicalDecisions[16];
         int physicalIndexes[16];
         int physicalContactCount = 0;
-        Finger tapData[16];
-        int tapContactCount = 0;
         int thumbIndex = thumbPresent - 1;
-        for (int i = 0; i < nFingers; i++) {
+        for (int i = 0; i < rawCount; i++) {
             BOOL excludedAsThumb = i == thumbIndex;
             MGMagicMouseContactDecision qualityDecision = MGMagicMouseContactDecisionForGeometry(
-                data[i].px, data[i].py, data[i].size, data[i].minorAxis);
+                rawData[i].px, rawData[i].py, rawData[i].size, rawData[i].minorAxis);
             BOOL excludedByQuality = qualityDecision != MGMagicMouseContactKept;
             if (i < traceCount) {
                 traceQualityDecisions[i] = qualityDecision;
@@ -4293,19 +4268,17 @@ static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, do
             if (excludedAsThumb)
                 continue;
             if (physicalContactCount < 16) {
-                physicalXs[physicalContactCount] = data[i].px;
-                physicalYs[physicalContactCount] = data[i].py;
+                physicalXs[physicalContactCount] = rawData[i].px;
+                physicalYs[physicalContactCount] = rawData[i].py;
                 physicalDecisions[physicalContactCount] = qualityDecision;
                 physicalIndexes[physicalContactCount] = i;
                 physicalContactCount++;
             }
             if (excludedByQuality)
                 continue;
-            if (tapContactCount < 16)
-                tapData[tapContactCount++] = data[i];
             if (eligibleClickContactCount < 8) {
-                clickXs[eligibleClickContactCount] = data[i].px;
-                clickYs[eligibleClickContactCount] = data[i].py;
+                clickXs[eligibleClickContactCount] = rawData[i].px;
+                clickYs[eligibleClickContactCount] = rawData[i].py;
                 eligibleClickContactCount++;
             }
         }
@@ -4314,8 +4287,8 @@ static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, do
         int rescuedDataIndex = rescuedPhysicalIndex >= 0
             ? physicalIndexes[rescuedPhysicalIndex] : -1;
         if (rescuedDataIndex >= 0 && eligibleClickContactCount < 8) {
-            clickXs[eligibleClickContactCount] = data[rescuedDataIndex].px;
-            clickYs[eligibleClickContactCount] = data[rescuedDataIndex].py;
+            clickXs[eligibleClickContactCount] = rawData[rescuedDataIndex].px;
+            clickYs[eligibleClickContactCount] = rawData[rescuedDataIndex].py;
             eligibleClickContactCount++;
         }
         clickCluster = MGMagicMouseContactsFormClickCluster(
@@ -4336,30 +4309,29 @@ static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, do
                 BOOL excludedAsThumb = traceExcludedAsThumb[i];
                 BOOL excludedByQuality = qualityDecision != MGMagicMouseContactKept;
                 BOOL rescuedForClick = i == rescuedDataIndex;
-                MGTraceRecordFilterDecision(data[i].identifier,
+                MGTraceRecordFilterDecision(rawData[i].identifier,
                     excludedAsThumb ? @"thumb-id" : rescuedForClick
                         ? @"side-narrow-clustered-third"
                         : MGMagicMouseContactDecisionName(qualityDecision),
-                    rescuedForClick || !(excludedAsThumb || excludedByQuality), data[i].px, data[i].py,
-                    data[i].size, data[i].majorAxis, data[i].minorAxis);
+                    rescuedForClick || !(excludedAsThumb || excludedByQuality), rawData[i].px, rawData[i].py,
+                    rawData[i].size, rawData[i].majorAxis, rawData[i].minorAxis);
             }
             if (!clickCluster)
                 MGTraceRecordCandidate(@"physical-click", @"canceled", @"disconnected-click-cluster");
         }
 
-        eligibleTapContactCount = tapContactCount;
-        gestureMagicMouseOneFingerSwipe(data, nFingers, timestamp);
-        gestureMagicMouseTwoFingerSwipe(data, nFingers, timestamp, thumbPresent);
-        gestureMagicMouseThreeFingerTap(tapData, tapContactCount, timestamp, 0);
-        gestureMagicMouseTwoFingerTap(tapData, tapContactCount, timestamp, 0);
-        gestureMagicMouseRightFrontTap(data, nFingers, timestamp);
-        gestureMagicMouseOneFingerTap(tapData, tapContactCount, timestamp);
-        gestureMagicMouseSwipeThreeFingers(data, nFingers, timestamp, thumbPresent);
-        gestureMagicMouseTwoFingers(data, nFingers, timestamp, thumbPresent);
-        gestureMagicMouseOneFixOneTap(tapData, tapContactCount, timestamp);
-        gestureMagicMouseV(data, nFingers);
-        gestureMagicMouseTwoFixOneSlide(data, nFingers, timestamp, thumbPresent);
-        gestureMagicMouseMiddleClick(data, nFingers);
+        gestureMagicMouseOneFingerSwipe(filteredData, filteredCount, timestamp);
+        gestureMagicMouseTwoFingerSwipe(filteredData, filteredCount, timestamp, 0);
+        gestureMagicMouseThreeFingerTap(filteredData, filteredCount, timestamp);
+        gestureMagicMouseTwoFingerTap(filteredData, filteredCount, timestamp);
+        gestureMagicMouseRightFrontTap(filteredData, filteredCount, timestamp);
+        gestureMagicMouseOneFingerTap(filteredData, filteredCount, timestamp);
+        gestureMagicMouseSwipeThreeFingers((Finger *)filteredData, filteredCount, timestamp, 0);
+        gestureMagicMouseTwoFingers((Finger *)filteredData, filteredCount, timestamp, 0);
+        gestureMagicMouseOneFixOneTap(filteredData, filteredCount, timestamp);
+        gestureMagicMouseV(filteredData, filteredCount);
+        gestureMagicMouseTwoFixOneSlide((Finger *)filteredData, filteredCount, timestamp, 0);
+        gestureMagicMouseMiddleClick(filteredData, filteredCount);
     } else {
         completedClickContactCount = MGMouseClickInteractionObserveContacts(
             &magicMouseClickInteraction, 0, CFAbsoluteTimeGetCurrent());
@@ -4382,13 +4354,13 @@ static int magicMouseCallback(MTDeviceRef device, Finger *data, int nFingers, do
     // click, so waiting for a bare surface suppressed taps long after the
     // clicking fingers had lifted. The button check keeps the flag through the
     // click itself, whose own fingers may be briefly filtered mid-press.
-    if (eligibleTapContactCount == 0 &&
+    if (filteredCount == 0 &&
         !CGEventSourceButtonState(kCGEventSourceStateHIDSystemState, kCGMouseButtonLeft) &&
         !CGEventSourceButtonState(kCGEventSourceStateHIDSystemState, kCGMouseButtonRight))
         magicMouseTapsSuppressedUntilLift = NO;
 
     NSUInteger ownerBeforeFinish = magicMouseSequence.owner;
-    MGGestureSequenceFinishFrame(&magicMouseSequence, activeMagicMouseContactCount);
+    MGGestureSequenceFinishFrame(&magicMouseSequence, rawCount);
     if (ownerBeforeFinish != magicMouseSequence.owner)
         MGTraceRecordOwnership(@"reset", gestureOwnerName(ownerBeforeFinish),
                                gestureOwnerName(magicMouseSequence.owner), YES);

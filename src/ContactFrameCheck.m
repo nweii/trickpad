@@ -152,12 +152,11 @@ int main(int argc, const char *argv[]) {
         };
         MGContactFrame mouseFrame = MGMagicMouseContactFrameCreate(mouse, 2, NO);
         const int mouseFilteredIdentifiers[] = {10};
-        const int mouseFingertipIdentifiers[] = {10, 11};
         requireIdentifiers(mouseFrame.thumbFiltered, mouseFilteredIdentifiers, 1,
                            @"Magic Mouse filtered view retained a measured resting-edge contact");
         requireIdentifiers(mouseFrame.fingertipScale,
-                           mouseFingertipIdentifiers, 2,
-                           @"Magic Mouse swipe scale applied tap-quality filtering");
+                           mouseFilteredIdentifiers, 1,
+                           @"Magic Mouse fingertip-scale view diverged from the filtered recognizer input");
         MGContactFrameDestroy(&mouseFrame);
 
         for (int argument = 1; argument < argc; argument++) {

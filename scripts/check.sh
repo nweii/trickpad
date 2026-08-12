@@ -309,10 +309,10 @@ done < <(script_table)
 GESTURE_SRC="$ROOT/src/jitouch/Jitouch/Gesture.m"
 source_has 'magicMouseTapsSuppressedUntilLift = YES;' "$GESTURE_SRC" ||
   gesture_fail "a Magic Mouse physical click no longer suppresses taps"
-source_has 'if (eligibleTapContactCount == 0 &&' "$GESTURE_SRC" ||
+source_has 'if (filteredCount == 0 &&' "$GESTURE_SRC" ||
   gesture_fail "Magic Mouse tap suppression is not released by the tap-eligible contacts lifting"
-source_has 'eligibleTapContactCount = tapContactCount;' "$GESTURE_SRC" ||
-  gesture_fail "Magic Mouse tap suppression release ignores contact filtering"
+source_has 'int filteredCount = contactFrame.thumbFiltered.count;' "$GESTURE_SRC" ||
+  gesture_fail "Magic Mouse tap suppression release ignores the filtered frame view"
 [[ "$(source_count 'if (magicMouseTapsSuppressedUntilLift ||' "$GESTURE_SRC")" -eq 4 ]] ||
   gesture_fail "a Magic Mouse tap recognizer ignores post-click suppression"
 
