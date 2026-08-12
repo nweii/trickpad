@@ -34,8 +34,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if TAG_COMMIT="$(git -C "$ROOT" rev-list -n 1 "v$VERSION" 2>/dev/null)" &&
-   [[ -n "$TAG_COMMIT" && "$TAG_COMMIT" != "$(git -C "$ROOT" rev-parse HEAD)" ]]; then
+# The disk image carries a corresponding-source link derived from v$VERSION, so
+# the tag must exist at the packaged commit before packaging. A tag pointing
+# elsewhere means this version already shipped from different source; a missing
+# tag means the link would name a page that does not exist yet.
+TAG_COMMIT="$(git -C "$ROOT" rev-list -n 1 "v$VERSION" 2>/dev/null || true)"
+if [[ -z "$TAG_COMMIT" ]]; then
+  echo "No tag v$VERSION exists. Tag this commit before packaging:" >&2
+  echo "  git tag -a v$VERSION -m \"$VERSION\"" >&2
+  echo "Keep the tag local until the package and publish preview verify." >&2
+  exit 1
+elif [[ "$TAG_COMMIT" != "$(git -C "$ROOT" rev-parse HEAD)" ]]; then
   echo "Version $VERSION already belongs to a different source commit." >&2
   echo "Bump the app version before packaging this build." >&2
   exit 1

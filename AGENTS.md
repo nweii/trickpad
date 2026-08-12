@@ -108,16 +108,16 @@ To cut a release:
 ```bash
 # bump APP_VERSION and APP_BUILD_NUMBER in scripts/build.sh
 ./scripts/build.sh && ./scripts/check.sh
-./scripts/package.sh          # prints every file the update feed names
+git commit -am "Release X.Y.Z"
+git tag -a vX.Y.Z -m "X.Y.Z"  # local until the package and preview verify
+./scripts/package.sh          # requires the tag at HEAD; prints every file the update feed names
 ./scripts/publish.sh          # read-only preview of R2 and the public feed
 ./scripts/publish.sh --publish X.Y.Z  # after approving that preview
-git commit -am "Release X.Y.Z"
-git tag -a vX.Y.Z -m "X.Y.Z"
 git push origin main --tags
 gh release create vX.Y.Z --title "X.Y.Z" --notes "..."
 ```
 
-GitHub releases carry the tag, changelog, and automatic source archives without a packaged binary. The DMG that `scripts/package.sh` produces is delivered through Gumroad and must not be attached to GitHub. Packaging refuses to reuse a version whose source tag already points at another commit and verifies the styled drag-to-Applications layout, app signature, license, notices, trademark notice, and exact-source link.
+GitHub releases carry the tag, changelog, and automatic source archives without a packaged binary. The DMG that `scripts/package.sh` produces is delivered through Gumroad and must not be attached to GitHub. Packaging requires the version's tag to exist at the packaged commit — a missing tag or one pointing elsewhere refuses — and verifies the styled drag-to-Applications layout, app signature, license, notices, trademark notice, and exact-source link. The tag stays local until the package and publish preview verify, so a bad package means deleting an unpushed tag rather than moving a published one.
 
 The release title is the bare version. The repository name sits above it on every page that shows a release, so repeating it adds nothing.
 
@@ -139,7 +139,7 @@ Sparkle, vendored at a pinned version under `third_party/sparkle/` with its own 
 
 Two of these fail quietly, and one is already guarded.
 
-**The corresponding-source link is generated, not written.** GPLv3 requires the buyer of a binary to be able to obtain its exact source, and `scripts/package.sh` satisfies that without anyone typing a URL: it derives the link from the app version, refuses to package when that version's tag already points at a different commit, and greps the mounted image to confirm the link before finishing. Leave it generated. A hand-maintained copy of that link anywhere else would have no such guard, so proposing one is a decision to take deliberately rather than a gap to fill.
+**The corresponding-source link is generated, not written.** GPLv3 requires the buyer of a binary to be able to obtain its exact source, and `scripts/package.sh` satisfies that without anyone typing a URL: it derives the link from the app version, refuses to package unless that version's tag points at the packaged commit, and greps the mounted image to confirm the link before finishing. Leave it generated. A hand-maintained copy of that link anywhere else would have no such guard, so proposing one is a decision to take deliberately rather than a gap to fill.
 
 **`CHANGELOG.md` is an interface, not only prose.** A downstream surface parses it to render a customer-facing changelog and the version it advertises. The shape it relies on: `## X.Y.Z` per release, a `Released YYYY-MM-DD.` line, a `### Section` heading per group, `- ` bullets that may wrap, and any trailing paragraph as closing notes. Entries are written in the imperative, so the section heading supplies the tense. Changing that structure degrades a page outside this repository, which no check here will catch.
 
