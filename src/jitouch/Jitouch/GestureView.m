@@ -21,7 +21,7 @@
     [[NSColor clearColor] set];
     NSRectFill([self frame]);
 
-    CGContextRef context = [[NSGraphicsContext currentContext]graphicsPort];
+    CGContextRef context = [[NSGraphicsContext currentContext] CGContext];
 
     if ([points count] > 0) {
         NSPoint currentPoint;
