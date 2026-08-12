@@ -48,11 +48,20 @@ typedef struct {
     int thumbIdentifier;
 } MGTrackpadContactFrameBuilder;
 
+typedef void (*MGContactFrameFilterObserver)(const Finger *contact,
+                                             NSString *reason,
+                                             BOOL kept,
+                                             void *context);
+
 void MGTrackpadContactFrameBuilderInitialize(MGTrackpadContactFrameBuilder *builder);
 MGContactFrame MGTrackpadContactFrameCreate(MGTrackpadContactFrameBuilder *builder,
                                             const Finger *contacts,
                                             int contactCount,
                                             BOOL leftHanded);
+MGContactFrame MGTrackpadContactFrameCreateObserved(
+    MGTrackpadContactFrameBuilder *builder, const Finger *contacts,
+    int contactCount, BOOL leftHanded, MGContactFrameFilterObserver observer,
+    void *context);
 MGContactFrame MGMagicMouseContactFrameCreate(const Finger *contacts,
                                               int contactCount,
                                               BOOL leftHanded);

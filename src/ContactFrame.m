@@ -43,15 +43,19 @@ static void mirrorContactsForLeftHand(MGContactList list, BOOL leftHanded) {
 
 static MGContactList trackpadThumbFilteredContacts(
     MGTrackpadContactFrameBuilder *builder, const Finger *contacts,
-    int contactCount, BOOL leftHanded) {
+    int contactCount, BOOL leftHanded, MGContactFrameFilterObserver observer,
+    void *context) {
     MGContactList list = copyContacts(contacts, contactCount);
     Finger *filtered = (Finger *)list.contacts;
     if (contactCount == 0)
         builder->thumbIdentifier = -1;
 
     for (int i = 0; i < list.count; i++) {
-        if (!contactIsActive(&filtered[i]))
+        if (!contactIsActive(&filtered[i])) {
+            if (observer)
+                observer(&filtered[i], @"inactive-state", NO, context);
             filtered[i--] = filtered[--list.count];
+        }
     }
 
     int edgeCount = 0;
@@ -76,13 +80,18 @@ static MGContactList trackpadThumbFilteredContacts(
     }
     if (edgeCount == 1 && list.count > 1 &&
         fabsf(nearestInteriorX - filtered[edgeIndex].px) >=
-            kTrackpadEdgeSeparation)
+            kTrackpadEdgeSeparation) {
+        if (observer)
+            observer(&filtered[edgeIndex], @"side-edge", NO, context);
         filtered[edgeIndex] = filtered[--list.count];
+    }
 
     if (builder->thumbIdentifier != -1) {
         BOOL foundThumb = NO;
         for (int i = 0; i < list.count; i++) {
             if (filtered[i].identifier == builder->thumbIdentifier) {
+                if (observer)
+                    observer(&filtered[i], @"thumb-id", NO, context);
                 filtered[i] = filtered[--list.count];
                 foundThumb = YES;
                 break;
@@ -108,6 +117,9 @@ static MGContactList trackpadThumbFilteredContacts(
             nextLowestY - filtered[candidateIndex].py >=
                 kTrackpadThumbMinimumSeparation) {
             builder->thumbIdentifier = filtered[candidateIndex].identifier;
+            if (observer)
+                observer(&filtered[candidateIndex], @"thumb-candidate", NO,
+                         context);
             filtered[candidateIndex] = filtered[--list.count];
         }
     }
@@ -166,10 +178,18 @@ MGContactFrame MGTrackpadContactFrameCreate(MGTrackpadContactFrameBuilder *build
                                             const Finger *contacts,
                                             int contactCount,
                                             BOOL leftHanded) {
+    return MGTrackpadContactFrameCreateObserved(builder, contacts, contactCount,
+                                                leftHanded, NULL, NULL);
+}
+
+MGContactFrame MGTrackpadContactFrameCreateObserved(
+    MGTrackpadContactFrameBuilder *builder, const Finger *contacts,
+    int contactCount, BOOL leftHanded, MGContactFrameFilterObserver observer,
+    void *context) {
     MGContactFrame frame = {0};
     frame.raw = copyContacts(contacts, contactCount);
     frame.thumbFiltered = trackpadThumbFilteredContacts(
-        builder, contacts, contactCount, leftHanded);
+        builder, contacts, contactCount, leftHanded, observer, context);
     frame.fingertipScale = fingertipScaleTrackpadContacts(frame.thumbFiltered);
     return frame;
 }
