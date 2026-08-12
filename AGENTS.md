@@ -109,7 +109,8 @@ To cut a release:
 # bump APP_VERSION and APP_BUILD_NUMBER in scripts/build.sh
 ./scripts/build.sh && ./scripts/check.sh
 ./scripts/package.sh          # prints every file the update feed names
-# upload those files, appcast last, with the cache headers package.sh names
+./scripts/publish.sh          # read-only preview of R2 and the public feed
+./scripts/publish.sh --publish X.Y.Z  # after approving that preview
 git commit -am "Release X.Y.Z"
 git tag -a vX.Y.Z -m "X.Y.Z"
 git push origin main --tags
@@ -131,6 +132,8 @@ Sparkle, vendored at a pinned version under `third_party/sparkle/` with its own 
 **An empty `SPARKLE_PUBLIC_KEY` builds an app with no updater**, and the build refuses when that would produce a release. The private half lives in the Keychain with a recovery copy in 1Password, and no agent needs it. Losing both strands every installed copy: a replacement key produces a public key those copies reject. Sparkle's key rotation is the documented escape and requires Developer ID signing, which this app does not have. For the same reason `SURequireSignedFeed` and `SUVerifyUpdateBeforeExtraction` stay off until it does.
 
 **Publishing is not uploading the archive.** The feed also names deltas, and Sparkle prefers a delta when one applies, so an unpublished delta breaks the update for exactly the people it was built for. `package.sh` prints every file the feed names and refuses when one is missing. Upload those before the appcast, so the feed never names something absent, and set the cache header each wants: archives never change, the appcast changes every release. Inheriting the host default caches both for four hours, which hides a release and lets the feed and its archives disagree. After publishing, compare each archive's served length against the length the appcast names. They must match before the release is announced. An archive published under a name already used caches to the edge for a year, so replacing one needs a cache purge and not another upload, which reports success either way.
+
+`scripts/publish.sh` automates that publication without joining it to packaging. Its default mode authenticates through the repository's non-secret Infisical pointer, reads `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` from `workstation/prod/trickpad-publish`, and previews both R2 and the public URLs without writing. Those credentials are an R2 account token restricted to Object Read & Write on `thirdwind-updates`; the publisher needs no zone permission. Live mode requires `--publish VERSION`, repeats the preview, and asks for the exact version unless `--yes` follows Nathan's approval. It uploads every archive and delta before `appcast.xml`, then reads each public URL back and compares its bytes and cache header. A different file at an immutable archive URL stops publication; replacement and cache purge remain a separate recovery operation.
 
 ### What a release commits this repository to
 

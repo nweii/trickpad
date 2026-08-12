@@ -29,6 +29,15 @@ run_compiled_check() {
   (( CHECK_COUNT += 1 ))
 }
 
+run_shell_check() {
+  local name="$1"
+  local runner="$2"
+
+  [[ -z "$CHECK_FILTER" || "$CHECK_FILTER" == "$name" ]] || return 0
+  "$runner"
+  (( CHECK_COUNT += 1 ))
+}
+
 run_without_arguments() {
   "$1"
 }
@@ -102,6 +111,7 @@ run_compiled_check trace-analyzer run_trace_analyzer_check -fblocks -fobjc-excep
 run_compiled_check trackpad-interaction run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/ContactOnsetTracker.m" "$ROOT/src/GestureSequence.m" "$ROOT/src/TrackpadInteraction.m" "$ROOT/src/TrackpadInteractionCheck.m"
 run_compiled_check system-gesture run_system_gesture_check -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/SystemGestureClaims.m" "$ROOT/src/SystemGestureClaimsCheck.m"
 run_compiled_check script-runner run_without_arguments -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/ScriptRunner.m" "$ROOT/src/ScriptRunnerCheck.m"
+run_shell_check publish "$ROOT/scripts/publish-check.sh"
 
 if [[ -n "$CHECK_FILTER" ]]; then
   (( CHECK_COUNT > 0 )) || { echo "unknown CHECK_FILTER: $CHECK_FILTER" >&2; exit 1; }
