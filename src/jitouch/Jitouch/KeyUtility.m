@@ -82,16 +82,16 @@ static void languageChanged(CFNotificationCenterRef center, void *observer, CFSt
     if (alt)  flags |= kCGEventFlagMaskAlternate | NX_DEVICELALTKEYMASK;
     if (cmd)  flags |= kCGEventFlagMaskCommand | NX_DEVICELCMDKEYMASK;
 
-    [self simulateKeyCode:code ModifierFlags:flags];
+    [self simulateKeyCode:code hasKey:YES ModifierFlags:flags];
 }
 
-- (void)simulateKeyCode:(CGKeyCode)code ModifierFlags:(CGEventFlags)flags {
+- (void)simulateKeyCode:(CGKeyCode)code hasKey:(BOOL)hasKey ModifierFlags:(CGEventFlags)flags {
 
     CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
     CGKeyCode key = a[code];
     CGEventFlags physicalFlags = CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState);
     MGKeyEventStep steps[18];
-    size_t count = MGPlanKeyEventSequence(key, flags, physicalFlags, steps);
+    size_t count = MGPlanKeyEventSequence(key, hasKey, flags, physicalFlags, steps);
     CGEventRef events[18] = {NULL};
 
     // Build the full sequence before posting any part of it. A failed event

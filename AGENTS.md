@@ -15,9 +15,10 @@ Shell scripts live in `scripts/` and resolve paths from the project root, two le
 - `fixtures/` — synthetic inputs the checks replay.
 - `third_party/` — vendored dependencies kept at a pinned version.
 - `assets/` — material that ships to people rather than to the build: `assets/design/` for design working files, `assets/marketing/` for generated icon exports used by the website and the storefront. No script reads either, so moving something here means it is not part of the build.
+- `icons/` — the release and development Icon Composer documents that `build.sh` compiles into each app bundle.
 - `build/`, `run/`, and `.scratch/` are ignored by git and safe to delete. `build/` holds compiled output and packaged images, `run/` holds runtime logs and generated commands, and `.scratch/` is working space for anything that does not belong in the repository. Keep nothing in them that exists nowhere else.
 
-The repository root holds the licence files, the reference documents, the starter configuration, and the two icon sources `build.sh` reads: `Trickpad.icon` for the app icon and `Trickpad-menu-bar-icon.svg` for the menu bar mark. A file at the root is either read by the build or read by a person arriving at the repository; anything else belongs in a directory above.
+The repository root holds the licence files, the reference documents, the starter configuration, and `Trickpad-menu-bar-icon.svg`, which `build.sh` reads for the menu bar mark. A file at the root is either read by the build or read by a person arriving at the repository; anything else belongs in a directory above.
 
 ## Agent skills
 
@@ -95,7 +96,9 @@ About opens a submenu carrying the version, read from the running bundle, plus a
 
 The version lives in one place: `APP_VERSION` in `scripts/build.sh`, which becomes `CFBundleShortVersionString`. The menu bar header reads it from the running bundle, so it cannot drift from what is installed.
 
-A build made anywhere other than the clean commit tagged `v$APP_VERSION` carries a `TrickpadBuildStamp` naming its short commit hash, with a trailing `+` for uncommitted changes. About and Copy Debug Info show it as "Version X.Y.Z (abc1234)", so an unreleased build identifies itself even though the version number has not bumped yet. Release builds at the tag carry no stamp.
+Between releases, `APP_VERSION` carries the next patch number with a `-dev` suffix, set as the last step of each release. The suffix names the release train, not a promise: no `-dev` version is ever tagged, packaging refuses it because its tag cannot exist, and the release that ends the cycle sets its real number then, which the semantic-versioning read below may raise past the `-dev` guess.
+
+A build made anywhere other than the clean commit tagged `v$APP_VERSION` also carries a `TrickpadBuildStamp` naming its short commit hash, with a trailing `+` for uncommitted changes. About and Copy Debug Info show both, as "Version 0.9.2-dev (abc1234+)", so an unreleased build names its train and its exact source. Release builds at the tag carry no stamp.
 
 Semantic versioning, read against the configuration file rather than the code, because the config is the only interface anyone depends on. Before 1.0, a minor release may intentionally change that alpha interface and must carry a migration note. After 1.0:
 
@@ -106,7 +109,7 @@ Semantic versioning, read against the configuration file rather than the code, b
 To cut a release:
 
 ```bash
-# bump APP_VERSION and APP_BUILD_NUMBER in scripts/build.sh
+# set APP_VERSION to the release number (drop -dev) and bump APP_BUILD_NUMBER in scripts/build.sh
 ./scripts/build.sh && ./scripts/check.sh
 git commit -am "Release X.Y.Z"
 git tag -a vX.Y.Z -m "X.Y.Z"  # local until the package and preview verify
@@ -115,6 +118,7 @@ git tag -a vX.Y.Z -m "X.Y.Z"  # local until the package and preview verify
 ./scripts/publish.sh --publish X.Y.Z  # after approving that preview
 git push origin main --tags
 gh release create vX.Y.Z --title "X.Y.Z" --notes "..."
+# start the next train: set APP_VERSION to the next patch number plus -dev, commit
 ```
 
 GitHub releases carry the tag, changelog, and automatic source archives without a packaged binary. The DMG that `scripts/package.sh` produces is delivered through Gumroad and must not be attached to GitHub. Packaging requires the version's tag to exist at the packaged commit — a missing tag or one pointing elsewhere refuses — and verifies the styled drag-to-Applications layout, app signature, license, notices, trademark notice, and exact-source link. The tag stays local until the package and publish preview verify, so a bad package means deleting an unpushed tag rather than moving a published one.

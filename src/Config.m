@@ -294,6 +294,57 @@
     return match;
 }
 
+static NSUInteger fingerCountInGestureSlug(NSString *slug) {
+    NSDictionary *counts = @{
+        @"one": @1, @"two": @2, @"three": @3, @"four": @4, @"five": @5,
+    };
+    NSArray *words = [slug componentsSeparatedByString:@"-"];
+    for (NSUInteger i = 0; i + 1 < [words count]; i++) {
+        NSNumber *count = [counts objectForKey:[words objectAtIndex:i]];
+        if (count != nil && [[words objectAtIndex:i + 1] isEqualToString:@"finger"])
+            return [count unsignedIntegerValue];
+    }
+    return 0;
+}
+
+static NSUInteger maximumFingerCountInSlugs(NSDictionary *slugs) {
+    NSUInteger maximum = 0;
+    for (NSString *slug in slugs)
+        maximum = MAX(maximum, fingerCountInGestureSlug(slug));
+    return maximum;
+}
+
+static NSString *gestureNameProblem(NSString *key, NSString *device,
+                                    NSDictionary *slugs) {
+    BOOL mouse = [device isEqualToString:@"mouse"];
+    NSDictionary *otherSlugs = mouse
+        ? [Config trackpadGestureSlugs] : [Config mouseGestureSlugs];
+    NSString *otherName = [otherSlugs objectForKey:key] == nil
+        ? [Config canonicalSlug:key inSlugs:otherSlugs] : key;
+    NSMutableArray *reasons = [NSMutableArray array];
+    if (otherName != nil) {
+        NSString *otherDevice = mouse ? @"Trackpad" : @"Magic Mouse";
+        [reasons addObject:[NSString stringWithFormat:@"\"%@\" is a %@ gesture.",
+                            otherName, otherDevice]];
+    }
+
+    NSUInteger count = fingerCountInGestureSlug(key);
+    NSUInteger maximum = maximumFingerCountInSlugs(slugs);
+    if (count > maximum && maximum > 0) {
+        NSString *deviceName = mouse ? @"Magic Mouse" : @"Trackpad";
+        NSDictionary *countWords = @{
+            @1: @"one", @2: @"two", @3: @"three", @4: @"four", @5: @"five",
+        };
+        NSString *maximumWord = [countWords objectForKey:@(maximum)] ?: [@(maximum) stringValue];
+        [reasons addObject:[NSString stringWithFormat:
+            @"%@ gestures use up to %@ fingers.", deviceName, maximumWord]];
+    }
+
+    if ([reasons count] == 0)
+        return [NSString stringWithFormat:@"no %@ gesture named \"%@\"", device, key];
+    return [reasons componentsJoinedByString:@" "];
+}
+
 + (NSString *)canonicalGestureName:(NSString *)raw inSlugs:(NSDictionary *)slugs {
     for (NSString *slug in slugs) {
         NSArray *engineNames = [slugs objectForKey:slug];
@@ -572,8 +623,14 @@ static void recordExplicitModifierSide(NSMutableDictionary *sides,
         @"cmd": @"command", @"command": @"command",
     };
     NSString *family = [families objectForKey:name];
-    if (family != nil)
-        [sides setObject:[parts objectAtIndex:0] forKey:family];
+    if (family == nil)
+        return;
+    NSString *side = [parts objectAtIndex:0];
+    NSString *existing = [sides objectForKey:family];
+    if (existing == nil || [existing isEqualToString:side])
+        [sides setObject:side forKey:family];
+    else
+        [sides setObject:@"both" forKey:family];
 }
 
 #pragma mark - Value parsing
@@ -860,7 +917,7 @@ static NSString *resolvedSpeechText(NSString *rawText, NSString **outProblem) {
 }
 
 // Returns an engine gesture dictionary, or nil for an unrecognized value.
-// Keystrokes contain modifiers and one key. Actions are dispatched by name.
+// Keystrokes contain a key, modifiers, or both. Actions are dispatched by name.
 static NSDictionary *parseBinding(NSString *rawValue) {
     NSString *unquoted = stripQuotes([rawValue stringByTrimmingCharactersInSet:
                          [NSCharacterSet whitespaceCharacterSet]]);
@@ -928,6 +985,7 @@ static NSDictionary *parseBinding(NSString *rawValue) {
     }
 
     NSArray *tokens = nil;
+    BOOL usesPlusSeparator = [value rangeOfString:@"+"].location != NSNotFound;
     if ([keyNames() objectForKey:value] != nil) {
         // Match the full value before splitting so the hyphens in page-down and
         // forward-delete are treated as part of the key name.
@@ -945,8 +1003,11 @@ static NSDictionary *parseBinding(NSString *rawValue) {
     for (NSUInteger i = 0; i < [tokens count]; i++) {
         NSString *raw = [tokens objectAtIndex:i];
         NSString *t = [raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        if ([t length] == 0)
+        if ([t length] == 0) {
+            if (usesPlusSeparator)
+                return nil;
             continue;
+        }
         NSString *modifierToken = t;
         NSNumber *flag = [modifierNames() objectForKey:t];
         if (flag == nil && ([t isEqualToString:@"left"] || [t isEqualToString:@"right"]) &&
@@ -972,26 +1033,138 @@ static NSDictionary *parseBinding(NSString *rawValue) {
         keyToken = t;
     }
 
-    if (keyToken == nil)
+    if (keyToken == nil && flags == 0)
         return nil;
-    NSNumber *code = [keyNames() objectForKey:keyToken];
-    if (code == nil)
+    NSNumber *code = keyToken == nil ? nil : [keyNames() objectForKey:keyToken];
+    if (keyToken != nil && code == nil)
         return nil;
 
     NSMutableDictionary *binding = [NSMutableDictionary dictionaryWithDictionary:@{
         @"Gesture": @"", @"Command": rawValue, @"IsAction": @NO,
-        @"ModifierFlags": @(flags), @"KeyCode": code, @"Enable": @YES,
-        @"KeyDisplayName": keyDisplayName(keyToken),
+        @"ModifierFlags": @(flags), @"Enable": @YES, @"HasKey": @(keyToken != nil),
     }];
+    if (keyToken != nil) {
+        [binding setObject:code forKey:@"KeyCode"];
+        [binding setObject:keyDisplayName(keyToken) forKey:@"KeyDisplayName"];
+    }
     if ([explicitModifierSides count] > 0)
         [binding setObject:explicitModifierSides forKey:@"ExplicitModifierSides"];
     return binding;
 }
 
+static const NSInteger kSequenceWaitLimitMilliseconds = 3000;
+
+static NSString *bindingProblem(NSString *rawValue) {
+    NSString *unquoted = stripQuotes([rawValue stringByTrimmingCharactersInSet:
+                         [NSCharacterSet whitespaceCharacterSet]]);
+    NSString *lower = [unquoted lowercaseString];
+    if ([lower hasPrefix:@"url:"])
+        return urlBindingProblem([unquoted substringFromIndex:4]);
+    if ([lower hasPrefix:@"script:"]) {
+        NSString *problem = nil;
+        resolvedScriptPath([unquoted substringFromIndex:7], &problem);
+        return problem;
+    }
+    if ([lower hasPrefix:@"sound:"]) {
+        NSString *problem = nil;
+        resolvedSoundName([unquoted substringFromIndex:6], &problem);
+        return problem;
+    }
+    if ([lower hasPrefix:@"say:"]) {
+        NSString *problem = nil;
+        resolvedSpeechText([unquoted substringFromIndex:4], &problem);
+        return problem;
+    }
+    if ([lower hasPrefix:@"wait:"])
+        return @"wait: is available only inside a sequence array";
+    return [NSString stringWithFormat:
+            @"\"%@\" is not a key, shortcut, action, URL, script, sound, or speech", rawValue];
+}
+
+static NSDictionary *parseSequence(NSString *rawValue, NSString **outProblem) {
+    NSData *data = [rawValue dataUsingEncoding:NSUTF8StringEncoding];
+    id decoded = data == nil ? nil :
+        [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+    if (![decoded isKindOfClass:[NSArray class]]) {
+        if (outProblem != NULL)
+            *outProblem = @"a sequence must be an array of binding strings";
+        return nil;
+    }
+    NSArray *values = decoded;
+    if ([values count] == 0) {
+        if (outProblem != NULL)
+            *outProblem = @"a sequence must contain at least one element";
+        return nil;
+    }
+
+    NSMutableArray *steps = [NSMutableArray array];
+    NSInteger totalWait = 0;
+    NSCharacterSet *digits = [NSCharacterSet characterSetWithCharactersInString:@"0123456789"];
+    for (NSUInteger i = 0; i < [values count]; i++) {
+        id value = [values objectAtIndex:i];
+        if (![value isKindOfClass:[NSString class]]) {
+            if (outProblem != NULL)
+                *outProblem = [NSString stringWithFormat:
+                    @"sequence element %lu must be a binding string", (unsigned long)i + 1];
+            return nil;
+        }
+        NSString *text = value;
+        NSString *lower = [text lowercaseString];
+        if ([lower hasPrefix:@"wait:"]) {
+            NSString *milliseconds = [text substringFromIndex:5];
+            if ([milliseconds length] == 0 ||
+                [milliseconds rangeOfCharacterFromSet:[digits invertedSet]].location != NSNotFound) {
+                if (outProblem != NULL)
+                    *outProblem = [NSString stringWithFormat:
+                        @"sequence element %lu wait must be a positive whole number of milliseconds",
+                        (unsigned long)i + 1];
+                return nil;
+            }
+            long long wait = [milliseconds longLongValue];
+            if (wait <= 0) {
+                if (outProblem != NULL)
+                    *outProblem = [NSString stringWithFormat:
+                        @"sequence element %lu wait must be a positive whole number of milliseconds",
+                        (unsigned long)i + 1];
+                return nil;
+            }
+            if (wait > kSequenceWaitLimitMilliseconds - totalWait) {
+                if (outProblem != NULL)
+                    *outProblem = [NSString stringWithFormat:
+                        @"sequence waits total more than %ld ms; use script: for longer work",
+                        (long)kSequenceWaitLimitMilliseconds];
+                return nil;
+            }
+            totalWait += (NSInteger)wait;
+            [steps addObject:@{ @"WaitMilliseconds": @((NSInteger)wait) }];
+            continue;
+        }
+
+        NSDictionary *step = parseBinding(text);
+        if (step == nil || ![[step objectForKey:@"Enable"] boolValue]) {
+            NSString *problem = step == nil ? bindingProblem(text) :
+                @"off is not an action inside a sequence";
+            if (outProblem != NULL)
+                *outProblem = [NSString stringWithFormat:@"sequence element %lu: %@",
+                               (unsigned long)i + 1, problem];
+            return nil;
+        }
+        [steps addObject:step];
+    }
+
+    if (outProblem != NULL)
+        *outProblem = nil;
+    return @{ @"Gesture": @"", @"Command": @"Sequence", @"Sequence": steps,
+              @"IsAction": @YES, @"ModifierFlags": @0, @"KeyCode": @0,
+              @"Enable": @YES };
+}
+
 + (NSString *)keystrokeDisplayNameForBinding:(NSDictionary *)binding {
     NSUInteger flags = [[binding objectForKey:@"ModifierFlags"] unsignedIntegerValue];
+    BOOL hasKey = [binding objectForKey:@"HasKey"] == nil ||
+        [[binding objectForKey:@"HasKey"] boolValue];
     NSString *key = [binding objectForKey:@"KeyDisplayName"];
-    if ([key length] == 0)
+    if (hasKey && [key length] == 0)
         key = [NSString stringWithFormat:@"Key %@", [binding objectForKey:@"KeyCode"] ?: @"?"];
     NSDictionary *sides = [binding objectForKey:@"ExplicitModifierSides"];
     if ([sides count] == 0) {
@@ -1000,26 +1173,39 @@ static NSDictionary *parseBinding(NSString *rawValue) {
         if (flags & kCGEventFlagMaskAlternate) [out appendString:@"⌥"];
         if (flags & kCGEventFlagMaskShift)     [out appendString:@"⇧"];
         if (flags & kCGEventFlagMaskCommand)   [out appendString:@"⌘"];
-        [out appendString:key];
+        if (hasKey)
+            [out appendString:key];
         return out;
     }
 
     NSMutableArray *parts = [NSMutableArray array];
     NSArray *modifiers = @[
-        @[@"control", @"Control", @(kCGEventFlagMaskControl)],
-        @[@"option", @"Option", @(kCGEventFlagMaskAlternate)],
-        @[@"shift", @"Shift", @(kCGEventFlagMaskShift)],
-        @[@"command", @"Command", @(kCGEventFlagMaskCommand)],
+        @[@"control", @"Control", @(kCGEventFlagMaskControl),
+          @(NX_DEVICELCTLKEYMASK), @(NX_DEVICERCTLKEYMASK)],
+        @[@"option", @"Option", @(kCGEventFlagMaskAlternate),
+          @(NX_DEVICELALTKEYMASK), @(NX_DEVICERALTKEYMASK)],
+        @[@"shift", @"Shift", @(kCGEventFlagMaskShift),
+          @(NX_DEVICELSHIFTKEYMASK), @(NX_DEVICERSHIFTKEYMASK)],
+        @[@"command", @"Command", @(kCGEventFlagMaskCommand),
+          @(NX_DEVICELCMDKEYMASK), @(NX_DEVICERCMDKEYMASK)],
     ];
     for (NSArray *modifier in modifiers) {
         if (!(flags & [[modifier objectAtIndex:2] unsignedIntegerValue]))
             continue;
         NSString *side = [sides objectForKey:[modifier objectAtIndex:0]];
         NSString *name = [modifier objectAtIndex:1];
-        [parts addObject:side == nil ? name :
-            [NSString stringWithFormat:@"%@ %@", [side capitalizedString], name]];
+        BOOL hasBothSides = (flags & [[modifier objectAtIndex:3] unsignedIntegerValue]) &&
+            (flags & [[modifier objectAtIndex:4] unsignedIntegerValue]);
+        if (hasBothSides || [side isEqualToString:@"both"]) {
+            [parts addObject:[NSString stringWithFormat:@"Left %@", name]];
+            [parts addObject:[NSString stringWithFormat:@"Right %@", name]];
+        } else {
+            [parts addObject:side == nil ? name :
+                [NSString stringWithFormat:@"%@ %@", [side capitalizedString], name]];
+        }
     }
-    [parts addObject:key];
+    if (hasKey)
+        [parts addObject:key];
     return [parts componentsJoinedByString:@" + "];
 }
 
@@ -1062,11 +1248,16 @@ static NSArray *splitExpandedProperties(NSString *body) {
     NSUInteger start = 0;
     BOOL quoted = NO;
     BOOL escaped = NO;
+    NSUInteger arrayDepth = 0;
     for (NSUInteger i = 0; i < [body length]; i++) {
         unichar character = [body characterAtIndex:i];
         if (character == '"' && !escaped)
             quoted = !quoted;
-        if (character == ',' && !quoted) {
+        if (!quoted && character == '[')
+            arrayDepth++;
+        else if (!quoted && character == ']' && arrayDepth > 0)
+            arrayDepth--;
+        if (character == ',' && !quoted && arrayDepth == 0) {
             [properties addObject:[body substringWithRange:NSMakeRange(start, i - start)]];
             start = i + 1;
         }
@@ -1127,13 +1318,28 @@ static NSString *legacyScalar(toml_datum_t datum) {
     }
 }
 
+static NSString *legacyArray(toml_datum_t array) {
+    if (array.type != TOML_ARRAY)
+        return nil;
+    NSMutableArray *elements = [NSMutableArray array];
+    for (int i = 0; i < array.u.arr.size; i++) {
+        toml_datum_t element = array.u.arr.elem[i];
+        NSString *rendered = element.type == TOML_ARRAY
+            ? legacyArray(element) : legacyScalar(element);
+        [elements addObject:rendered ?: @"null"];
+    }
+    return [NSString stringWithFormat:@"[%@]", [elements componentsJoinedByString:@", "]];
+}
+
 static NSString *legacyInlineTable(toml_datum_t table) {
     if (table.type != TOML_TABLE || !(table.flag & TOML_FLAG_INLINED))
         return nil;
     NSMutableArray *properties = [NSMutableArray array];
     for (int i = 0; i < table.u.tab.size; i++) {
         NSString *key = [NSString stringWithUTF8String:table.u.tab.key[i]];
-        NSString *value = legacyScalar(table.u.tab.value[i]);
+        toml_datum_t datum = table.u.tab.value[i];
+        NSString *value = datum.type == TOML_ARRAY
+            ? legacyArray(datum) : legacyScalar(datum);
         if (value == nil)
             value = @"\"<unsupported TOML value>\"";
         [properties addObject:[NSString stringWithFormat:@"%@ = %@", key, value]];
@@ -1235,7 +1441,8 @@ static void appendTOMLTable(NSMutableString *output, NSInteger *currentLine,
             continue;
         NSString *key = [NSString stringWithUTF8String:table.u.tab.key[i]];
         NSString *rendered = value.type == TOML_TABLE
-            ? legacyInlineTable(value) : legacyScalar(value);
+            ? legacyInlineTable(value) : value.type == TOML_ARRAY
+                ? legacyArray(value) : legacyScalar(value);
         if ([section isEqualToString:@"GENERAL"] && application == nil) {
             NSSet *booleans = [NSSet setWithArray:@[
                 @"enable-mouse", @"enable-trackpad", @"haptic-feedback",
@@ -1537,9 +1744,11 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
                     stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
                 if ([propertyName isEqualToString:@"action"]) {
                     if ([propertyValue length] < 2 ||
-                        [propertyValue characterAtIndex:0] != '"' ||
-                        [propertyValue characterAtIndex:[propertyValue length] - 1] != '"') {
-                        report(line, @"an expanded action value must be in double quotes");
+                        !(([propertyValue characterAtIndex:0] == '"' &&
+                           [propertyValue characterAtIndex:[propertyValue length] - 1] == '"') ||
+                          ([propertyValue characterAtIndex:0] == '[' &&
+                           [propertyValue characterAtIndex:[propertyValue length] - 1] == ']'))) {
+                        report(line, @"an expanded action value must be a string or sequence array");
                         expandedInvalid = YES;
                         break;
                     }
@@ -1623,7 +1832,7 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
                 }
             }
             if (engineNames == nil) {
-                report(line, [NSString stringWithFormat:@"no %@ gesture named \"%@\"", device, key]);
+                report(line, gestureNameProblem(key, device, slugs));
                 continue;
             }
             if (expandedDefer != nil &&
@@ -1635,31 +1844,14 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
                 report(line, @"haptic is available only for trackpad bindings");
                 continue;
             }
+            NSString *bindingProblemText = nil;
             NSDictionary *binding = expanded && expandedValue == nil
                 ? @{ @"Gesture": @"", @"InheritAction": @YES,
                      @"SourceLine": @(lineNumber), @"SourceText": line }
-                : parseBinding(value);
+                : ([value hasPrefix:@"["]
+                    ? parseSequence(value, &bindingProblemText) : parseBinding(value));
             if (binding == nil) {
-                NSString *unquoted = stripQuotes(value);
-                if ([[unquoted lowercaseString] hasPrefix:@"url:"])
-                    report(line, urlBindingProblem([unquoted substringFromIndex:4]));
-                else if ([[unquoted lowercaseString] hasPrefix:@"script:"]) {
-                    NSString *problem = nil;
-                    resolvedScriptPath([unquoted substringFromIndex:7], &problem);
-                    report(line, problem);
-                }
-                else if ([[unquoted lowercaseString] hasPrefix:@"sound:"]) {
-                    NSString *problem = nil;
-                    resolvedSoundName([unquoted substringFromIndex:6], &problem);
-                    report(line, problem);
-                }
-                else if ([[unquoted lowercaseString] hasPrefix:@"say:"]) {
-                    NSString *problem = nil;
-                    resolvedSpeechText([unquoted substringFromIndex:4], &problem);
-                    report(line, problem);
-                }
-                else
-                    report(line, [NSString stringWithFormat:@"\"%@\" is not a key, shortcut, action, URL, script, sound, or speech", value]);
+                report(line, bindingProblemText ?: bindingProblem(value));
                 continue;
             }
 

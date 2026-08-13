@@ -9,6 +9,7 @@
 #import "Settings.h"
 #import "ApplicationScopeCache.h"
 #import "Config.h"
+#import "Gesture.h"
 #import <CoreFoundation/CFPreferences.h>
 #import <CoreFoundation/CoreFoundation.h>
 
@@ -209,6 +210,8 @@ static int notSynchronize;
 + (void)loadSettings2:(NSDictionary*)newSettings {
     if (!newSettings)
         return;
+
+    cancelPendingGestureSequences();
 
     if (settings != newSettings) {
         [settings release];

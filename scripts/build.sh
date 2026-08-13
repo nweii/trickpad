@@ -16,7 +16,7 @@ if [[ "${1:-}" == "--dev" ]]; then
   BUNDLE_ID="fyi.thirdwind.trickpad.dev"
 fi
 
-APP_VERSION="0.9.1"
+APP_VERSION="0.9.2-dev"
 APP_BUILD_NUMBER="18"
 MIN_MACOS_VERSION="11.0"
 ARCHITECTURES=(x86_64 arm64)
@@ -38,7 +38,7 @@ SPARKLE_FRAMEWORK="$ROOT/third_party/sparkle/Sparkle.framework"
 # with no updater rather than one that cannot verify what it downloads.
 SPARKLE_FEED_URL="https://updates.thirdwind.fyi/trickpad/9zvff4/appcast.xml"
 SPARKLE_PUBLIC_KEY="PRUR58SW8YdEJmAFlzV+LxGjQR1xS8txBGJdU8ZOeyw="
-ICON_SOURCE="$ROOT/$APP_NAME.icon"
+ICON_SOURCE="$ROOT/icons/$APP_NAME.icon"
 ICON_BUILD_SOURCE="$BUILD_ROOT/$APP_NAME.icon"
 ICON_INFO="$BUILD_ROOT/TrickpadIconInfo.plist"
 
@@ -208,6 +208,7 @@ clang \
   "$SRC_ROOT/MultitouchDeviceLifecycle.m" \
   "$ROOT/src/ContactOnsetTracker.m" \
   "$ROOT/src/ScriptRunner.m" \
+  "$ROOT/src/SequenceDispatcher.m" \
   "$ROOT/src/SystemGestureClaims.m" \
   "$ROOT/src/TraceRecorder.m" \
   "$ROOT/src/TraceSessionModel.m" \

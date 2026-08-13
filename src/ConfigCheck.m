@@ -174,6 +174,23 @@ static void expectKeyDisplay(NSString *label, NSString *value, NSString *display
         fail(label, display, actual ?: @"none");
 }
 
+static void expectModifierChord(NSString *label, NSString *value, NSUInteger flags,
+                                NSString *display) {
+    NSString *conf = [NSString stringWithFormat:@"[mouse]\nhold-right-tap-left = %@\n", value];
+    NSDictionary *g = bindingFor(parse(conf), @"MagicMouseCommands", @"Middle-Fix Index-Near-Tap");
+    if (g == nil) {
+        fail(label, @"a binding", @"none");
+        return;
+    }
+    if ([[g objectForKey:@"ModifierFlags"] unsignedIntegerValue] != flags)
+        fail([label stringByAppendingString:@" flags"], @(flags), [g objectForKey:@"ModifierFlags"]);
+    if ([[g objectForKey:@"HasKey"] boolValue])
+        fail([label stringByAppendingString:@" regular key"], @NO, @YES);
+    NSString *actual = [Config keystrokeDisplayNameForBinding:g];
+    if (![actual isEqualToString:display])
+        fail([label stringByAppendingString:@" display"], display, actual ?: @"none");
+}
+
 static NSArray *directDispatchLines(NSString *source) {
     NSMutableArray *lines = [NSMutableArray array];
     NSCharacterSet *whitespace = [NSCharacterSet whitespaceCharacterSet];
@@ -264,6 +281,82 @@ int main(void) {
             ![[tomlAppBinding objectForKey:@"Defer"] boolValue])
             fail(@"TOML application table and inline options",
                  @"a deferred URL binding", tomlAppBinding ?: @"missing");
+
+        tomlSettings = parseRawTOML(
+            @"[MOUSE]\n"
+             @"two-finger-click = [\"ctrl+space\", \"wait:120\", \"escape\"]\n",
+            &tomlProblems);
+        NSDictionary *sequenceBinding = bindingFor(
+            tomlSettings, @"MagicMouseCommands", @"Two-Finger Click");
+        NSArray *sequence = [sequenceBinding objectForKey:@"Sequence"];
+        if ([tomlProblems count] != 0 || [sequence count] != 3 ||
+            [[[sequence objectAtIndex:0] objectForKey:@"KeyCode"] intValue] != 49 ||
+            ![[[sequence objectAtIndex:1] objectForKey:@"WaitMilliseconds"] isEqual:@120] ||
+            [[[sequence objectAtIndex:2] objectForKey:@"KeyCode"] intValue] != 53)
+            fail(@"TOML array binding preserves parsed steps in order",
+                 @"Control-Space, 120 ms, Escape", sequenceBinding ?: tomlProblems);
+
+        tomlSettings = parseRawTOML(
+            @"[TRACKPAD]\n"
+             @"three-finger-tap = { action = [\"mission-control\", \"url:things:///show\"], haptic = false }\n"
+             @"[TRACKPAD.\"Final Cut Pro\"]\n"
+             @"three-finger-tap = [\"sound:Glass\", \"say:done\"]\n",
+            &tomlProblems);
+        sequenceBinding = bindingFor(
+            tomlSettings, @"TrackpadCommands", @"Three-Finger Tap");
+        sequence = [sequenceBinding objectForKey:@"Sequence"];
+        NSDictionary *scopedSequenceBinding = bindingForApplication(
+            tomlSettings, @"TrackpadCommands", @"Final Cut Pro", @"Three-Finger Tap");
+        NSArray *scopedSequence = [scopedSequenceBinding objectForKey:@"Sequence"];
+        if ([tomlProblems count] != 0 || [sequence count] != 2 ||
+            ![[[sequence objectAtIndex:0] objectForKey:@"Command"] isEqualToString:@"Mission Control"] ||
+            ![[[sequence objectAtIndex:1] objectForKey:@"OpenURL"] isEqualToString:@"things:///show"] ||
+            [sequenceBinding objectForKey:@"HapticFeedback"] == nil ||
+            [[sequenceBinding objectForKey:@"HapticFeedback"] boolValue] ||
+            ![[[scopedSequence objectAtIndex:0] objectForKey:@"PlaySound"] isEqualToString:@"Glass"] ||
+            ![[[scopedSequence objectAtIndex:1] objectForKey:@"SpeakText"] isEqualToString:@"done"])
+            fail(@"expanded and application-scoped sequences reuse value forms",
+                 @"action, URL, sound, and speech steps", tomlSettings ?: tomlProblems);
+
+        NSDictionary *invalidSequences = @{
+            @"[\"wait:0\", \"escape\"]": @"element 1",
+            @"[\"wait:1.5\", \"escape\"]": @"whole number",
+            @"[\"wait:2000\", \"wait:1001\", \"escape\"]": @"3000 ms",
+            @"[\"escape\", \"not-a-key\"]": @"element 2",
+            @"[\"off\", \"escape\"]": @"off is not an action",
+            @"[]": @"at least one element",
+            @"[\"escape\", 12]": @"element 2 must be a binding string",
+        };
+        for (NSString *value in invalidSequences) {
+            NSArray *problems = nil;
+            NSString *configuration = [NSString stringWithFormat:
+                @"[MOUSE]\ntwo-finger-click = %@\none-finger-tap = \"return\"\n", value];
+            NSDictionary *parsed = parseRawTOML(configuration, &problems);
+            NSDictionary *valid = bindingFor(parsed, @"MagicMouseCommands", @"One-Finger Tap");
+            NSString *reported = [problems count] > 0 ? [problems objectAtIndex:0] : @"";
+            if (bindingFor(parsed, @"MagicMouseCommands", @"Two-Finger Click") != nil ||
+                valid == nil || [reported rangeOfString:[invalidSequences objectForKey:value]].location == NSNotFound)
+                fail([@"invalid sequence is reported and skipped: " stringByAppendingString:value],
+                     [invalidSequences objectForKey:value], reported);
+        }
+
+        tomlSettings = parseRawTOML(
+            @"[MOUSE]\n"
+             @"two-finger-click = [\"wait:1000\", \"wait:2000\", \"escape\"]\n",
+            &tomlProblems);
+        if ([tomlProblems count] != 0 ||
+            bindingFor(tomlSettings, @"MagicMouseCommands", @"Two-Finger Click") == nil)
+            fail(@"sequence accepts waits totaling the cap", @"a binding", tomlProblems);
+
+        NSArray *standaloneWaitProblems = nil;
+        tomlSettings = parseRawTOML(
+            @"[MOUSE]\ntwo-finger-click = \"wait:100\"\n", &standaloneWaitProblems);
+        NSString *standaloneWaitProblem = [standaloneWaitProblems count] > 0
+            ? [standaloneWaitProblems objectAtIndex:0] : @"";
+        if (bindingFor(tomlSettings, @"MagicMouseCommands", @"Two-Finger Click") != nil ||
+            [standaloneWaitProblem rangeOfString:@"only inside a sequence array"].location == NSNotFound)
+            fail(@"wait outside an array is reported and skipped",
+                 @"sequence-only diagnostic", standaloneWaitProblem);
 
         ConfigResult *sourceResult = parseResult(
             @"[MOUSE]\n"
@@ -377,6 +470,15 @@ int main(void) {
                          @"Right Control + Space");
         expectKeyDisplay(@"mixed modifier side display", @"left-shift+right-command+4",
                          @"Left Shift + Right Command + 4");
+        expectModifierChord(@"both Command keys", @"left-cmd+right-cmd",
+                            kCGEventFlagMaskCommand | NX_DEVICELCMDKEYMASK |
+                            NX_DEVICERCMDKEYMASK,
+                            @"Left Command + Right Command");
+        expectModifierChord(@"default left and explicit right Command keys",
+                            @"cmd+right-cmd",
+                            kCGEventFlagMaskCommand | NX_DEVICELCMDKEYMASK |
+                            NX_DEVICERCMDKEYMASK,
+                            @"Left Command + Right Command");
 
         NSDictionary *punctuation = @{
             @"[": @33, @"]": @30, @"-": @27, @"=": @24, @";": @41,
@@ -888,6 +990,31 @@ int main(void) {
             fail(@"expanded binding accepts a script action", scriptPath,
                  [g objectForKey:@"ScriptPath"] ?: @"missing");
 
+        NSArray *sequenceScriptProblems = nil;
+        s = parseRawTOML([NSString stringWithFormat:
+            @"[TRACKPAD]\nthree-finger-click = [\"script:%@\", \"url:https://example.com?q={{clipboard|urlencode}}\"]\n",
+            scriptPath], &sequenceScriptProblems);
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Click");
+        NSArray *scriptSequence = [g objectForKey:@"Sequence"];
+        if ([sequenceScriptProblems count] != 0 ||
+            ![[[scriptSequence objectAtIndex:0] objectForKey:@"ScriptPath"] isEqualToString:scriptPath] ||
+            ![[[scriptSequence objectAtIndex:1] objectForKey:@"OpenURL"]
+                isEqualToString:@"https://example.com?q={{clipboard|urlencode}}"])
+            fail(@"sequence validates scripts and preserves unresolved URL substitutions",
+                 @"validated script and configured URL", g ?: sequenceScriptProblems);
+
+        NSArray *badSequenceScriptProblems = nil;
+        s = parseRawTOML(
+            @"[TRACKPAD]\nthree-finger-click = [\"escape\", \"script:relative-script\"]\n",
+            &badSequenceScriptProblems);
+        NSString *badSequenceScriptProblem = [badSequenceScriptProblems count] > 0
+            ? [badSequenceScriptProblems objectAtIndex:0] : @"";
+        if (bindingFor(s, @"TrackpadCommands", @"Three-Finger Click") != nil ||
+            [badSequenceScriptProblem rangeOfString:@"sequence element 2"].location == NSNotFound ||
+            [badSequenceScriptProblem rangeOfString:@"absolute path"].location == NSNotFound)
+            fail(@"invalid sequence script names its element at reload",
+                 @"element 2 and absolute path", badSequenceScriptProblem);
+
         NSArray *scriptProblems = nil;
         s = parseWithProblems(@"[trackpad]\nthree-finger-tap = script: relative-script\n", &scriptProblems);
         if (bindingFor(s, @"TrackpadCommands", @"Three-Finger Tap") != nil)
@@ -1055,6 +1182,27 @@ int main(void) {
         s = parse(@"[mouse]\nnot-a-gesture = return\nhold-right-tap-left = return\n");
         if (bindingFor(s, @"MagicMouseCommands", @"Middle-Fix Index-Near-Tap") == nil)
             fail(@"unknown gesture does not abort the file", @"later binding present", @"missing");
+        NSDictionary *gestureProblems = @{
+            @"[mouse]\nfour-finger-click = return\n":
+                @"\"four-finger-click\" is a Trackpad gesture. Magic Mouse gestures use up to three fingers.",
+            @"[mouse]\nclick-four-finger = return\n":
+                @"\"four-finger-click\" is a Trackpad gesture. Magic Mouse gestures use up to three fingers.",
+            @"[trackpad]\nfront-right-tap = return\n":
+                @"\"front-right-tap\" is a Magic Mouse gesture.",
+            @"[mouse]\nfive-finger-clack = return\n":
+                @"Magic Mouse gestures use up to three fingers.",
+            @"[mouse]\nthree-finger-clack = return\n":
+                @"no mouse gesture named \"three-finger-clack\"",
+        };
+        for (NSString *conf in gestureProblems) {
+            NSArray *problems = nil;
+            parseWithProblems(conf, &problems);
+            NSString *reported = [problems count] > 0 ? [problems objectAtIndex:0] : @"";
+            NSString *expected = [gestureProblems objectForKey:conf];
+            if ([reported rangeOfString:expected].location == NSNotFound)
+                fail([@"unknown gesture explains device support: " stringByAppendingString:conf],
+                     expected, reported);
+        }
         s = parse(@"[mouse]\nhold-right-tap-left = not-a-key\n");
         if (bindingFor(s, @"MagicMouseCommands", @"Middle-Fix Index-Near-Tap") != nil)
             fail(@"unknown key is skipped", @"nothing", @"a binding");
@@ -1171,6 +1319,23 @@ int main(void) {
         // Every slug must appear in the canonical gesture reference. The
         // installed agent guide points there instead of duplicating the list.
         NSArray *args = [[NSProcessInfo processInfo] arguments];
+        for (NSUInteger i = 2; i < MIN([args count], 4); i++) {
+            NSString *doc = [NSString stringWithContentsOfFile:args[i]
+                                                        encoding:NSUTF8StringEncoding
+                                                           error:NULL];
+            if (doc == nil)
+                continue;
+            if ([doc rangeOfString:@"wait:MS"].location == NSNotFound ||
+                [doc rangeOfString:@"[\""].location == NSNotFound)
+                fail([NSString stringWithFormat:@"%@ documents sequence arrays and wait:MS",
+                      [args[i] lastPathComponent]], @"array syntax and wait:MS", @"missing");
+            if ([doc rangeOfString:@"left-cmd+right-cmd"].location == NSNotFound)
+                fail([NSString stringWithFormat:@"%@ documents modifier-only chords",
+                      [args[i] lastPathComponent]], @"left-cmd+right-cmd", @"missing");
+            if ([doc rangeOfString:@"Magic Mouse gestures use up to three fingers"].location == NSNotFound)
+                fail([NSString stringWithFormat:@"%@ documents the Magic Mouse finger limit",
+                      [args[i] lastPathComponent]], @"Magic Mouse finger limit", @"missing");
+        }
         NSUInteger documentationEnd = MIN([args count], 4);
         for (NSUInteger i = 3; i < documentationEnd; i++) {
             NSString *doc = [NSString stringWithContentsOfFile:args[i] encoding:NSUTF8StringEncoding error:NULL];
@@ -1293,6 +1458,9 @@ int main(void) {
             if ([engine rangeOfString:@"ModifierFlags:modifierFlags"].location == NSNotFound)
                 fail(@"configured shortcuts preserve modifier sides",
                      @"ModifierFlags:modifierFlags", @"missing");
+            if ([engine rangeOfString:@"hasKey:hasKey"].location == NSNotFound)
+                fail(@"configured modifier-only chords omit a regular key",
+                     @"hasKey:hasKey", @"missing");
             for (NSString *required in @[
                 @"MGTrackpadInteractionObserveBoundScrollFamily",
                 @"MGGestureSequenceObserveBoundScrollFamily",

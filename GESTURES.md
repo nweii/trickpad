@@ -8,6 +8,15 @@ The words of a gesture name can come in any order, so `swipe-up-three-finger` lo
 
 Gestures that hold one finger still are named by where the fingers sit, not by which finger does what. `hold-left-tap-right` means hold a finger and tap to its right, which on a right hand is the index finger holding and the middle finger tapping. Either hand works, and either finger can play either part.
 
+## Supported finger counts
+
+| Device | Taps | Physical clicks | Swipes |
+|---|---:|---:|---:|
+| Magic Mouse | 1–3 | 2–3 | 1–3 |
+| Magic Trackpad | 2–5 | 3–4 | 3–4 |
+
+Magic Mouse gestures use up to three fingers. Trackpad taps use up to five fingers, while its physical clicks and swipes use up to four. Reload Settings reports and skips a gesture outside these ranges.
+
 ## Magic Mouse
 
 | Write this | Hand motion |
@@ -189,11 +198,33 @@ Triple taps are not available.
 
 ## What a gesture can send
 
-A keystroke, a built-in action, a URL, or an executable script.
+A keystroke, a built-in action, a URL, an executable script, a sound, speech, or a sequence of these values.
+
+### Sequences
+
+Use a TOML array to run several binding values in order:
+
+    three-finger-tap = ["ctrl+space", "p"]
+    four-finger-tap = ["cmd+shift+p", "wait:150", "escape"]
+
+Each element uses the same validation as a standalone keystroke, action, URL, script, sound, or speech binding. Trickpad reports the element number and skips the binding when one element is invalid.
+
+Use `wait:MS` to pause before the next element. `MS` is a positive whole number of milliseconds. The waits in one sequence may total up to 3000 ms. Use a `script:` binding for longer work. A standalone `wait:` value is invalid.
+
+Trickpad adds a short gap between consecutive keystrokes so an application can process a prefix before the next key. Sequence dispatch does not block gesture recognition. Reloading settings or turning Trickpad off drops any steps that have not started.
+
+URL substitutions resolve when their element runs. Script paths are checked when settings reload, as they are for standalone bindings.
+
+An expanded binding accepts an array for `action`, so the normal `defer`, `haptic`, `sound`, and `say` options still apply once to the gesture:
+
+    three-finger-tap = {
+      action = ["cmd+shift+p", "wait:150", "escape"],
+      haptic = false
+    }
 
 ### Keystrokes
 
-Modifiers, then one key. These four are the same binding:
+Write a key alone, modifiers plus one key, or modifier keys without a regular key. These four are the same binding:
 
     "cmd+shift+a"
     "command-shift-a"
@@ -208,6 +239,8 @@ Modifiers, then one key. These four are the same binding:
 | Shift | `shift` `⇧` |
 
 Modifiers default to the left-side key. Prefix a written name with `left-` or `right-` when an application distinguishes the two sides, such as `right-control+space`. The prefix works with every written alias, including `right-ctrl`, `right-cmd`, and `right-alt`. Modifier symbols use the default left side.
+
+A modifier-only binding presses and releases the named modifier keys. For example, `left-cmd+right-cmd` sends the two Command keys together.
 
 Keys: any letter or digit, plus `return` `escape` `tab` `space` `delete` `forward-delete` `up` `down` `left` `right` `home` `end` `page-up` `page-down` and `f1` through `f12`. Punctuation keys: `[` `]` `-` `=` `;` `'` `,` `.` `/` `\` and backtick (`` ` ``).
 
@@ -297,7 +330,6 @@ App updates and localizations can change menu titles. Update the App Shortcut if
 | `trackpad-edge-gesture-depth` | Fraction of the trackpad an edge band reaches in from its edge, above 0 and below 0.5; corners span twice this; default `0.06` |
 | `haptic-feedback` | `true` requests confirmation for configured trackpad gestures, default `true` |
 | `menu-bar-icon` | `trickpad`, or `sf:` followed by a name from [SF Symbols](https://developer.apple.com/sf-symbols/); default `trickpad` |
-| `experimental-mouse-click-gestures` | Has no effect; accepted so existing files that set it keep loading |
 | `verbose-logging` | `true` logs every gesture and keystroke to Console |
 
 Booleans are `true` or `false`, following TOML.
