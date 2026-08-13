@@ -16,6 +16,12 @@ Three files sit in this folder, and each answers a different question:
 
 Read `config.toml` first, and `AGENTS.local.md` if it exists. An edit to `config.toml` takes effect when Trickpad reloads its settings, not when the file is saved. Do not write preference notes into `config.toml` or this file unless the user asks; anything worth keeping between sessions belongs in `AGENTS.local.md`, and offering to maintain it alongside `config.toml` is part of the job.
 
+Before proposing or editing a gesture, action, binding value, or setting, read the public configuration reference:
+
+https://thirdwind.fyi/trickpad/docs.md
+
+It lists the supported names, syntax, options, and device limits. The online reference describes the latest release. If a feature may be newer than the installed app, confirm the installed Trickpad version before using it.
+
 Bring whatever you already know about this user to the work.
 
 ## Help choose a gesture
@@ -35,19 +41,13 @@ If the user wants ideas, find a few concrete options that fit their workflow:
 - Use an application-specific binding when a gesture makes sense in one app or would conflict elsewhere.
 - `sound:NAME` (a system sound such as `sound:Glass`) and `say:WORDS` play or speak and do nothing else. They are ordinary binding values, useful for whatever the user wants them for; checking that a gesture fires at all is the obvious one. Speech can name the gesture, so several such bindings stay distinguishable by ear.
 - To confirm a gesture that still does its real work, you could add `sound` or `say` as a binding option: `{ action = "cmd+shift+4", sound = "Glass" }`. A Magic Mouse has no haptic feedback, so this is the only way to feel or hear one of its gestures fire.
-- A TOML array runs binding values in order: `["ctrl+space", "p"]`. An element can be a keystroke, action, URL, script, sound, or speech binding. `wait:MS` pauses before the next element, and all waits in one sequence can total up to 3000 ms. Use `script:` for longer work. An expanded binding can put the array in `action` beside its normal options. Reloading settings or turning Trickpad off drops steps that have not started.
-- A keystroke can contain only modifier keys when an app assigns a command that way. For example, `left-cmd+right-cmd` presses both Command keys together and then releases them.
-- Magic Mouse gestures use up to three fingers. Trackpad taps use up to five fingers, while its physical clicks and swipes use up to four. Do not propose a gesture outside these ranges.
+- A TOML array runs binding values in order: `["ctrl+space", "p"]`. An element can be a keystroke, action, URL, script, sound, or speech binding. `wait:MS` pauses before the next element, and all waits in one sequence can total up to 3000 ms. Use `script:` for longer work. An expanded binding can put the array in `action` beside its normal options. A second sequence waits for the first to finish. Reloading settings or turning Trickpad off drops queued sequences and steps that have not started.
 
-**The words of a gesture name can come in any order** (`swipe-up-three-finger` loads as `three-finger-swipe-up`); the menu and reports show the canonical name.
+Use a bare swipe when its action does not depend on direction. Use `defer = true` when a single tap and its matching double tap both have bindings.
 
-**A bare swipe name binds every direction of its finger count.** `three-finger-swipe = "escape"` fires on a three-finger swipe in any direction; `one-finger-swipe` and `two-finger-swipe` cover the Magic Mouse's left and right. A directional name (`three-finger-swipe-left`) is more specific and wins for its own direction, so the two forms combine: bind the family once and override one direction. `"off"` on either name in an application table excludes one direction or the whole family there. Prefer the bare name when the action does not care about direction.
+Area clicks replace the native click inside their bound regions. Prefer a few separated edges or corners that the user does not click during ordinary pointing. An area click needs one contact, so tell the user to lift resting fingers and the palm. Check whether macOS assigns secondary click to a proposed bottom corner.
 
-**A `<count>-finger-double-tap` name fires on two taps of that finger count inside the Mac's double-click interval.** The Magic Mouse has `one-finger-double-tap`, `two-finger-double-tap`, and `three-finger-double-tap`; the trackpad has `two-finger-double-tap` through `five-finger-double-tap`. Bound on its own, a double tap adds no delay to anything. To bind a single tap and its own double tap together, set `defer = true` on the single tap so it waits out the interval; without that, both bindings fire on the second tap. Triple taps do not exist.
-
-**Area clicks put actions on named regions of the trackpad surface.** A one-finger physical click in a bound region runs the action instead of the native click; a click anywhere else stays native. The regions are whole edges (`left-edge-click`, `right-edge-click`, `top-edge-click`, `bottom-edge-click`), edge halves (`left-edge-top-half-click`, `left-edge-bottom-half-click`, `right-edge-top-half-click`, `right-edge-bottom-half-click`, `top-edge-left-half-click`, `top-edge-right-half-click`, `bottom-edge-left-half-click`, `bottom-edge-right-half-click`), edge thirds (`left-edge-top-third-click`, `left-edge-middle-third-click`, `left-edge-bottom-third-click`, `right-edge-top-third-click`, `right-edge-middle-third-click`, `right-edge-bottom-third-click`, `top-edge-left-third-click`, `top-edge-middle-third-click`, `top-edge-right-third-click`, `bottom-edge-left-third-click`, `bottom-edge-middle-third-click`, `bottom-edge-right-third-click`), and corners (`top-left-corner-click`, `top-right-corner-click`, `bottom-left-corner-click`, `bottom-right-corner-click`). `corner-click` binds all four corners at once and `edge-click` binds a click anywhere in any edge band; a named region overrides the bare form for its own spot. When bound regions overlap, the most specific bound region wins: a named corner beats `corner-click`, either beats an edge region, a third beats a half beats the whole edge, and `edge-click` comes last. Because a bound region replaces the native click there, prefer edges and corners the user does not click during ordinary pointing, and note that macOS's own bottom-corner secondary click (System Settings > Trackpad) claims those corners when it is enabled. `trackpad-edge-gesture-depth` under `[GENERAL]` sets how far a region reaches in from its edge (a fraction of the surface, default `0.06`, corners twice that); widen it only if the user reports missed clicks, since a deeper band catches more ordinary pointing. An area click fires only when the clicking finger is the only contact, so a resting palm blocks it by design — tell the user to lift the hand for the click, and steer them toward a few well-separated regions rather than a dense layout, which demands conscious aim near every boundary.
-
-Some useful app commands appear in the menu bar without their own shortcut. Recommend a macOS App Shortcut when appropriate. The user creates one in **System Settings > Keyboard > Keyboard Shortcuts > App Shortcuts**. It targets an existing menu command in one app or all apps. Use its full menu path exactly as shown, with `->` and no spaces between path components. Titles are case-sensitive, and an ellipsis is three periods (`...`), not `…`. Verify it in the target app before binding a Trickpad gesture to it. Do not automate System Settings for this. Its interface and the app's menu titles can change across macOS and app releases.
+Some useful app commands have no shortcut. Recommend a macOS App Shortcut when appropriate, and verify it in the target app before binding it. Do not automate System Settings for this because its interface and menu titles can change.
 
 Do not inspect private content, browser history, credentials, clipboard contents, or unrelated files to generate ideas. Ask before reading another local file or creating a script.
 
@@ -136,11 +136,3 @@ binding: "ctrl+cmd+a"
 Include the binding lines that bear on the problem. Configuration and logs carry private content: a script path naming a client, a URL binding holding a token, an application name they would not want quoted. Read what you are about to include, tell them what is in it, and ask before including anything personal. Attach logs only if they ask.
 
 When they want something Trickpad does not do, build it out of what exists first. A keystroke, an app deep link, a macOS App Shortcut, or a small script covers many wants that sound like features, and a working binding today beats a request answered someday. If nothing reaches it, say so and mention support@thirdwind.fyi.
-
-## Reference
-
-Read the full configuration reference before proposing gesture, action, or setting names:
-
-https://thirdwind.fyi/trickpad/docs.md
-
-The online reference describes the latest release. If a setting may be new, confirm the installed Trickpad version before using it.

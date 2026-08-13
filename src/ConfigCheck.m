@@ -1329,10 +1329,12 @@ int main(void) {
                 [doc rangeOfString:@"[\""].location == NSNotFound)
                 fail([NSString stringWithFormat:@"%@ documents sequence arrays and wait:MS",
                       [args[i] lastPathComponent]], @"array syntax and wait:MS", @"missing");
-            if ([doc rangeOfString:@"left-cmd+right-cmd"].location == NSNotFound)
+            if ([[args[i] lastPathComponent] isEqualToString:@"GESTURES.md"] &&
+                [doc rangeOfString:@"left-cmd+right-cmd"].location == NSNotFound)
                 fail([NSString stringWithFormat:@"%@ documents modifier-only chords",
                       [args[i] lastPathComponent]], @"left-cmd+right-cmd", @"missing");
-            if ([doc rangeOfString:@"Magic Mouse gestures use up to three fingers"].location == NSNotFound)
+            if ([[args[i] lastPathComponent] isEqualToString:@"GESTURES.md"] &&
+                [doc rangeOfString:@"Magic Mouse gestures use up to three fingers"].location == NSNotFound)
                 fail([NSString stringWithFormat:@"%@ documents the Magic Mouse finger limit",
                       [args[i] lastPathComponent]], @"Magic Mouse finger limit", @"missing");
         }

@@ -12,6 +12,23 @@
 
 # Changelog
 
+## 0.10.0
+
+Released 2026-08-13.
+
+### Added
+
+- Add sequence bindings that run a list of steps in order. Each step accepts a keystroke, action, URL, script, sound, or speech. Support `wait:MS` steps that pause the sequence. Limit total waits to three seconds per sequence. Require a `script:` binding for longer work.
+- Add modifier-only keystroke bindings, such as `left-cmd+right-cmd`, for commands that use modifier keys without a regular key.
+
+### Changed
+
+- Reorganize internal device connection and configuration code to simplify maintenance. The maintenance work does not change existing gesture recognition.
+
+### Fixed
+
+- Make Reload Settings identify gesture names that belong to the other device and explain the Magic Mouse three-finger limit.
+
 ## 0.9.1
 
 Released 2026-08-11.

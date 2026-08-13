@@ -10,12 +10,12 @@ Gestures that hold one finger still are named by where the fingers sit, not by w
 
 ## Supported finger counts
 
-| Device | Taps | Physical clicks | Swipes |
+| Device | Taps | Multi-finger clicks | Swipes |
 |---|---:|---:|---:|
 | Magic Mouse | 1–3 | 2–3 | 1–3 |
 | Magic Trackpad | 2–5 | 3–4 | 3–4 |
 
-Magic Mouse gestures use up to three fingers. Trackpad taps use up to five fingers, while its physical clicks and swipes use up to four. Reload Settings reports and skips a gesture outside these ranges.
+Magic Mouse gestures use up to three fingers. Trackpad taps use up to five fingers, while its multi-finger clicks and swipes use up to four. Trackpad area clicks use one finger.
 
 ## Magic Mouse
 
@@ -209,9 +209,9 @@ Use a TOML array to run several binding values in order:
 
 Each element uses the same validation as a standalone keystroke, action, URL, script, sound, or speech binding. Trickpad reports the element number and skips the binding when one element is invalid.
 
-Use `wait:MS` to pause before the next element. `MS` is a positive whole number of milliseconds. The waits in one sequence may total up to 3000 ms. Use a `script:` binding for longer work. A standalone `wait:` value is invalid.
+Use `wait:MS` to pause before the next element. `MS` is a positive whole number of milliseconds. The waits in one sequence can total up to 3000 ms. Use a `script:` binding for longer work. A standalone `wait:` value is invalid.
 
-Trickpad adds a short gap between consecutive keystrokes so an application can process a prefix before the next key. Sequence dispatch does not block gesture recognition. Reloading settings or turning Trickpad off drops any steps that have not started.
+Trickpad adds a short gap between consecutive keystrokes so an application can process a prefix before the next key. If another sequence starts while one runs, Trickpad queues it. Each sequence finishes before the next begins. Reloading settings or turning Trickpad off drops queued sequences and steps that have not started.
 
 URL substitutions resolve when their element runs. Script paths are checked when settings reload, as they are for standalone bindings.
 
