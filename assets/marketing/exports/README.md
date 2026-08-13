@@ -1,6 +1,6 @@
 # Trickpad icon exports
 
-These PNGs are flattened marketing renders generated directly from `Trickpad.icon` with Icon Composer's macOS 27 renderer. Each file is rendered at its stated size rather than downscaled from a larger PNG. All exports are 16-bit RGBA with an embedded Display P3 profile.
+These PNGs are flattened marketing renders generated directly from `icons/Trickpad.icon` with Icon Composer's macOS 27 renderer. Each file is rendered at its stated size rather than downscaled from a larger PNG. All exports are 16-bit RGBA with an embedded Display P3 profile.
 
 ## macOS
 

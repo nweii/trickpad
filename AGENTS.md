@@ -15,9 +15,10 @@ Shell scripts live in `scripts/` and resolve paths from the project root, two le
 - `fixtures/` — synthetic inputs the checks replay.
 - `third_party/` — vendored dependencies kept at a pinned version.
 - `assets/` — material that ships to people rather than to the build: `assets/design/` for design working files, `assets/marketing/` for generated icon exports used by the website and the storefront. No script reads either, so moving something here means it is not part of the build.
+- `icons/` — the release and development Icon Composer documents that `build.sh` compiles into each app bundle.
 - `build/`, `run/`, and `.scratch/` are ignored by git and safe to delete. `build/` holds compiled output and packaged images, `run/` holds runtime logs and generated commands, and `.scratch/` is working space for anything that does not belong in the repository. Keep nothing in them that exists nowhere else.
 
-The repository root holds the licence files, the reference documents, the starter configuration, and the two icon sources `build.sh` reads: `Trickpad.icon` for the app icon and `Trickpad-menu-bar-icon.svg` for the menu bar mark. A file at the root is either read by the build or read by a person arriving at the repository; anything else belongs in a directory above.
+The repository root holds the licence files, the reference documents, the starter configuration, and `Trickpad-menu-bar-icon.svg`, which `build.sh` reads for the menu bar mark. A file at the root is either read by the build or read by a person arriving at the repository; anything else belongs in a directory above.
 
 ## Agent skills
 

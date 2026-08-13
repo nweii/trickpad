@@ -38,7 +38,7 @@ SPARKLE_FRAMEWORK="$ROOT/third_party/sparkle/Sparkle.framework"
 # with no updater rather than one that cannot verify what it downloads.
 SPARKLE_FEED_URL="https://updates.thirdwind.fyi/trickpad/9zvff4/appcast.xml"
 SPARKLE_PUBLIC_KEY="PRUR58SW8YdEJmAFlzV+LxGjQR1xS8txBGJdU8ZOeyw="
-ICON_SOURCE="$ROOT/$APP_NAME.icon"
+ICON_SOURCE="$ROOT/icons/$APP_NAME.icon"
 ICON_BUILD_SOURCE="$BUILD_ROOT/$APP_NAME.icon"
 ICON_INFO="$BUILD_ROOT/TrickpadIconInfo.plist"
 
