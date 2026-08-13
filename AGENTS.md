@@ -121,7 +121,7 @@ gh release create vX.Y.Z --title "X.Y.Z" --notes "..."
 # start the next train: set APP_VERSION to the next patch number plus -dev, commit
 ```
 
-GitHub releases carry the tag, changelog, and automatic source archives without a packaged binary. The DMG that `scripts/package.sh` produces is delivered through Gumroad and must not be attached to GitHub. Packaging requires the version's tag to exist at the packaged commit — a missing tag or one pointing elsewhere refuses — and verifies the styled drag-to-Applications layout, app signature, license, notices, trademark notice, and exact-source link. The tag stays local until the package and publish preview verify, so a bad package means deleting an unpushed tag rather than moving a published one.
+GitHub releases carry the tag, changelog, and automatic source archives without a packaged binary. The DMG that `scripts/package.sh` produces is delivered through Polar and must not be attached to GitHub. Packaging requires the version's tag to exist at the packaged commit — a missing tag or one pointing elsewhere refuses — and verifies the styled drag-to-Applications layout, app signature, license, notices, trademark notice, and exact-source link. The tag stays local until the package and publish preview verify, so a bad package means deleting an unpushed tag rather than moving a published one.
 
 The release title is the bare version. The repository name sits above it on every page that shows a release, so repeating it adds nothing.
 

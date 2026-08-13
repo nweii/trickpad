@@ -21,7 +21,7 @@ Trickpad requires macOS 11 or later and supports Intel and Apple silicon Macs. T
 
 ### Official download
 
-Official packaged builds are delivered with a purchase through Gumroad. Open the downloaded disk image and drag Trickpad to Applications.
+Official packaged builds are delivered with a purchase through Polar. Open the downloaded disk image and drag Trickpad to Applications.
 
 The official build is ad-hoc signed and not notarized by Apple, so macOS shows a verification warning the first time you open it. Only follow these steps for Trickpad downloaded through your official purchase. Choose **Done**, not **Move to Trash**. Then open System Settings > Privacy & Security and scroll down to the **Security** section. Find the message that Trickpad was blocked, choose **Open Anyway**, authenticate, and confirm that you want to open it.
 
