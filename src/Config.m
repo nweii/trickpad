@@ -988,6 +988,113 @@ static NSDictionary *parseBinding(NSString *rawValue) {
     return binding;
 }
 
+static const NSInteger kSequenceWaitLimitMilliseconds = 3000;
+
+static NSString *bindingProblem(NSString *rawValue) {
+    NSString *unquoted = stripQuotes([rawValue stringByTrimmingCharactersInSet:
+                         [NSCharacterSet whitespaceCharacterSet]]);
+    NSString *lower = [unquoted lowercaseString];
+    if ([lower hasPrefix:@"url:"])
+        return urlBindingProblem([unquoted substringFromIndex:4]);
+    if ([lower hasPrefix:@"script:"]) {
+        NSString *problem = nil;
+        resolvedScriptPath([unquoted substringFromIndex:7], &problem);
+        return problem;
+    }
+    if ([lower hasPrefix:@"sound:"]) {
+        NSString *problem = nil;
+        resolvedSoundName([unquoted substringFromIndex:6], &problem);
+        return problem;
+    }
+    if ([lower hasPrefix:@"say:"]) {
+        NSString *problem = nil;
+        resolvedSpeechText([unquoted substringFromIndex:4], &problem);
+        return problem;
+    }
+    if ([lower hasPrefix:@"wait:"])
+        return @"wait: is available only inside a sequence array";
+    return [NSString stringWithFormat:
+            @"\"%@\" is not a key, shortcut, action, URL, script, sound, or speech", rawValue];
+}
+
+static NSDictionary *parseSequence(NSString *rawValue, NSString **outProblem) {
+    NSData *data = [rawValue dataUsingEncoding:NSUTF8StringEncoding];
+    id decoded = data == nil ? nil :
+        [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+    if (![decoded isKindOfClass:[NSArray class]]) {
+        if (outProblem != NULL)
+            *outProblem = @"a sequence must be an array of binding strings";
+        return nil;
+    }
+    NSArray *values = decoded;
+    if ([values count] == 0) {
+        if (outProblem != NULL)
+            *outProblem = @"a sequence must contain at least one element";
+        return nil;
+    }
+
+    NSMutableArray *steps = [NSMutableArray array];
+    NSInteger totalWait = 0;
+    NSCharacterSet *digits = [NSCharacterSet characterSetWithCharactersInString:@"0123456789"];
+    for (NSUInteger i = 0; i < [values count]; i++) {
+        id value = [values objectAtIndex:i];
+        if (![value isKindOfClass:[NSString class]]) {
+            if (outProblem != NULL)
+                *outProblem = [NSString stringWithFormat:
+                    @"sequence element %lu must be a binding string", (unsigned long)i + 1];
+            return nil;
+        }
+        NSString *text = value;
+        NSString *lower = [text lowercaseString];
+        if ([lower hasPrefix:@"wait:"]) {
+            NSString *milliseconds = [text substringFromIndex:5];
+            if ([milliseconds length] == 0 ||
+                [milliseconds rangeOfCharacterFromSet:[digits invertedSet]].location != NSNotFound) {
+                if (outProblem != NULL)
+                    *outProblem = [NSString stringWithFormat:
+                        @"sequence element %lu wait must be a positive whole number of milliseconds",
+                        (unsigned long)i + 1];
+                return nil;
+            }
+            long long wait = [milliseconds longLongValue];
+            if (wait <= 0) {
+                if (outProblem != NULL)
+                    *outProblem = [NSString stringWithFormat:
+                        @"sequence element %lu wait must be a positive whole number of milliseconds",
+                        (unsigned long)i + 1];
+                return nil;
+            }
+            if (wait > kSequenceWaitLimitMilliseconds - totalWait) {
+                if (outProblem != NULL)
+                    *outProblem = [NSString stringWithFormat:
+                        @"sequence waits total more than %ld ms; use script: for longer work",
+                        (long)kSequenceWaitLimitMilliseconds];
+                return nil;
+            }
+            totalWait += (NSInteger)wait;
+            [steps addObject:@{ @"WaitMilliseconds": @((NSInteger)wait) }];
+            continue;
+        }
+
+        NSDictionary *step = parseBinding(text);
+        if (step == nil || ![[step objectForKey:@"Enable"] boolValue]) {
+            NSString *problem = step == nil ? bindingProblem(text) :
+                @"off is not an action inside a sequence";
+            if (outProblem != NULL)
+                *outProblem = [NSString stringWithFormat:@"sequence element %lu: %@",
+                               (unsigned long)i + 1, problem];
+            return nil;
+        }
+        [steps addObject:step];
+    }
+
+    if (outProblem != NULL)
+        *outProblem = nil;
+    return @{ @"Gesture": @"", @"Command": @"Sequence", @"Sequence": steps,
+              @"IsAction": @YES, @"ModifierFlags": @0, @"KeyCode": @0,
+              @"Enable": @YES };
+}
+
 + (NSString *)keystrokeDisplayNameForBinding:(NSDictionary *)binding {
     NSUInteger flags = [[binding objectForKey:@"ModifierFlags"] unsignedIntegerValue];
     NSString *key = [binding objectForKey:@"KeyDisplayName"];
@@ -1062,11 +1169,16 @@ static NSArray *splitExpandedProperties(NSString *body) {
     NSUInteger start = 0;
     BOOL quoted = NO;
     BOOL escaped = NO;
+    NSUInteger arrayDepth = 0;
     for (NSUInteger i = 0; i < [body length]; i++) {
         unichar character = [body characterAtIndex:i];
         if (character == '"' && !escaped)
             quoted = !quoted;
-        if (character == ',' && !quoted) {
+        if (!quoted && character == '[')
+            arrayDepth++;
+        else if (!quoted && character == ']' && arrayDepth > 0)
+            arrayDepth--;
+        if (character == ',' && !quoted && arrayDepth == 0) {
             [properties addObject:[body substringWithRange:NSMakeRange(start, i - start)]];
             start = i + 1;
         }
@@ -1127,13 +1239,28 @@ static NSString *legacyScalar(toml_datum_t datum) {
     }
 }
 
+static NSString *legacyArray(toml_datum_t array) {
+    if (array.type != TOML_ARRAY)
+        return nil;
+    NSMutableArray *elements = [NSMutableArray array];
+    for (int i = 0; i < array.u.arr.size; i++) {
+        toml_datum_t element = array.u.arr.elem[i];
+        NSString *rendered = element.type == TOML_ARRAY
+            ? legacyArray(element) : legacyScalar(element);
+        [elements addObject:rendered ?: @"null"];
+    }
+    return [NSString stringWithFormat:@"[%@]", [elements componentsJoinedByString:@", "]];
+}
+
 static NSString *legacyInlineTable(toml_datum_t table) {
     if (table.type != TOML_TABLE || !(table.flag & TOML_FLAG_INLINED))
         return nil;
     NSMutableArray *properties = [NSMutableArray array];
     for (int i = 0; i < table.u.tab.size; i++) {
         NSString *key = [NSString stringWithUTF8String:table.u.tab.key[i]];
-        NSString *value = legacyScalar(table.u.tab.value[i]);
+        toml_datum_t datum = table.u.tab.value[i];
+        NSString *value = datum.type == TOML_ARRAY
+            ? legacyArray(datum) : legacyScalar(datum);
         if (value == nil)
             value = @"\"<unsupported TOML value>\"";
         [properties addObject:[NSString stringWithFormat:@"%@ = %@", key, value]];
@@ -1235,7 +1362,8 @@ static void appendTOMLTable(NSMutableString *output, NSInteger *currentLine,
             continue;
         NSString *key = [NSString stringWithUTF8String:table.u.tab.key[i]];
         NSString *rendered = value.type == TOML_TABLE
-            ? legacyInlineTable(value) : legacyScalar(value);
+            ? legacyInlineTable(value) : value.type == TOML_ARRAY
+                ? legacyArray(value) : legacyScalar(value);
         if ([section isEqualToString:@"GENERAL"] && application == nil) {
             NSSet *booleans = [NSSet setWithArray:@[
                 @"enable-mouse", @"enable-trackpad", @"haptic-feedback",
@@ -1537,9 +1665,11 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
                     stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
                 if ([propertyName isEqualToString:@"action"]) {
                     if ([propertyValue length] < 2 ||
-                        [propertyValue characterAtIndex:0] != '"' ||
-                        [propertyValue characterAtIndex:[propertyValue length] - 1] != '"') {
-                        report(line, @"an expanded action value must be in double quotes");
+                        !(([propertyValue characterAtIndex:0] == '"' &&
+                           [propertyValue characterAtIndex:[propertyValue length] - 1] == '"') ||
+                          ([propertyValue characterAtIndex:0] == '[' &&
+                           [propertyValue characterAtIndex:[propertyValue length] - 1] == ']'))) {
+                        report(line, @"an expanded action value must be a string or sequence array");
                         expandedInvalid = YES;
                         break;
                     }
@@ -1635,31 +1765,14 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
                 report(line, @"haptic is available only for trackpad bindings");
                 continue;
             }
+            NSString *bindingProblemText = nil;
             NSDictionary *binding = expanded && expandedValue == nil
                 ? @{ @"Gesture": @"", @"InheritAction": @YES,
                      @"SourceLine": @(lineNumber), @"SourceText": line }
-                : parseBinding(value);
+                : ([value hasPrefix:@"["]
+                    ? parseSequence(value, &bindingProblemText) : parseBinding(value));
             if (binding == nil) {
-                NSString *unquoted = stripQuotes(value);
-                if ([[unquoted lowercaseString] hasPrefix:@"url:"])
-                    report(line, urlBindingProblem([unquoted substringFromIndex:4]));
-                else if ([[unquoted lowercaseString] hasPrefix:@"script:"]) {
-                    NSString *problem = nil;
-                    resolvedScriptPath([unquoted substringFromIndex:7], &problem);
-                    report(line, problem);
-                }
-                else if ([[unquoted lowercaseString] hasPrefix:@"sound:"]) {
-                    NSString *problem = nil;
-                    resolvedSoundName([unquoted substringFromIndex:6], &problem);
-                    report(line, problem);
-                }
-                else if ([[unquoted lowercaseString] hasPrefix:@"say:"]) {
-                    NSString *problem = nil;
-                    resolvedSpeechText([unquoted substringFromIndex:4], &problem);
-                    report(line, problem);
-                }
-                else
-                    report(line, [NSString stringWithFormat:@"\"%@\" is not a key, shortcut, action, URL, script, sound, or speech", value]);
+                report(line, bindingProblemText ?: bindingProblem(value));
                 continue;
             }
 

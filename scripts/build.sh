@@ -208,6 +208,7 @@ clang \
   "$SRC_ROOT/MultitouchDeviceLifecycle.m" \
   "$ROOT/src/ContactOnsetTracker.m" \
   "$ROOT/src/ScriptRunner.m" \
+  "$ROOT/src/SequenceDispatcher.m" \
   "$ROOT/src/SystemGestureClaims.m" \
   "$ROOT/src/TraceRecorder.m" \
   "$ROOT/src/TraceSessionModel.m" \

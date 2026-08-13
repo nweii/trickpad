@@ -189,7 +189,29 @@ Triple taps are not available.
 
 ## What a gesture can send
 
-A keystroke, a built-in action, a URL, or an executable script.
+A keystroke, a built-in action, a URL, an executable script, a sound, speech, or a sequence of these values.
+
+### Sequences
+
+Use a TOML array to run several binding values in order:
+
+    three-finger-tap = ["ctrl+space", "p"]
+    four-finger-tap = ["cmd+shift+p", "wait:150", "escape"]
+
+Each element uses the same validation as a standalone keystroke, action, URL, script, sound, or speech binding. Trickpad reports the element number and skips the binding when one element is invalid.
+
+Use `wait:MS` to pause before the next element. `MS` is a positive whole number of milliseconds. The waits in one sequence may total up to 3000 ms. Use a `script:` binding for longer work. A standalone `wait:` value is invalid.
+
+Trickpad adds a short gap between consecutive keystrokes so an application can process a prefix before the next key. Sequence dispatch does not block gesture recognition. Reloading settings or turning Trickpad off drops any steps that have not started.
+
+URL substitutions resolve when their element runs. Script paths are checked when settings reload, as they are for standalone bindings.
+
+An expanded binding accepts an array for `action`, so the normal `defer`, `haptic`, `sound`, and `say` options still apply once to the gesture:
+
+    three-finger-tap = {
+      action = ["cmd+shift+p", "wait:150", "escape"],
+      haptic = false
+    }
 
 ### Keystrokes
 

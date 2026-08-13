@@ -265,6 +265,82 @@ int main(void) {
             fail(@"TOML application table and inline options",
                  @"a deferred URL binding", tomlAppBinding ?: @"missing");
 
+        tomlSettings = parseRawTOML(
+            @"[MOUSE]\n"
+             @"two-finger-click = [\"ctrl+space\", \"wait:120\", \"escape\"]\n",
+            &tomlProblems);
+        NSDictionary *sequenceBinding = bindingFor(
+            tomlSettings, @"MagicMouseCommands", @"Two-Finger Click");
+        NSArray *sequence = [sequenceBinding objectForKey:@"Sequence"];
+        if ([tomlProblems count] != 0 || [sequence count] != 3 ||
+            [[[sequence objectAtIndex:0] objectForKey:@"KeyCode"] intValue] != 49 ||
+            ![[[sequence objectAtIndex:1] objectForKey:@"WaitMilliseconds"] isEqual:@120] ||
+            [[[sequence objectAtIndex:2] objectForKey:@"KeyCode"] intValue] != 53)
+            fail(@"TOML array binding preserves parsed steps in order",
+                 @"Control-Space, 120 ms, Escape", sequenceBinding ?: tomlProblems);
+
+        tomlSettings = parseRawTOML(
+            @"[TRACKPAD]\n"
+             @"three-finger-tap = { action = [\"mission-control\", \"url:things:///show\"], haptic = false }\n"
+             @"[TRACKPAD.\"Final Cut Pro\"]\n"
+             @"three-finger-tap = [\"sound:Glass\", \"say:done\"]\n",
+            &tomlProblems);
+        sequenceBinding = bindingFor(
+            tomlSettings, @"TrackpadCommands", @"Three-Finger Tap");
+        sequence = [sequenceBinding objectForKey:@"Sequence"];
+        NSDictionary *scopedSequenceBinding = bindingForApplication(
+            tomlSettings, @"TrackpadCommands", @"Final Cut Pro", @"Three-Finger Tap");
+        NSArray *scopedSequence = [scopedSequenceBinding objectForKey:@"Sequence"];
+        if ([tomlProblems count] != 0 || [sequence count] != 2 ||
+            ![[[sequence objectAtIndex:0] objectForKey:@"Command"] isEqualToString:@"Mission Control"] ||
+            ![[[sequence objectAtIndex:1] objectForKey:@"OpenURL"] isEqualToString:@"things:///show"] ||
+            [sequenceBinding objectForKey:@"HapticFeedback"] == nil ||
+            [[sequenceBinding objectForKey:@"HapticFeedback"] boolValue] ||
+            ![[[scopedSequence objectAtIndex:0] objectForKey:@"PlaySound"] isEqualToString:@"Glass"] ||
+            ![[[scopedSequence objectAtIndex:1] objectForKey:@"SpeakText"] isEqualToString:@"done"])
+            fail(@"expanded and application-scoped sequences reuse value forms",
+                 @"action, URL, sound, and speech steps", tomlSettings ?: tomlProblems);
+
+        NSDictionary *invalidSequences = @{
+            @"[\"wait:0\", \"escape\"]": @"element 1",
+            @"[\"wait:1.5\", \"escape\"]": @"whole number",
+            @"[\"wait:2000\", \"wait:1001\", \"escape\"]": @"3000 ms",
+            @"[\"escape\", \"not-a-key\"]": @"element 2",
+            @"[\"off\", \"escape\"]": @"off is not an action",
+            @"[]": @"at least one element",
+            @"[\"escape\", 12]": @"element 2 must be a binding string",
+        };
+        for (NSString *value in invalidSequences) {
+            NSArray *problems = nil;
+            NSString *configuration = [NSString stringWithFormat:
+                @"[MOUSE]\ntwo-finger-click = %@\none-finger-tap = \"return\"\n", value];
+            NSDictionary *parsed = parseRawTOML(configuration, &problems);
+            NSDictionary *valid = bindingFor(parsed, @"MagicMouseCommands", @"One-Finger Tap");
+            NSString *reported = [problems count] > 0 ? [problems objectAtIndex:0] : @"";
+            if (bindingFor(parsed, @"MagicMouseCommands", @"Two-Finger Click") != nil ||
+                valid == nil || [reported rangeOfString:[invalidSequences objectForKey:value]].location == NSNotFound)
+                fail([@"invalid sequence is reported and skipped: " stringByAppendingString:value],
+                     [invalidSequences objectForKey:value], reported);
+        }
+
+        tomlSettings = parseRawTOML(
+            @"[MOUSE]\n"
+             @"two-finger-click = [\"wait:1000\", \"wait:2000\", \"escape\"]\n",
+            &tomlProblems);
+        if ([tomlProblems count] != 0 ||
+            bindingFor(tomlSettings, @"MagicMouseCommands", @"Two-Finger Click") == nil)
+            fail(@"sequence accepts waits totaling the cap", @"a binding", tomlProblems);
+
+        NSArray *standaloneWaitProblems = nil;
+        tomlSettings = parseRawTOML(
+            @"[MOUSE]\ntwo-finger-click = \"wait:100\"\n", &standaloneWaitProblems);
+        NSString *standaloneWaitProblem = [standaloneWaitProblems count] > 0
+            ? [standaloneWaitProblems objectAtIndex:0] : @"";
+        if (bindingFor(tomlSettings, @"MagicMouseCommands", @"Two-Finger Click") != nil ||
+            [standaloneWaitProblem rangeOfString:@"only inside a sequence array"].location == NSNotFound)
+            fail(@"wait outside an array is reported and skipped",
+                 @"sequence-only diagnostic", standaloneWaitProblem);
+
         ConfigResult *sourceResult = parseResult(
             @"[MOUSE]\n"
              @"two-finger-click = \"escape\" # close the overlay\n"
@@ -888,6 +964,31 @@ int main(void) {
             fail(@"expanded binding accepts a script action", scriptPath,
                  [g objectForKey:@"ScriptPath"] ?: @"missing");
 
+        NSArray *sequenceScriptProblems = nil;
+        s = parseRawTOML([NSString stringWithFormat:
+            @"[TRACKPAD]\nthree-finger-click = [\"script:%@\", \"url:https://example.com?q={{clipboard|urlencode}}\"]\n",
+            scriptPath], &sequenceScriptProblems);
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Click");
+        NSArray *scriptSequence = [g objectForKey:@"Sequence"];
+        if ([sequenceScriptProblems count] != 0 ||
+            ![[[scriptSequence objectAtIndex:0] objectForKey:@"ScriptPath"] isEqualToString:scriptPath] ||
+            ![[[scriptSequence objectAtIndex:1] objectForKey:@"OpenURL"]
+                isEqualToString:@"https://example.com?q={{clipboard|urlencode}}"])
+            fail(@"sequence validates scripts and preserves unresolved URL substitutions",
+                 @"validated script and configured URL", g ?: sequenceScriptProblems);
+
+        NSArray *badSequenceScriptProblems = nil;
+        s = parseRawTOML(
+            @"[TRACKPAD]\nthree-finger-click = [\"escape\", \"script:relative-script\"]\n",
+            &badSequenceScriptProblems);
+        NSString *badSequenceScriptProblem = [badSequenceScriptProblems count] > 0
+            ? [badSequenceScriptProblems objectAtIndex:0] : @"";
+        if (bindingFor(s, @"TrackpadCommands", @"Three-Finger Click") != nil ||
+            [badSequenceScriptProblem rangeOfString:@"sequence element 2"].location == NSNotFound ||
+            [badSequenceScriptProblem rangeOfString:@"absolute path"].location == NSNotFound)
+            fail(@"invalid sequence script names its element at reload",
+                 @"element 2 and absolute path", badSequenceScriptProblem);
+
         NSArray *scriptProblems = nil;
         s = parseWithProblems(@"[trackpad]\nthree-finger-tap = script: relative-script\n", &scriptProblems);
         if (bindingFor(s, @"TrackpadCommands", @"Three-Finger Tap") != nil)
@@ -1171,6 +1272,15 @@ int main(void) {
         // Every slug must appear in the canonical gesture reference. The
         // installed agent guide points there instead of duplicating the list.
         NSArray *args = [[NSProcessInfo processInfo] arguments];
+        for (NSUInteger i = 2; i < MIN([args count], 4); i++) {
+            NSString *doc = [NSString stringWithContentsOfFile:args[i]
+                                                        encoding:NSUTF8StringEncoding
+                                                           error:NULL];
+            if ([doc rangeOfString:@"wait:MS"].location == NSNotFound ||
+                [doc rangeOfString:@"[\""].location == NSNotFound)
+                fail([NSString stringWithFormat:@"%@ documents sequence arrays and wait:MS",
+                      [args[i] lastPathComponent]], @"array syntax and wait:MS", @"missing");
+        }
         NSUInteger documentationEnd = MIN([args count], 4);
         for (NSUInteger i = 3; i < documentationEnd; i++) {
             NSString *doc = [NSString stringWithContentsOfFile:args[i] encoding:NSUTF8StringEncoding error:NULL];

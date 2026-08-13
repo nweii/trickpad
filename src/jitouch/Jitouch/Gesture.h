@@ -20,3 +20,4 @@
 @end
 
 void turnOffGestures(void);
+void cancelPendingGestureSequences(void);

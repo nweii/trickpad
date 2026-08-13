@@ -32,6 +32,7 @@
 #import "MultitouchDeviceLifecycle.h"
 #import "ContactOnsetTracker.h"
 #import "ScriptRunner.h"
+#import "SequenceDispatcher.h"
 #import "TraceRecorder.h"
 #import "TrackpadInteraction.h"
 
@@ -303,6 +304,8 @@ static BOOL magicMousePointIsRightFrontTapRegion(float x, float y) {
     return x >= kMagicMouseRightFrontTapKeepMinX && y >= kMagicMouseRightFrontTapKeepMinY;
 }
 
+static MGSequenceDispatcher *sequenceDispatcher(void);
+
 static double lenSqrF(const Finger *data, int a, int b) {
     return lenSqr(data[a].px, data[a].py, data[b].px, data[b].py);
 }
@@ -349,6 +352,7 @@ static void turnOffCharacters() {
 }
 
 void turnOffGestures() {
+    cancelPendingGestureSequences();
     turnOffTrackpad();
     turnOffMagicMouse();
     turnOffCharacters();
@@ -982,6 +986,23 @@ static MGDeferredGestureDispatcher *deferredGestureDispatcher(void) {
     return dispatcher;
 }
 
+static MGSequenceDispatcher *sequenceDispatcher(void) {
+    static MGSequenceDispatcher *dispatcher = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        dispatcher = [[MGSequenceDispatcher alloc] initWithScheduler:
+            ^(NSTimeInterval delay, dispatch_block_t block) {
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
+                               dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), block);
+            }];
+    });
+    return dispatcher;
+}
+
+void cancelPendingGestureSequences(void) {
+    [sequenceDispatcher() cancelAll];
+}
+
 // One shared instance per sound name, restarted when a gesture fires during
 // its own tail, so a repeat is always audible.
 static void playSystemSound(NSString *name) {
@@ -1121,6 +1142,7 @@ static void dispatchCommand(NSString *gesture, int device) {
         NSString *scope = [(binding != nil ? matchedApplication : doubleApplication)
                            isEqualToString:@"All Applications"] ? @"global" : @"application";
         NSString *kind = ![[traced objectForKey:@"Enable"] boolValue] ? @"off" :
+            [traced objectForKey:@"Sequence"] != nil ? @"sequence" :
             [traced objectForKey:@"ScriptPath"] != nil ? @"script" :
             [traced objectForKey:@"OpenURL"] != nil ? @"url" :
             [traced objectForKey:@"PlaySound"] != nil ? @"sound" :
@@ -1352,7 +1374,13 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
             NSString *command = [commandDict objectForKey:@"Command"];
             if (logLevel >= LOG_LEVEL_DEBUG) NSLog(@"Command \"%@\" for application \"%@\"", command, application);
 
-            if ([command isEqualToString:@"-"]) {
+            NSArray *sequence = [commandDict objectForKey:@"Sequence"];
+            if (sequence != nil) {
+                [sequenceDispatcher() dispatchSequence:sequence
+                                            stepHandler:^(NSDictionary *step) {
+                    doCommand(gesture, device, step, matchedApplication);
+                }];
+            } else if ([command isEqualToString:@"-"]) {
 
             } else if ([command isEqualToString:@"Next Tab"]) {
                 [keyUtil simulateKey:@"Tab" ShftDown:NO CtrlDown:YES AltDown:NO CmdDown:NO];
@@ -5059,6 +5087,7 @@ int eventTapTries = 0;
 
 - (void)reload {
     if (logLevel >= LOG_LEVEL_INFO) NSLog(@"Reloading gestures.");
+    cancelPendingGestureSequences();
     turnOffMagicMouse();
     turnOffTrackpad();
     [multitouchDevices rebuild];

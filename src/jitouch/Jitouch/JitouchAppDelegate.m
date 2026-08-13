@@ -285,6 +285,16 @@ static NSString *loginShellPath(void) {
 static NSString *describeBinding(NSDictionary *g) {
     if (![[g objectForKey:@"Enable"] boolValue])
         return @"Off";
+    NSArray *sequence = [g objectForKey:@"Sequence"];
+    if (sequence != nil) {
+        NSUInteger actions = 0;
+        for (NSDictionary *step in sequence) {
+            if ([step objectForKey:@"WaitMilliseconds"] == nil)
+                actions++;
+        }
+        return [NSString stringWithFormat:@"Run sequence (%lu action%@)",
+                (unsigned long)actions, actions == 1 ? @"" : @"s"];
+    }
     NSString *script = [g objectForKey:@"ScriptPath"];
     if ([script length] > 0)
         return [@"Run " stringByAppendingString:[script lastPathComponent]];

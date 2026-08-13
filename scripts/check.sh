@@ -97,6 +97,7 @@ run_system_gesture_check() {
 run_compiled_check config run_config_check "${OBJC_FLAGS[@]}" -I"$ROOT/third_party/tomlc17" -framework Foundation -framework ApplicationServices -framework Carbon "$ROOT/src/Config.m" "$ROOT/src/ConfigCheck.m" "$ROOT/src/SystemGestureClaims.m" "$ROOT/third_party/tomlc17/tomlc17.c"
 run_compiled_check key-event run_without_arguments "${OBJC_FLAGS[@]}" -framework ApplicationServices "$ROOT/src/KeyEventSequence.m" "$ROOT/src/KeyEventSequenceCheck.m"
 run_compiled_check deferred-gesture run_without_arguments -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/DeferredGestureDispatcher.m" "$ROOT/src/DeferredGestureDispatcherCheck.m"
+run_compiled_check sequence-dispatcher run_without_arguments -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/SequenceDispatcher.m" "$ROOT/src/SequenceDispatcherCheck.m"
 run_compiled_check contact-tap run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/ContactTapRecognizer.m" "$ROOT/src/ContactTapRecognizerCheck.m"
 run_compiled_check application-scope run_without_arguments "${OBJC_FLAGS[@]}" -framework Cocoa "$ROOT/src/ApplicationScopeCache.m" "$ROOT/src/ApplicationScopeCacheCheck.m"
 run_compiled_check multitouch-lifecycle run_without_arguments "${OBJC_FLAGS[@]}" -I"$ROOT/src/jitouch/Jitouch" -framework Foundation -framework IOKit -F"$SDKROOT/System/Library/PrivateFrameworks" -framework MultitouchSupport "$ROOT/src/jitouch/Jitouch/MultitouchDeviceLifecycle.m" "$ROOT/src/MultitouchDeviceLifecycleCheck.m"
@@ -320,6 +321,15 @@ source_has 'MGApplicationScopeCacheInvalidate();' "$ROOT/src/jitouch/Jitouch/Set
   gesture_fail "a configuration reload no longer drops the cached application candidates"
 source_has 'MGApplicationScopeCacheObserveApplicationActivation();' "$APP_SRC" ||
   gesture_fail "the app no longer drops the cached application candidates when another application activates"
+
+source_has 'dispatchSequence:sequence' "$GESTURE_SRC" ||
+  gesture_fail "sequence bindings do not dispatch through SequenceDispatcher"
+source_has 'Run sequence (%lu action%@)' "$APP_SRC" ||
+  gesture_fail "Current Gestures does not summarize sequence bindings"
+source_section_has 'cancelPendingGestureSequences();' "$ROOT/src/jitouch/Jitouch/Settings.m" '/+ (void)loadSettings2:/,/^}/' ||
+  gesture_fail "a configuration reload does not cancel pending sequence steps"
+source_section_has 'cancelPendingGestureSequences();' "$GESTURE_SRC" '/^void turnOffGestures()/,/^}/' ||
+  gesture_fail "turning gestures off does not cancel pending sequence steps"
 
 source_has 'NSWorkspaceDidWakeNotification' "$APP_SRC" || wake_fail "the app does not observe wake notifications"
 source_has '\[self reload\]' "$APP_SRC" || wake_fail "the wake handler does not reload gesture devices"
