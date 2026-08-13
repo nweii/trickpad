@@ -215,7 +215,7 @@ An expanded binding accepts an array for `action`, so the normal `defer`, `hapti
 
 ### Keystrokes
 
-Modifiers, then one key. These four are the same binding:
+Write a key alone, modifiers plus one key, or modifier keys without a regular key. These four are the same binding:
 
     "cmd+shift+a"
     "command-shift-a"
@@ -230,6 +230,8 @@ Modifiers, then one key. These four are the same binding:
 | Shift | `shift` `⇧` |
 
 Modifiers default to the left-side key. Prefix a written name with `left-` or `right-` when an application distinguishes the two sides, such as `right-control+space`. The prefix works with every written alias, including `right-ctrl`, `right-cmd`, and `right-alt`. Modifier symbols use the default left side.
+
+A modifier-only binding presses and releases the named modifier keys. For example, `left-cmd+right-cmd` sends the two Command keys together.
 
 Keys: any letter or digit, plus `return` `escape` `tab` `space` `delete` `forward-delete` `up` `down` `left` `right` `home` `end` `page-up` `page-down` and `f1` through `f12`. Punctuation keys: `[` `]` `-` `=` `;` `'` `,` `.` `/` `\` and backtick (`` ` ``).
 

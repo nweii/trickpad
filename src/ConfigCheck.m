@@ -174,6 +174,23 @@ static void expectKeyDisplay(NSString *label, NSString *value, NSString *display
         fail(label, display, actual ?: @"none");
 }
 
+static void expectModifierChord(NSString *label, NSString *value, NSUInteger flags,
+                                NSString *display) {
+    NSString *conf = [NSString stringWithFormat:@"[mouse]\nhold-right-tap-left = %@\n", value];
+    NSDictionary *g = bindingFor(parse(conf), @"MagicMouseCommands", @"Middle-Fix Index-Near-Tap");
+    if (g == nil) {
+        fail(label, @"a binding", @"none");
+        return;
+    }
+    if ([[g objectForKey:@"ModifierFlags"] unsignedIntegerValue] != flags)
+        fail([label stringByAppendingString:@" flags"], @(flags), [g objectForKey:@"ModifierFlags"]);
+    if ([[g objectForKey:@"HasKey"] boolValue])
+        fail([label stringByAppendingString:@" regular key"], @NO, @YES);
+    NSString *actual = [Config keystrokeDisplayNameForBinding:g];
+    if (![actual isEqualToString:display])
+        fail([label stringByAppendingString:@" display"], display, actual ?: @"none");
+}
+
 static NSArray *directDispatchLines(NSString *source) {
     NSMutableArray *lines = [NSMutableArray array];
     NSCharacterSet *whitespace = [NSCharacterSet whitespaceCharacterSet];
@@ -453,6 +470,15 @@ int main(void) {
                          @"Right Control + Space");
         expectKeyDisplay(@"mixed modifier side display", @"left-shift+right-command+4",
                          @"Left Shift + Right Command + 4");
+        expectModifierChord(@"both Command keys", @"left-cmd+right-cmd",
+                            kCGEventFlagMaskCommand | NX_DEVICELCMDKEYMASK |
+                            NX_DEVICERCMDKEYMASK,
+                            @"Left Command + Right Command");
+        expectModifierChord(@"default left and explicit right Command keys",
+                            @"cmd+right-cmd",
+                            kCGEventFlagMaskCommand | NX_DEVICELCMDKEYMASK |
+                            NX_DEVICERCMDKEYMASK,
+                            @"Left Command + Right Command");
 
         NSDictionary *punctuation = @{
             @"[": @33, @"]": @30, @"-": @27, @"=": @24, @";": @41,
@@ -1282,6 +1308,9 @@ int main(void) {
                 [doc rangeOfString:@"[\""].location == NSNotFound)
                 fail([NSString stringWithFormat:@"%@ documents sequence arrays and wait:MS",
                       [args[i] lastPathComponent]], @"array syntax and wait:MS", @"missing");
+            if ([doc rangeOfString:@"left-cmd+right-cmd"].location == NSNotFound)
+                fail([NSString stringWithFormat:@"%@ documents modifier-only chords",
+                      [args[i] lastPathComponent]], @"left-cmd+right-cmd", @"missing");
         }
         NSUInteger documentationEnd = MIN([args count], 4);
         for (NSUInteger i = 3; i < documentationEnd; i++) {
@@ -1405,6 +1434,9 @@ int main(void) {
             if ([engine rangeOfString:@"ModifierFlags:modifierFlags"].location == NSNotFound)
                 fail(@"configured shortcuts preserve modifier sides",
                      @"ModifierFlags:modifierFlags", @"missing");
+            if ([engine rangeOfString:@"hasKey:hasKey"].location == NSNotFound)
+                fail(@"configured modifier-only chords omit a regular key",
+                     @"hasKey:hasKey", @"missing");
             for (NSString *required in @[
                 @"MGTrackpadInteractionObserveBoundScrollFamily",
                 @"MGGestureSequenceObserveBoundScrollFamily",

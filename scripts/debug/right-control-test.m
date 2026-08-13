@@ -7,7 +7,7 @@
 int main(void) {
     CGEventFlags flags = kCGEventFlagMaskControl | NX_DEVICERCTLKEYMASK;
     MGKeyEventStep steps[18];
-    size_t count = MGPlanKeyEventSequence(49, flags, 0, steps);
+    size_t count = MGPlanKeyEventSequence(49, true, flags, 0, steps);
     CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
     if (source == NULL)
         return 1;

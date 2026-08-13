@@ -1689,14 +1689,13 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                 tmpRef = activateWindowAtPosition(x, y);
 
             NSUInteger modifierFlags = [[commandDict objectForKey:@"ModifierFlags"] unsignedIntegerValue];
-            if (logLevel >= LOG_LEVEL_DEBUG) NSLog(@"Key \"%@%@%@%@%@\" for application \"%@\"",
-                                                   (modifierFlags & kCGEventFlagMaskShift)? @"⇧" : @"",
-                                                   (modifierFlags & kCGEventFlagMaskControl)? @"⌃" : @"",
-                                                   (modifierFlags & kCGEventFlagMaskAlternate)? @"⌥ " : @"",
-                                                   (modifierFlags & kCGEventFlagMaskCommand)? @"⌘ " : @"",
-                                                   [KeyUtility codeToChar:(CGKeyCode)[[commandDict objectForKey:@"KeyCode"] unsignedIntValue]],
-                                                   application);
+            BOOL hasKey = [commandDict objectForKey:@"HasKey"] == nil ||
+                [[commandDict objectForKey:@"HasKey"] boolValue];
+            if (logLevel >= LOG_LEVEL_DEBUG)
+                NSLog(@"Keystroke \"%@\" for application \"%@\"",
+                      [Config keystrokeDisplayNameForBinding:commandDict], application);
             [keyUtil simulateKeyCode:[[commandDict objectForKey:@"KeyCode"] unsignedShortValue]
+                              hasKey:hasKey
                        ModifierFlags:modifierFlags];
             CFSafeRelease(tmpRef);
 

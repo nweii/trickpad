@@ -36,6 +36,7 @@ If the user wants ideas, find a few concrete options that fit their workflow:
 - `sound:NAME` (a system sound such as `sound:Glass`) and `say:WORDS` play or speak and do nothing else. They are ordinary binding values, useful for whatever the user wants them for; checking that a gesture fires at all is the obvious one. Speech can name the gesture, so several such bindings stay distinguishable by ear.
 - To confirm a gesture that still does its real work, you could add `sound` or `say` as a binding option: `{ action = "cmd+shift+4", sound = "Glass" }`. A Magic Mouse has no haptic feedback, so this is the only way to feel or hear one of its gestures fire.
 - A TOML array runs binding values in order: `["ctrl+space", "p"]`. An element can be a keystroke, action, URL, script, sound, or speech binding. `wait:MS` pauses before the next element, and all waits in one sequence can total up to 3000 ms. Use `script:` for longer work. An expanded binding can put the array in `action` beside its normal options. Reloading settings or turning Trickpad off drops steps that have not started.
+- A keystroke can contain only modifier keys when an app assigns a command that way. For example, `left-cmd+right-cmd` presses both Command keys together and then releases them.
 
 **The words of a gesture name can come in any order** (`swipe-up-three-finger` loads as `three-finger-swipe-up`); the menu and reports show the canonical name.
 

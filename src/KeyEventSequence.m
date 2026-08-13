@@ -13,6 +13,7 @@ typedef struct {
 } MGModifier;
 
 size_t MGPlanKeyEventSequence(CGKeyCode keyCode,
+                              bool hasKey,
                               CGEventFlags requestedFlags,
                               CGEventFlags physicalFlags,
                               MGKeyEventStep steps[18]) {
@@ -67,12 +68,16 @@ size_t MGPlanKeyEventSequence(CGKeyCode keyCode,
         pressed[pressedCount++] = i;
     }
 
-    steps[count++] = (MGKeyEventStep){keyCode, true, requestedFlags};
-    steps[count++] = (MGKeyEventStep){keyCode, false, requestedFlags};
+    if (hasKey) {
+        steps[count++] = (MGKeyEventStep){keyCode, true, requestedFlags};
+        steps[count++] = (MGKeyEventStep){keyCode, false, requestedFlags};
+    }
 
     while (pressedCount > 0) {
         MGModifier modifier = modifiers[pressed[--pressedCount]];
-        activeFlags &= ~modifier.flags;
+        activeFlags &= ~modifier.sideFlag;
+        if (!(activeFlags & modifier.sideMask))
+            activeFlags &= ~modifier.genericFlag;
         steps[count++] = (MGKeyEventStep){modifier.keyCode, false, activeFlags};
     }
 

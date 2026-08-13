@@ -21,7 +21,7 @@ int main(void) {
     CGEventFlags command = kCGEventFlagMaskCommand | NX_DEVICELCMDKEYMASK;
     CGEventFlags chord = control | command;
 
-    size_t count = MGPlanKeyEventSequence(2, chord, 0, steps);
+    size_t count = MGPlanKeyEventSequence(2, true, chord, 0, steps);
     if (count != 6) {
         fprintf(stderr, "FAIL  control-command-D event count\n");
         failures++;
@@ -34,7 +34,7 @@ int main(void) {
         expectStep("control up", steps[5], 59, false, 0);
     }
 
-    count = MGPlanKeyEventSequence(2, chord, kCGEventFlagMaskControl, steps);
+    count = MGPlanKeyEventSequence(2, true, chord, kCGEventFlagMaskControl, steps);
     if (count != 4) {
         fprintf(stderr, "FAIL  physically held control event count\n");
         failures++;
@@ -45,7 +45,7 @@ int main(void) {
         expectStep("held control is not released", steps[3], 55, false, control);
     }
 
-    count = MGPlanKeyEventSequence(53, 0, 0, steps);
+    count = MGPlanKeyEventSequence(53, true, 0, 0, steps);
     if (count != 2) {
         fprintf(stderr, "FAIL  bare Escape event count\n");
         failures++;
@@ -55,7 +55,7 @@ int main(void) {
     }
 
     CGEventFlags rightControl = kCGEventFlagMaskControl | NX_DEVICERCTLKEYMASK;
-    count = MGPlanKeyEventSequence(49, rightControl, 0, steps);
+    count = MGPlanKeyEventSequence(49, true, rightControl, 0, steps);
     if (count != 4) {
         fprintf(stderr, "FAIL  right-control-Space event count\n");
         failures++;
@@ -66,13 +66,37 @@ int main(void) {
         expectStep("right control up", steps[3], 62, false, 0);
     }
 
-    count = MGPlanKeyEventSequence(49, rightControl, rightControl, steps);
+    count = MGPlanKeyEventSequence(49, true, rightControl, rightControl, steps);
     if (count != 2) {
         fprintf(stderr, "FAIL  physically held right control event count\n");
         failures++;
     } else {
         expectStep("held right control chord down", steps[0], 49, true, rightControl);
         expectStep("held right control chord up", steps[1], 49, false, rightControl);
+    }
+
+    CGEventFlags bothCommands = kCGEventFlagMaskCommand |
+        NX_DEVICELCMDKEYMASK | NX_DEVICERCMDKEYMASK;
+    count = MGPlanKeyEventSequence(0, false, bothCommands, 0, steps);
+    if (count != 4) {
+        fprintf(stderr, "FAIL  left-command-right-command event count\n");
+        failures++;
+    } else {
+        CGEventFlags leftCommand = kCGEventFlagMaskCommand | NX_DEVICELCMDKEYMASK;
+        expectStep("left command down", steps[0], 55, true, leftCommand);
+        expectStep("right command down", steps[1], 54, true, bothCommands);
+        expectStep("right command up", steps[2], 54, false, leftCommand);
+        expectStep("left command up", steps[3], 55, false, 0);
+    }
+
+    CGEventFlags leftCommand = kCGEventFlagMaskCommand | NX_DEVICELCMDKEYMASK;
+    count = MGPlanKeyEventSequence(0, false, bothCommands, leftCommand, steps);
+    if (count != 2) {
+        fprintf(stderr, "FAIL  physically held left command event count\n");
+        failures++;
+    } else {
+        expectStep("held left command is not pressed", steps[0], 54, true, bothCommands);
+        expectStep("held left command is not released", steps[1], 54, false, leftCommand);
     }
 
     if (failures == 0) {

@@ -572,8 +572,14 @@ static void recordExplicitModifierSide(NSMutableDictionary *sides,
         @"cmd": @"command", @"command": @"command",
     };
     NSString *family = [families objectForKey:name];
-    if (family != nil)
-        [sides setObject:[parts objectAtIndex:0] forKey:family];
+    if (family == nil)
+        return;
+    NSString *side = [parts objectAtIndex:0];
+    NSString *existing = [sides objectForKey:family];
+    if (existing == nil || [existing isEqualToString:side])
+        [sides setObject:side forKey:family];
+    else
+        [sides setObject:@"both" forKey:family];
 }
 
 #pragma mark - Value parsing
@@ -860,7 +866,7 @@ static NSString *resolvedSpeechText(NSString *rawText, NSString **outProblem) {
 }
 
 // Returns an engine gesture dictionary, or nil for an unrecognized value.
-// Keystrokes contain modifiers and one key. Actions are dispatched by name.
+// Keystrokes contain a key, modifiers, or both. Actions are dispatched by name.
 static NSDictionary *parseBinding(NSString *rawValue) {
     NSString *unquoted = stripQuotes([rawValue stringByTrimmingCharactersInSet:
                          [NSCharacterSet whitespaceCharacterSet]]);
@@ -928,6 +934,7 @@ static NSDictionary *parseBinding(NSString *rawValue) {
     }
 
     NSArray *tokens = nil;
+    BOOL usesPlusSeparator = [value rangeOfString:@"+"].location != NSNotFound;
     if ([keyNames() objectForKey:value] != nil) {
         // Match the full value before splitting so the hyphens in page-down and
         // forward-delete are treated as part of the key name.
@@ -945,8 +952,11 @@ static NSDictionary *parseBinding(NSString *rawValue) {
     for (NSUInteger i = 0; i < [tokens count]; i++) {
         NSString *raw = [tokens objectAtIndex:i];
         NSString *t = [raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        if ([t length] == 0)
+        if ([t length] == 0) {
+            if (usesPlusSeparator)
+                return nil;
             continue;
+        }
         NSString *modifierToken = t;
         NSNumber *flag = [modifierNames() objectForKey:t];
         if (flag == nil && ([t isEqualToString:@"left"] || [t isEqualToString:@"right"]) &&
@@ -972,17 +982,20 @@ static NSDictionary *parseBinding(NSString *rawValue) {
         keyToken = t;
     }
 
-    if (keyToken == nil)
+    if (keyToken == nil && flags == 0)
         return nil;
-    NSNumber *code = [keyNames() objectForKey:keyToken];
-    if (code == nil)
+    NSNumber *code = keyToken == nil ? nil : [keyNames() objectForKey:keyToken];
+    if (keyToken != nil && code == nil)
         return nil;
 
     NSMutableDictionary *binding = [NSMutableDictionary dictionaryWithDictionary:@{
         @"Gesture": @"", @"Command": rawValue, @"IsAction": @NO,
-        @"ModifierFlags": @(flags), @"KeyCode": code, @"Enable": @YES,
-        @"KeyDisplayName": keyDisplayName(keyToken),
+        @"ModifierFlags": @(flags), @"Enable": @YES, @"HasKey": @(keyToken != nil),
     }];
+    if (keyToken != nil) {
+        [binding setObject:code forKey:@"KeyCode"];
+        [binding setObject:keyDisplayName(keyToken) forKey:@"KeyDisplayName"];
+    }
     if ([explicitModifierSides count] > 0)
         [binding setObject:explicitModifierSides forKey:@"ExplicitModifierSides"];
     return binding;
@@ -1097,8 +1110,10 @@ static NSDictionary *parseSequence(NSString *rawValue, NSString **outProblem) {
 
 + (NSString *)keystrokeDisplayNameForBinding:(NSDictionary *)binding {
     NSUInteger flags = [[binding objectForKey:@"ModifierFlags"] unsignedIntegerValue];
+    BOOL hasKey = [binding objectForKey:@"HasKey"] == nil ||
+        [[binding objectForKey:@"HasKey"] boolValue];
     NSString *key = [binding objectForKey:@"KeyDisplayName"];
-    if ([key length] == 0)
+    if (hasKey && [key length] == 0)
         key = [NSString stringWithFormat:@"Key %@", [binding objectForKey:@"KeyCode"] ?: @"?"];
     NSDictionary *sides = [binding objectForKey:@"ExplicitModifierSides"];
     if ([sides count] == 0) {
@@ -1107,26 +1122,39 @@ static NSDictionary *parseSequence(NSString *rawValue, NSString **outProblem) {
         if (flags & kCGEventFlagMaskAlternate) [out appendString:@"⌥"];
         if (flags & kCGEventFlagMaskShift)     [out appendString:@"⇧"];
         if (flags & kCGEventFlagMaskCommand)   [out appendString:@"⌘"];
-        [out appendString:key];
+        if (hasKey)
+            [out appendString:key];
         return out;
     }
 
     NSMutableArray *parts = [NSMutableArray array];
     NSArray *modifiers = @[
-        @[@"control", @"Control", @(kCGEventFlagMaskControl)],
-        @[@"option", @"Option", @(kCGEventFlagMaskAlternate)],
-        @[@"shift", @"Shift", @(kCGEventFlagMaskShift)],
-        @[@"command", @"Command", @(kCGEventFlagMaskCommand)],
+        @[@"control", @"Control", @(kCGEventFlagMaskControl),
+          @(NX_DEVICELCTLKEYMASK), @(NX_DEVICERCTLKEYMASK)],
+        @[@"option", @"Option", @(kCGEventFlagMaskAlternate),
+          @(NX_DEVICELALTKEYMASK), @(NX_DEVICERALTKEYMASK)],
+        @[@"shift", @"Shift", @(kCGEventFlagMaskShift),
+          @(NX_DEVICELSHIFTKEYMASK), @(NX_DEVICERSHIFTKEYMASK)],
+        @[@"command", @"Command", @(kCGEventFlagMaskCommand),
+          @(NX_DEVICELCMDKEYMASK), @(NX_DEVICERCMDKEYMASK)],
     ];
     for (NSArray *modifier in modifiers) {
         if (!(flags & [[modifier objectAtIndex:2] unsignedIntegerValue]))
             continue;
         NSString *side = [sides objectForKey:[modifier objectAtIndex:0]];
         NSString *name = [modifier objectAtIndex:1];
-        [parts addObject:side == nil ? name :
-            [NSString stringWithFormat:@"%@ %@", [side capitalizedString], name]];
+        BOOL hasBothSides = (flags & [[modifier objectAtIndex:3] unsignedIntegerValue]) &&
+            (flags & [[modifier objectAtIndex:4] unsignedIntegerValue]);
+        if (hasBothSides || [side isEqualToString:@"both"]) {
+            [parts addObject:[NSString stringWithFormat:@"Left %@", name]];
+            [parts addObject:[NSString stringWithFormat:@"Right %@", name]];
+        } else {
+            [parts addObject:side == nil ? name :
+                [NSString stringWithFormat:@"%@ %@", [side capitalizedString], name]];
+        }
     }
-    [parts addObject:key];
+    if (hasKey)
+        [parts addObject:key];
     return [parts componentsJoinedByString:@" + "];
 }
 
