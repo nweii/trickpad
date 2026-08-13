@@ -1182,6 +1182,27 @@ int main(void) {
         s = parse(@"[mouse]\nnot-a-gesture = return\nhold-right-tap-left = return\n");
         if (bindingFor(s, @"MagicMouseCommands", @"Middle-Fix Index-Near-Tap") == nil)
             fail(@"unknown gesture does not abort the file", @"later binding present", @"missing");
+        NSDictionary *gestureProblems = @{
+            @"[mouse]\nfour-finger-click = return\n":
+                @"\"four-finger-click\" is a Trackpad gesture. Magic Mouse gestures use up to three fingers.",
+            @"[mouse]\nclick-four-finger = return\n":
+                @"\"four-finger-click\" is a Trackpad gesture. Magic Mouse gestures use up to three fingers.",
+            @"[trackpad]\nfront-right-tap = return\n":
+                @"\"front-right-tap\" is a Magic Mouse gesture.",
+            @"[mouse]\nfive-finger-clack = return\n":
+                @"Magic Mouse gestures use up to three fingers.",
+            @"[mouse]\nthree-finger-clack = return\n":
+                @"no mouse gesture named \"three-finger-clack\"",
+        };
+        for (NSString *conf in gestureProblems) {
+            NSArray *problems = nil;
+            parseWithProblems(conf, &problems);
+            NSString *reported = [problems count] > 0 ? [problems objectAtIndex:0] : @"";
+            NSString *expected = [gestureProblems objectForKey:conf];
+            if ([reported rangeOfString:expected].location == NSNotFound)
+                fail([@"unknown gesture explains device support: " stringByAppendingString:conf],
+                     expected, reported);
+        }
         s = parse(@"[mouse]\nhold-right-tap-left = not-a-key\n");
         if (bindingFor(s, @"MagicMouseCommands", @"Middle-Fix Index-Near-Tap") != nil)
             fail(@"unknown key is skipped", @"nothing", @"a binding");
@@ -1311,6 +1332,9 @@ int main(void) {
             if ([doc rangeOfString:@"left-cmd+right-cmd"].location == NSNotFound)
                 fail([NSString stringWithFormat:@"%@ documents modifier-only chords",
                       [args[i] lastPathComponent]], @"left-cmd+right-cmd", @"missing");
+            if ([doc rangeOfString:@"Magic Mouse gestures use up to three fingers"].location == NSNotFound)
+                fail([NSString stringWithFormat:@"%@ documents the Magic Mouse finger limit",
+                      [args[i] lastPathComponent]], @"Magic Mouse finger limit", @"missing");
         }
         NSUInteger documentationEnd = MIN([args count], 4);
         for (NSUInteger i = 3; i < documentationEnd; i++) {

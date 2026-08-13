@@ -8,6 +8,15 @@ The words of a gesture name can come in any order, so `swipe-up-three-finger` lo
 
 Gestures that hold one finger still are named by where the fingers sit, not by which finger does what. `hold-left-tap-right` means hold a finger and tap to its right, which on a right hand is the index finger holding and the middle finger tapping. Either hand works, and either finger can play either part.
 
+## Supported finger counts
+
+| Device | Taps | Physical clicks | Swipes |
+|---|---:|---:|---:|
+| Magic Mouse | 1–3 | 2–3 | 1–3 |
+| Magic Trackpad | 2–5 | 3–4 | 3–4 |
+
+Magic Mouse gestures use up to three fingers. Trackpad taps use up to five fingers, while its physical clicks and swipes use up to four. Reload Settings reports and skips a gesture outside these ranges.
+
 ## Magic Mouse
 
 | Write this | Hand motion |

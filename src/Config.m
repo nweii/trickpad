@@ -294,6 +294,57 @@
     return match;
 }
 
+static NSUInteger fingerCountInGestureSlug(NSString *slug) {
+    NSDictionary *counts = @{
+        @"one": @1, @"two": @2, @"three": @3, @"four": @4, @"five": @5,
+    };
+    NSArray *words = [slug componentsSeparatedByString:@"-"];
+    for (NSUInteger i = 0; i + 1 < [words count]; i++) {
+        NSNumber *count = [counts objectForKey:[words objectAtIndex:i]];
+        if (count != nil && [[words objectAtIndex:i + 1] isEqualToString:@"finger"])
+            return [count unsignedIntegerValue];
+    }
+    return 0;
+}
+
+static NSUInteger maximumFingerCountInSlugs(NSDictionary *slugs) {
+    NSUInteger maximum = 0;
+    for (NSString *slug in slugs)
+        maximum = MAX(maximum, fingerCountInGestureSlug(slug));
+    return maximum;
+}
+
+static NSString *gestureNameProblem(NSString *key, NSString *device,
+                                    NSDictionary *slugs) {
+    BOOL mouse = [device isEqualToString:@"mouse"];
+    NSDictionary *otherSlugs = mouse
+        ? [Config trackpadGestureSlugs] : [Config mouseGestureSlugs];
+    NSString *otherName = [otherSlugs objectForKey:key] == nil
+        ? [Config canonicalSlug:key inSlugs:otherSlugs] : key;
+    NSMutableArray *reasons = [NSMutableArray array];
+    if (otherName != nil) {
+        NSString *otherDevice = mouse ? @"Trackpad" : @"Magic Mouse";
+        [reasons addObject:[NSString stringWithFormat:@"\"%@\" is a %@ gesture.",
+                            otherName, otherDevice]];
+    }
+
+    NSUInteger count = fingerCountInGestureSlug(key);
+    NSUInteger maximum = maximumFingerCountInSlugs(slugs);
+    if (count > maximum && maximum > 0) {
+        NSString *deviceName = mouse ? @"Magic Mouse" : @"Trackpad";
+        NSDictionary *countWords = @{
+            @1: @"one", @2: @"two", @3: @"three", @4: @"four", @5: @"five",
+        };
+        NSString *maximumWord = [countWords objectForKey:@(maximum)] ?: [@(maximum) stringValue];
+        [reasons addObject:[NSString stringWithFormat:
+            @"%@ gestures use up to %@ fingers.", deviceName, maximumWord]];
+    }
+
+    if ([reasons count] == 0)
+        return [NSString stringWithFormat:@"no %@ gesture named \"%@\"", device, key];
+    return [reasons componentsJoinedByString:@" "];
+}
+
 + (NSString *)canonicalGestureName:(NSString *)raw inSlugs:(NSDictionary *)slugs {
     for (NSString *slug in slugs) {
         NSArray *engineNames = [slugs objectForKey:slug];
@@ -1781,7 +1832,7 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
                 }
             }
             if (engineNames == nil) {
-                report(line, [NSString stringWithFormat:@"no %@ gesture named \"%@\"", device, key]);
+                report(line, gestureNameProblem(key, device, slugs));
                 continue;
             }
             if (expandedDefer != nil &&
