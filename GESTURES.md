@@ -319,7 +319,6 @@ App updates and localizations can change menu titles. Update the App Shortcut if
 | `trackpad-edge-gesture-depth` | Fraction of the trackpad an edge band reaches in from its edge, above 0 and below 0.5; corners span twice this; default `0.06` |
 | `haptic-feedback` | `true` requests confirmation for configured trackpad gestures, default `true` |
 | `menu-bar-icon` | `trickpad`, or `sf:` followed by a name from [SF Symbols](https://developer.apple.com/sf-symbols/); default `trickpad` |
-| `experimental-mouse-click-gestures` | Has no effect; accepted so existing files that set it keep loading |
 | `verbose-logging` | `true` logs every gesture and keystroke to Console |
 
 Booleans are `true` or `false`, following TOML.
