@@ -95,7 +95,9 @@ About opens a submenu carrying the version, read from the running bundle, plus a
 
 The version lives in one place: `APP_VERSION` in `scripts/build.sh`, which becomes `CFBundleShortVersionString`. The menu bar header reads it from the running bundle, so it cannot drift from what is installed.
 
-A build made anywhere other than the clean commit tagged `v$APP_VERSION` carries a `TrickpadBuildStamp` naming its short commit hash, with a trailing `+` for uncommitted changes. About and Copy Debug Info show it as "Version X.Y.Z (abc1234)", so an unreleased build identifies itself even though the version number has not bumped yet. Release builds at the tag carry no stamp.
+Between releases, `APP_VERSION` carries the next patch number with a `-dev` suffix, set as the last step of each release. The suffix names the release train, not a promise: no `-dev` version is ever tagged, packaging refuses it because its tag cannot exist, and the release that ends the cycle sets its real number then, which the semantic-versioning read below may raise past the `-dev` guess.
+
+A build made anywhere other than the clean commit tagged `v$APP_VERSION` also carries a `TrickpadBuildStamp` naming its short commit hash, with a trailing `+` for uncommitted changes. About and Copy Debug Info show both, as "Version 0.9.2-dev (abc1234+)", so an unreleased build names its train and its exact source. Release builds at the tag carry no stamp.
 
 Semantic versioning, read against the configuration file rather than the code, because the config is the only interface anyone depends on. Before 1.0, a minor release may intentionally change that alpha interface and must carry a migration note. After 1.0:
 
@@ -106,7 +108,7 @@ Semantic versioning, read against the configuration file rather than the code, b
 To cut a release:
 
 ```bash
-# bump APP_VERSION and APP_BUILD_NUMBER in scripts/build.sh
+# set APP_VERSION to the release number (drop -dev) and bump APP_BUILD_NUMBER in scripts/build.sh
 ./scripts/build.sh && ./scripts/check.sh
 git commit -am "Release X.Y.Z"
 git tag -a vX.Y.Z -m "X.Y.Z"  # local until the package and preview verify
@@ -115,6 +117,7 @@ git tag -a vX.Y.Z -m "X.Y.Z"  # local until the package and preview verify
 ./scripts/publish.sh --publish X.Y.Z  # after approving that preview
 git push origin main --tags
 gh release create vX.Y.Z --title "X.Y.Z" --notes "..."
+# start the next train: set APP_VERSION to the next patch number plus -dev, commit
 ```
 
 GitHub releases carry the tag, changelog, and automatic source archives without a packaged binary. The DMG that `scripts/package.sh` produces is delivered through Gumroad and must not be attached to GitHub. Packaging requires the version's tag to exist at the packaged commit — a missing tag or one pointing elsewhere refuses — and verifies the styled drag-to-Applications layout, app signature, license, notices, trademark notice, and exact-source link. The tag stays local until the package and publish preview verify, so a bad package means deleting an unpushed tag rather than moving a published one.
