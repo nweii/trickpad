@@ -1276,6 +1276,8 @@ int main(void) {
             NSString *doc = [NSString stringWithContentsOfFile:args[i]
                                                         encoding:NSUTF8StringEncoding
                                                            error:NULL];
+            if (doc == nil)
+                continue;
             if ([doc rangeOfString:@"wait:MS"].location == NSNotFound ||
                 [doc rangeOfString:@"[\""].location == NSNotFound)
                 fail([NSString stringWithFormat:@"%@ documents sequence arrays and wait:MS",

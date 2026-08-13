@@ -65,6 +65,34 @@ int main(void) {
         require([emitted isEqual:@[@"prefix"]],
                 "cancellation drops the undispatched sequence remainder");
 
+        [scheduled removeAllObjects];
+        [emitted removeAllObjects];
+        NSDictionary *prefixB = @{ @"Name": @"prefix-b", @"IsAction": @NO };
+        NSDictionary *keyB = @{ @"Name": @"key-b", @"IsAction": @NO };
+        MGSequenceStepHandler collect = ^(NSDictionary *step) {
+            [emitted addObject:[step objectForKey:@"Name"]];
+        };
+        [dispatcher dispatchSequence:@[prefix, key] stepHandler:collect];
+        [dispatcher dispatchSequence:@[prefixB, keyB] stepHandler:collect];
+        while ([scheduled count] > 0)
+            runFirstScheduled(scheduled);
+        require([emitted isEqual:@[@"prefix", @"key", @"prefix-b", @"key-b"]],
+                "a queued sequence starts after the active sequence finishes");
+
+        [scheduled removeAllObjects];
+        [emitted removeAllObjects];
+        [dispatcher dispatchSequence:@[prefix, key] stepHandler:collect];
+        [dispatcher dispatchSequence:@[prefixB, keyB] stepHandler:collect];
+        runFirstScheduled(scheduled);
+        [dispatcher cancelAll];
+        while ([scheduled count] > 0)
+            runFirstScheduled(scheduled);
+        [dispatcher dispatchSequence:@[url] stepHandler:collect];
+        while ([scheduled count] > 0)
+            runFirstScheduled(scheduled);
+        require([emitted isEqual:@[@"prefix", @"url"]],
+                "cancellation drops both the active remainder and queued sequences");
+
         if (failures == 0) {
             printf("sequence dispatcher: all checks passed\n");
             return 0;
