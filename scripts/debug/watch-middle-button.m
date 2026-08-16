@@ -1,5 +1,5 @@
-// Prints every middle-button event the window server delivers, so a middle-click
-// binding's down, drag, and up can be watched without an application that uses them.
+// Prints the middle-button events applications receive after other event taps
+// rewrite them, so a binding's down, drag, and up can be checked directly.
 
 #import <ApplicationServices/ApplicationServices.h>
 
@@ -38,7 +38,7 @@ int main(void) {
                        CGEventMaskBit(kCGEventOtherMouseDragged);
     // A listen-only tap: it reports what happened and changes nothing, so a
     // stuck button stays visible rather than being papered over.
-    CFMachPortRef tap = CGEventTapCreate(kCGSessionEventTap, kCGHeadInsertEventTap,
+    CFMachPortRef tap = CGEventTapCreate(kCGSessionEventTap, kCGTailAppendEventTap,
                                          kCGEventTapOptionListenOnly, mask, observe, NULL);
     if (tap == NULL) {
         fprintf(stderr, "Could not create the event tap. Grant this program Accessibility access.\n");

@@ -1451,6 +1451,44 @@ int main(void) {
                          required, @"missing");
             }
 
+            // The engine maps its zero-valued trackpad constant through the
+            // lifecycle boundary. The lifecycle owns both click decisions.
+            for (NSString *required in @[
+                @"MGMiddleButtonDeviceFromEngineDevice(TRACKPAD)",
+                @"MGMiddleButtonDeviceFromEngineDevice(device)",
+                @"MGMiddleButtonLifecycleShouldRewriteMouseDown",
+                @"MGMiddleButtonLifecycleShouldDispatchOnMouseUp",
+                @"MGMiddleButtonLifecycleShouldRewriteDrag",
+                @"MGMiddleButtonLifecycleEnd(&middleButtonLifecycle)",
+                @"releaseHeldMiddleButton();",
+                @"kCGEventOtherMouseDragged",
+            ]) {
+                if ([clickCallback rangeOfString:required].location == NSNotFound)
+                    fail(@"physical clicks use the shared middle-button lifecycle",
+                         required, @"missing");
+            }
+            for (NSString *reset in @[@"static void turnOffTrackpad",
+                                       @"static void turnOffMagicMouse"]) {
+                NSString *body = section(engine, reset, @"\n}");
+                if (body == nil ||
+                    [body rangeOfString:@"releaseHeldMiddleButton();"].location == NSNotFound)
+                    fail(@"a device reset releases a held middle button",
+                         reset, @"no release");
+            }
+            for (NSString *required in @[
+                @"postTrackpadMiddleButtonDrag(data, nFingers, timestamp)",
+                @"MGMiddleButtonLifecycleTrackpadDragDelta",
+                @"CGEventSetIntegerValueField(event, kCGMouseEventDeltaX",
+                @"CGEventSetIntegerValueField(event, kCGMouseEventDeltaY",
+                @"CGEventSetIntegerValueField(event, kCGEventSourceUserData",
+                @"CGEventSetLocation(event, trackpadMiddleButtonLocation)",
+                @"nativeClickChordMouseUp",
+            ]) {
+                if ([engine rangeOfString:required].location == NSNotFound)
+                    fail(@"trackpad contact frames synthesize the held middle drag",
+                         required, @"missing");
+            }
+
             if ([engine rangeOfString:@"trackpadHasTwoFingers"].location != NSNotFound)
                 fail(@"native trackpad dragging is not suppressed by legacy contact flags",
                      @"no trackpadHasTwoFingers gate", @"legacy gate remains");

@@ -60,7 +60,7 @@ A good configuration is personal: it reflects one user's apps, habits, and taste
 - Frequency. Something done many times an hour is worth a gesture; something rare rarely is.
 - Flow. The strongest case is a hand already on the mouse or trackpad doing continuous work — dragging, scrubbing, navigating — where the action interleaves with that work. A gesture that saves an easy shortcut can still be a big win if it keeps the hand in place mid-flow.
 - Ergonomics. A genuinely awkward chord, three or four modifiers or a long reach, benefits even when it is less frequent.
-- No keyboard equivalent. Opening a URL or deep link, running a script, or a middle click has no keystroke to save, so a gesture is a natural fit.
+- No keyboard equivalent. Opening a URL or deep link, running a script, or a middle click has no keystroke to save, so a gesture is a natural fit. A physical click bound to `middle-click` can middle-drag because it holds the button until the click ends. A tap sends one press and release.
 
 Ask about the user's workflows and propose bindings they would plausibly try, not a showcase of what the app can do.
 

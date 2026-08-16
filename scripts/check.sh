@@ -105,6 +105,7 @@ run_compiled_check gesture-sequence run_without_arguments "${OBJC_FLAGS[@]}" -fr
 run_compiled_check single-instance run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation -framework AppKit "$ROOT/src/SingleInstance.m" "$ROOT/src/SingleInstanceCheck.m"
 run_compiled_check mouse-contact-filter run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/MouseContactFilter.m" "$ROOT/src/MouseContactFilterCheck.m"
 run_compiled_check contact-onset-tracker run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/ContactOnsetTracker.m" "$ROOT/src/ContactOnsetTrackerCheck.m"
+run_compiled_check middle-button-lifecycle run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/MiddleButtonLifecycle.m" "$ROOT/src/MiddleButtonLifecycleCheck.m"
 run_compiled_check mouse-click-interaction run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/MouseClickInteraction.m" "$ROOT/src/MouseClickInteractionCheck.m"
 run_compiled_check trace-recorder run_without_arguments -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/TraceRecorder.m" "$ROOT/src/TraceRecorderCheck.m"
 run_compiled_check trace-session run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/TraceSessionModel.m" "$ROOT/src/TraceSessionModelCheck.m"
