@@ -232,13 +232,18 @@ source_has 'doCommand(gesture, device, binding, matchedApplication)' \
 
 # Hold-taps end in a tap, so they must pass through the shared tap eligibility
 # path that rejects broad contacts and physical clicks.
-for gesture in 'One-Fix Left-Tap' 'One-Fix Right-Tap'; do
+for gesture in 'One-Fix Left-Tap' 'One-Fix Right-Tap' \
+  'Two-Fix Left-Tap' 'Two-Fix Right-Tap' 'Two-Fix Between-Tap' \
+  'Three-Fix Left-Tap' 'Three-Fix Right-Tap'; do
   source_has "dispatchExclusiveTapCommand(@\"$gesture\", TRACKPAD" "$ROOT/src/jitouch/Jitouch/Gesture.m" ||
     gesture_fail "$gesture bypasses shared trackpad tap eligibility"
 done
 source_has 'BOOL anchorRemained = nFingers == 1 && data\[0\]\.identifier == fixId;' \
   "$ROOT/src/jitouch/Jitouch/Gesture.m" ||
   gesture_fail "trackpad hold-tap treats full lift as a held anchor"
+source_has 'if (enHanded && result == kTrackpadFixedHoldTapLeft)' \
+  "$ROOT/src/jitouch/Jitouch/Gesture.m" ||
+  gesture_fail "trackpad fixed hold-taps do not mirror left and right for a left dominant hand"
 
 # A two-finger tap lands its contacts together and lifts them a frame later, so
 # without a held anchor the Magic Mouse hold-tap recognizes it first and takes

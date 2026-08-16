@@ -2569,6 +2569,231 @@ static void gestureTrackpadHoldSlide(const Finger *data, int nFingers) {
     }
 }
 
+enum {
+    kTrackpadFixedHoldTapIdle = 0,
+    kTrackpadFixedHoldTapResting,
+    kTrackpadFixedHoldTapTracking,
+};
+
+enum {
+    kTrackpadFixedHoldTapNoPosition = 0,
+    kTrackpadFixedHoldTapLeft,
+    kTrackpadFixedHoldTapBetween,
+    kTrackpadFixedHoldTapRight,
+};
+
+typedef struct {
+    int step;
+    int anchorCount;
+    int anchorIds[3];
+    float anchorX[3];
+    float anchorY[3];
+    int contactIds[4];
+    float contactX[4];
+    float contactY[4];
+    int tapPosition;
+    double restTime;
+    double tapTime;
+} MGTrackpadFixedHoldTapRecognizer;
+
+static int trackpadContactIndexForIdentifier(const Finger *data, int nFingers,
+                                              int identifier) {
+    for (int i = 0; i < nFingers; i++) {
+        if (data[i].identifier == identifier)
+            return i;
+    }
+    return -1;
+}
+
+static BOOL trackpadContactsRemainStill(const Finger *data, int nFingers,
+                                         const int *identifiers,
+                                         const float *startX,
+                                         const float *startY,
+                                         int contactCount) {
+    if (nFingers != contactCount)
+        return NO;
+    for (int i = 0; i < contactCount; i++) {
+        int index = trackpadContactIndexForIdentifier(data, nFingers, identifiers[i]);
+        if (index < 0 || lenSqr(data[index].px, data[index].py,
+                               startX[i], startY[i]) > 0.001)
+            return NO;
+    }
+    return YES;
+}
+
+static void trackpadFixedHoldTapBeginRest(MGTrackpadFixedHoldTapRecognizer *recognizer,
+                                           const Finger *data, double timestamp) {
+    recognizer->step = kTrackpadFixedHoldTapResting;
+    recognizer->restTime = timestamp;
+    recognizer->tapPosition = kTrackpadFixedHoldTapNoPosition;
+    for (int i = 0; i < recognizer->anchorCount; i++) {
+        recognizer->anchorIds[i] = data[i].identifier;
+        recognizer->anchorX[i] = data[i].px;
+        recognizer->anchorY[i] = data[i].py;
+    }
+}
+
+static int trackpadFixedHoldTapPosition(const Finger *data, int tapIndex,
+                                        const MGTrackpadFixedHoldTapRecognizer *recognizer) {
+    float minimum = recognizer->anchorX[0] + recognizer->anchorY[0];
+    float maximum = minimum;
+    for (int i = 1; i < recognizer->anchorCount; i++) {
+        float position = recognizer->anchorX[i] + recognizer->anchorY[i];
+        minimum = MIN(minimum, position);
+        maximum = MAX(maximum, position);
+    }
+    float tapPosition = data[tapIndex].px + data[tapIndex].py;
+    int result = tapPosition < minimum ? kTrackpadFixedHoldTapLeft :
+                 tapPosition > maximum ? kTrackpadFixedHoldTapRight :
+                 kTrackpadFixedHoldTapBetween;
+    // The callback mirrors x before recognition for a left dominant hand.
+    // Swap the named sides as the existing one-anchor hold-tap does; the
+    // between position is invariant under the mirror.
+    if (enHanded && result == kTrackpadFixedHoldTapLeft)
+        result = kTrackpadFixedHoldTapRight;
+    else if (enHanded && result == kTrackpadFixedHoldTapRight)
+        result = kTrackpadFixedHoldTapLeft;
+    return result;
+}
+
+static NSString *trackpadFixedHoldTapGesture(int anchorCount, int tapPosition) {
+    if (anchorCount == 2) {
+        if (tapPosition == kTrackpadFixedHoldTapLeft)
+            return @"Two-Fix Left-Tap";
+        if (tapPosition == kTrackpadFixedHoldTapRight)
+            return @"Two-Fix Right-Tap";
+        if (tapPosition == kTrackpadFixedHoldTapBetween)
+            return @"Two-Fix Between-Tap";
+    } else if (anchorCount == 3) {
+        if (tapPosition == kTrackpadFixedHoldTapLeft)
+            return @"Three-Fix Left-Tap";
+        if (tapPosition == kTrackpadFixedHoldTapRight)
+            return @"Three-Fix Right-Tap";
+    }
+    return nil;
+}
+
+static void dispatchTrackpadFixedHoldTap(int anchorCount, int tapPosition) {
+    if (anchorCount == 2 && tapPosition == kTrackpadFixedHoldTapLeft)
+        dispatchExclusiveTapCommand(@"Two-Fix Left-Tap", TRACKPAD, kGestureOwnerHoldTap);
+    else if (anchorCount == 2 && tapPosition == kTrackpadFixedHoldTapRight)
+        dispatchExclusiveTapCommand(@"Two-Fix Right-Tap", TRACKPAD, kGestureOwnerHoldTap);
+    else if (anchorCount == 2 && tapPosition == kTrackpadFixedHoldTapBetween)
+        dispatchExclusiveTapCommand(@"Two-Fix Between-Tap", TRACKPAD, kGestureOwnerHoldTap);
+    else if (anchorCount == 3 && tapPosition == kTrackpadFixedHoldTapLeft)
+        dispatchExclusiveTapCommand(@"Three-Fix Left-Tap", TRACKPAD, kGestureOwnerHoldTap);
+    else if (anchorCount == 3 && tapPosition == kTrackpadFixedHoldTapRight)
+        dispatchExclusiveTapCommand(@"Three-Fix Right-Tap", TRACKPAD, kGestureOwnerHoldTap);
+}
+
+static void gestureTrackpadFixedHoldTap(const Finger *data, int nFingers,
+                                        double timestamp, int anchorCount) {
+    static MGTrackpadFixedHoldTapRecognizer recognizers[2] = {0};
+    MGTrackpadFixedHoldTapRecognizer *recognizer = &recognizers[anchorCount - 2];
+    if (recognizer->anchorCount == 0)
+        recognizer->anchorCount = anchorCount;
+
+    if (nFingers == 0) {
+        recognizer->step = kTrackpadFixedHoldTapIdle;
+        recognizer->restTime = -1;
+        recognizer->tapTime = -1;
+        return;
+    }
+
+    if (recognizer->step == kTrackpadFixedHoldTapIdle) {
+        if (nFingers == anchorCount)
+            trackpadFixedHoldTapBeginRest(recognizer, data, timestamp);
+        return;
+    }
+
+    if (recognizer->step == kTrackpadFixedHoldTapResting) {
+        if (nFingers == anchorCount) {
+            if (!trackpadContactsRemainStill(data, nFingers,
+                                              recognizer->anchorIds,
+                                              recognizer->anchorX,
+                                              recognizer->anchorY,
+                                              anchorCount))
+                trackpadFixedHoldTapBeginRest(recognizer, data, timestamp);
+            return;
+        }
+        if (nFingers != anchorCount + 1 || timestamp - recognizer->restTime < 0.06) {
+            if (nFingers != anchorCount + 1)
+                recognizer->step = kTrackpadFixedHoldTapIdle;
+            return;
+        }
+
+        int tapIndex = -1;
+        BOOL anchorsRemain = YES;
+        for (int i = 0; i < anchorCount; i++) {
+            int index = trackpadContactIndexForIdentifier(data, nFingers,
+                                                           recognizer->anchorIds[i]);
+            if (index < 0 || lenSqr(data[index].px, data[index].py,
+                                    recognizer->anchorX[i], recognizer->anchorY[i]) > 0.001) {
+                anchorsRemain = NO;
+                break;
+            }
+        }
+        for (int i = 0; i < nFingers; i++) {
+            BOOL isAnchor = NO;
+            for (int j = 0; j < anchorCount; j++)
+                isAnchor |= data[i].identifier == recognizer->anchorIds[j];
+            if (!isAnchor) {
+                if (tapIndex >= 0) {
+                    tapIndex = -1;
+                    break;
+                }
+                tapIndex = i;
+            }
+        }
+
+        BOOL tapFormsPair = NO;
+        for (int i = 0; i < anchorCount && tapIndex >= 0; i++) {
+            tapFormsPair |= MGTrackpadInteractionContactsFormHoldTapPair(
+                data[tapIndex].px, data[tapIndex].py,
+                recognizer->anchorX[i], recognizer->anchorY[i]);
+        }
+        int tapPosition = tapIndex < 0 ? kTrackpadFixedHoldTapNoPosition :
+            trackpadFixedHoldTapPosition(data, tapIndex, recognizer);
+        if (!anchorsRemain || !tapFormsPair ||
+            trackpadFixedHoldTapGesture(anchorCount, tapPosition) == nil) {
+            recognizer->step = kTrackpadFixedHoldTapIdle;
+            return;
+        }
+
+        recognizer->tapPosition = tapPosition;
+        recognizer->tapTime = timestamp;
+        recognizer->step = kTrackpadFixedHoldTapTracking;
+        for (int i = 0; i < nFingers; i++) {
+            recognizer->contactIds[i] = data[i].identifier;
+            recognizer->contactX[i] = data[i].px;
+            recognizer->contactY[i] = data[i].py;
+        }
+        return;
+    }
+
+    if (recognizer->step == kTrackpadFixedHoldTapTracking) {
+        if (timestamp - recognizer->tapTime > clickSpeed) {
+            recognizer->step = kTrackpadFixedHoldTapIdle;
+        } else if (nFingers == anchorCount + 1) {
+            if (!trackpadContactsRemainStill(data, nFingers,
+                                              recognizer->contactIds,
+                                              recognizer->contactX,
+                                              recognizer->contactY,
+                                              anchorCount + 1))
+                recognizer->step = kTrackpadFixedHoldTapIdle;
+        } else if (trackpadContactsRemainStill(data, nFingers,
+                                                recognizer->anchorIds,
+                                                recognizer->anchorX,
+                                                recognizer->anchorY,
+                                                anchorCount)) {
+            dispatchTrackpadFixedHoldTap(anchorCount, recognizer->tapPosition);
+            recognizer->step = kTrackpadFixedHoldTapIdle;
+        } else {
+            recognizer->step = kTrackpadFixedHoldTapIdle;
+        }
+    }
+}
+
 static void gestureTrackpadOneFixOneTap(const Finger *data, int nFingers, double timestamp) {
     static double sttime = -1;
     static float fing[2][2];
@@ -3181,6 +3406,12 @@ static int trackpadCallback(MGMultitouchDeviceRef device, Finger *data, int nFin
                 gestureTrackpadAutoScroll(data, nFingers, timestamp);
 
                 gestureTrackpadOneFixOneTap(data, nFingers, timestamp);
+                // Hold-tap geometry reads the thumb-filtered count and contacts.
+                // dispatchExclusiveTapCommand reads the interaction's raw-contact
+                // palm and physical-click latches. Raw count closes ownership at
+                // full lift; fingertip-scale count belongs only to swipe suppression.
+                gestureTrackpadFixedHoldTap(data, nFingers, timestamp, 2);
+                gestureTrackpadFixedHoldTap(data, nFingers, timestamp, 3);
 
                 gestureTrackpadTwoFingerTap(data, nFingers, contactsFormTapGroup, timestamp);
                 gestureTrackpadHoldSlide(data, nFingers);

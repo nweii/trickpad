@@ -74,6 +74,8 @@ If a recommendation carries a risk, tell the user plainly what could collide and
 
 **The device counts contacts, not fingers.** A resting finger can add one to the count. A light touch or an edge contact can drop one. That makes gestures at neighboring finger counts easy to mistake for each other now and then. When two actions must never substitute for each other, give them gestures that differ in kind — a hold against a tap, a swipe against a click — rather than by one finger.
 
+Trackpad hold-tap bindings include `hold-left-tap-right`, `hold-right-tap-left`, `hold-two-tap-left`, `hold-two-tap-right`, `hold-two-tap-between`, `hold-three-tap-left`, and `hold-three-tap-right`. The held contacts must remain down through the tap.
+
 **Conflicts can come from three places. Check each.**
 
 - Triggers macOS has claimed. Run the claims report, substituting the running app path from the prompt:

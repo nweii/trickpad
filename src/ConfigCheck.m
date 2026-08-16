@@ -555,6 +555,20 @@ int main(void) {
             fail(@"trackpad five-finger tap is configurable",
                  @"a binding", @"missing");
 
+        NSDictionary *holdTapVariants = @{
+            @"hold-two-tap-left": @"Two-Fix Left-Tap",
+            @"hold-two-tap-right": @"Two-Fix Right-Tap",
+            @"hold-two-tap-between": @"Two-Fix Between-Tap",
+            @"hold-three-tap-left": @"Three-Fix Left-Tap",
+            @"hold-three-tap-right": @"Three-Fix Right-Tap",
+        };
+        for (NSString *slug in holdTapVariants) {
+            s = parse([NSString stringWithFormat:@"[trackpad]\n%@ = escape\n", slug]);
+            if (bindingFor(s, @"TrackpadCommands", [holdTapVariants objectForKey:slug]) == nil)
+                fail([slug stringByAppendingString:@" is configurable"],
+                     @"a binding", @"missing");
+        }
+
         s = parse(@"[mouse]\n"
                   @"two-finger-click = return\n"
                   @"[mouse \"Safari\"]\n"
