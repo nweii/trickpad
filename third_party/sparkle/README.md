@@ -15,11 +15,7 @@ This project builds through a single `clang` invocation and has no Xcode
 project, so the compiled framework is what can be pinned. Committing it keeps a
 clean checkout buildable offline at a known version.
 
-The framework carries nested code that must be signed along with the app:
-`Updater.app`, `XPCServices/Downloader.xpc`, `XPCServices/Installer.xpc`, and
-`Autoupdate`. The `codesign --force --deep` call in `scripts/build.sh` covers
-them. Verify with `codesign --verify --deep --strict` against the built bundle
-after changing anything about signing.
+The framework carries nested code that must be signed along with the app: `Updater.app`, `XPCServices/Downloader.xpc`, `XPCServices/Installer.xpc`, and `Autoupdate`. `scripts/build.sh` signs each of them innermost first and the app bundle last, without `--deep`, which would re-sign them in its own order and leave the framework reported as modified. Verify with `codesign --verify --deep --strict` against the built bundle after changing anything about signing.
 
 The release tools that live alongside the framework in that archive
 (`generate_appcast`, `sign_update`, `generate_keys`, `BinaryDelta`) are not
