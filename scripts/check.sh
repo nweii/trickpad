@@ -244,6 +244,9 @@ source_has 'BOOL anchorRemained = nFingers == 1 && data\[0\]\.identifier == fixI
 source_has 'if (enHanded && result == kTrackpadFixedHoldTapLeft)' \
   "$ROOT/src/jitouch/Jitouch/Gesture.m" ||
   gesture_fail "trackpad fixed hold-taps do not mirror left and right for a left dominant hand"
+source_has 'float projection = (tapDeltaX \* anchorDeltaX + tapDeltaY \* anchorDeltaY) /' \
+  "$ROOT/src/jitouch/Jitouch/Gesture.m" ||
+  gesture_fail "trackpad fixed hold-taps do not project the tap along the held-finger axis"
 
 # A two-finger tap lands its contacts together and lifts them a frame later, so
 # without a held anchor the Magic Mouse hold-tap recognizes it first and takes

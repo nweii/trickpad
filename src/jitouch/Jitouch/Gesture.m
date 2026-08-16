@@ -2635,16 +2635,32 @@ static void trackpadFixedHoldTapBeginRest(MGTrackpadFixedHoldTapRecognizer *reco
 
 static int trackpadFixedHoldTapPosition(const Finger *data, int tapIndex,
                                         const MGTrackpadFixedHoldTapRecognizer *recognizer) {
+    int firstAnchor = 0;
+    int lastAnchor = 0;
     float minimum = recognizer->anchorX[0] + recognizer->anchorY[0];
     float maximum = minimum;
     for (int i = 1; i < recognizer->anchorCount; i++) {
         float position = recognizer->anchorX[i] + recognizer->anchorY[i];
-        minimum = MIN(minimum, position);
-        maximum = MAX(maximum, position);
+        if (position < minimum) {
+            minimum = position;
+            firstAnchor = i;
+        }
+        if (position > maximum) {
+            maximum = position;
+            lastAnchor = i;
+        }
     }
-    float tapPosition = data[tapIndex].px + data[tapIndex].py;
-    int result = tapPosition < minimum ? kTrackpadFixedHoldTapLeft :
-                 tapPosition > maximum ? kTrackpadFixedHoldTapRight :
+    float anchorDeltaX = recognizer->anchorX[lastAnchor] - recognizer->anchorX[firstAnchor];
+    float anchorDeltaY = recognizer->anchorY[lastAnchor] - recognizer->anchorY[firstAnchor];
+    float anchorLengthSquared = anchorDeltaX * anchorDeltaX + anchorDeltaY * anchorDeltaY;
+    if (anchorLengthSquared <= 0)
+        return kTrackpadFixedHoldTapNoPosition;
+    float tapDeltaX = data[tapIndex].px - recognizer->anchorX[firstAnchor];
+    float tapDeltaY = data[tapIndex].py - recognizer->anchorY[firstAnchor];
+    float projection = (tapDeltaX * anchorDeltaX + tapDeltaY * anchorDeltaY) /
+        anchorLengthSquared;
+    int result = projection < 0 ? kTrackpadFixedHoldTapLeft :
+                 projection > 1 ? kTrackpadFixedHoldTapRight :
                  kTrackpadFixedHoldTapBetween;
     // The callback mirrors x before recognition for a left dominant hand.
     // Swap the named sides as the existing one-anchor hold-tap does; the
