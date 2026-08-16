@@ -234,7 +234,7 @@ The `appID` CFPreferences domain in `Settings.h` is vestigial — only the remov
 
 `./scripts/check.sh` compiles `src/Config.m` with `src/ConfigCheck.m` and runs the result against the parser. No framework, no fixtures.
 
-It asserts keystroke parsing, app scopes, exclusions, expanded options, action and deferred dispatch, URL substitution parsing and resolution, script validation and execution, skipped bad lines, boolean spellings, and comment stripping. It also asserts that every slug appears in both `GESTURES.md` and `config-notes.default.md`, and that every engine name reachable from a slug has a menu phrase. Adding a gesture without documenting it fails the check. Direct gesture dispatch is allowlisted so a recognizer that bypasses contact-sequence ownership also fails the check.
+It asserts keystroke parsing, app scopes, exclusions, expanded options, action and deferred dispatch, URL substitution parsing and resolution, script validation and execution, skipped bad lines, boolean spellings, and comment stripping. It also asserts that every slug appears in `GESTURES.md` and that every engine name reachable from a slug has a menu phrase. `config-notes.default.md` carries syntax and scoping guidance and points agents to the gesture reference instead of duplicating its catalog. Adding a gesture without documenting it in `GESTURES.md` fails the check. Direct gesture dispatch is allowlisted so a recognizer that bypasses contact-sequence ownership also fails the check.
 
 ## Login item
 
