@@ -89,8 +89,8 @@ About opens a submenu carrying the version, read from the running bundle, plus a
 - Edit Settings (⌘,), which opens `config.toml` in the user's editor.
 - Reload Settings (⌘R), which rereads the file into the running engine. Key equivalents, including ⌘Q on Quit, fire while the menu is open. Rows carry no icons, which would sit unevenly beside the Open at Login checkmark.
 - Open at Login, a checkbox running `install-login-agent.sh` or `uninstall-login-agent.sh` with `PLIST_ONLY` set, so the file changes without launchd terminating the running process. It sits after the separator with the app-lifecycle rows, not among the configuration actions.
-- Diagnostics, which can copy a state summary, open the last 15 minutes of logs, or enable verbose logging for the current session. An internal preference can also reveal the guided Magic Mouse trace session described below.
-- About Trickpad, whose submenu shows the running version and opens the product-owned documentation, latest-version retrieval, and website pages, then Quit Trickpad. Menu rows that only open a page carry no ellipsis; the mark is reserved for commands needing further input, so Edit Settings keeps it and the outbound links do not.
+- About Trickpad, whose submenu shows the running version and opens the product-owned documentation, latest-version retrieval, and website pages, then offers Diagnostics. Diagnostics is user-facing support tooling for copying a state summary, opening the last 15 minutes of logs, and enabling verbose logging for the current session; an internal preference can also reveal the guided Magic Mouse trace session described below. Rare-use troubleshooting rows are tucked under About, where version and debug info already travel together in support requests; Accessibility stays top-level because it is the first thing a broken install needs. Menu rows that only open a page carry no ellipsis; the mark is reserved for commands needing further input, so Edit Settings keeps it and the outbound links do not.
+- Quit Trickpad stays last and alone.
 
 ## Releasing
 

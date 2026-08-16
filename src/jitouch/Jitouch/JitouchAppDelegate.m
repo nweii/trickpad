@@ -202,6 +202,7 @@ CGKeyCode keyMap[128]; // for dvorak support
 @interface JitouchAppDelegate ()
 - (void)populateDiagnosticsMenu:(NSMenu *)menu;
 - (void)populateGestureTestingMenu:(NSMenu *)menu;
+- (NSMenuItem *)diagnosticsMenuItem;
 @end
 
 @implementation JitouchAppDelegate
@@ -1450,13 +1451,18 @@ static NSTextField *traceText(NSRect frame, CGFloat size, BOOL bold) {
 }
 
 - (void)refreshDiagnosticsSubmenu {
-    NSMenuItem *parent = [theMenu itemWithTag:kMenuTagDiagnostics];
+    NSMenuItem *parent = [self diagnosticsMenuItem];
     if (parent == nil)
         return;
     NSMenu *menu = [[[NSMenu alloc] initWithTitle:@"Diagnostics"] autorelease];
     [menu setDelegate:self];
     [self populateDiagnosticsMenu:menu];
     [parent setSubmenu:menu];
+}
+
+- (NSMenuItem *)diagnosticsMenuItem {
+    NSMenuItem *about = [theMenu itemWithTitle:@"About Trickpad"];
+    return [[about submenu] itemWithTag:kMenuTagDiagnostics];
 }
 
 // Starts the selected coding agent in the settings folder with the running app
@@ -1666,7 +1672,7 @@ static NSArray *agentCandidates(void) {
 
 - (void)menuNeedsUpdate:(NSMenu *)menu {
     NSMenuItem *agents = [theMenu itemWithTag:kMenuTagAgents];
-    NSMenuItem *diagnostics = [theMenu itemWithTag:kMenuTagDiagnostics];
+    NSMenuItem *diagnostics = [self diagnosticsMenuItem];
     if (menu == [diagnostics submenu]) {
         [self populateDiagnosticsMenu:menu];
         return;
@@ -1778,9 +1784,6 @@ static NSMenuItem *MGMenuSectionHeader(NSString *title) {
     item = [theMenu addItemWithTitle:@"Open at Login" action:@selector(toggleLoginItem:) keyEquivalent:@""];
     [item setTag:kMenuTagLoginItem];
 
-    item = [theMenu addItemWithTitle:@"Diagnostics" action:NULL keyEquivalent:@""];
-    [item setTag:kMenuTagDiagnostics];
-
     NSMenu *aboutMenu = [[[NSMenu alloc] initWithTitle:@"About Trickpad"] autorelease];
     NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
     // An unreleased build reports the last shipped version number, so the
@@ -1822,6 +1825,10 @@ static NSMenuItem *MGMenuSectionHeader(NSString *title) {
     }
     NSMenuItem *websiteItem = [aboutMenu addItemWithTitle:@"Website" action:@selector(about:) keyEquivalent:@""];
     [websiteItem setTarget:self];
+
+    [aboutMenu addItem:[NSMenuItem separatorItem]];
+    item = [aboutMenu addItemWithTitle:@"Diagnostics" action:NULL keyEquivalent:@""];
+    [item setTag:kMenuTagDiagnostics];
 
     NSMenuItem *aboutItem = [theMenu addItemWithTitle:@"About Trickpad" action:NULL keyEquivalent:@""];
     [aboutItem setSubmenu:aboutMenu];
