@@ -1467,6 +1467,9 @@ static void appendTOMLTable(NSMutableString *output, NSInteger *currentLine,
                  value.type != TOML_INT64 && value.type != TOML_FP64);
             if (wrongType)
                 rendered = @"\"<wrong TOML type>\"";
+        } else if (application != nil && [key isEqualToString:@"inherit"] &&
+                   value.type != TOML_BOOLEAN) {
+            rendered = @"\"<wrong TOML type>\"";
         }
         if (rendered == nil)
             rendered = @"\"<unsupported TOML value>\"";
@@ -1584,6 +1587,8 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
                                                                               forKey:@"All Applications"];
     NSMutableArray *mouseScopeOrder = [NSMutableArray arrayWithObject:@"All Applications"];
     NSMutableArray *trackpadScopeOrder = [NSMutableArray arrayWithObject:@"All Applications"];
+    NSMutableSet *mouseScopesWithoutInheritance = [NSMutableSet set];
+    NSMutableSet *trackpadScopesWithoutInheritance = [NSMutableSet set];
     NSMutableDictionary *general = [NSMutableDictionary dictionary];
     __block NSString *section = @"general";
     NSString *application = nil;
@@ -1831,6 +1836,20 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
         NSString *device = section;
 
         if ([device isEqualToString:@"mouse"] || [device isEqualToString:@"trackpad"]) {
+            if (application != nil && [key isEqualToString:@"inherit"]) {
+                BOOL inherits = YES;
+                if (!parseBooleanValue(value, &inherits)) {
+                    report(line, @"inherit must be true or false");
+                    continue;
+                }
+                NSMutableSet *scopesWithoutInheritance = [device isEqualToString:@"mouse"]
+                    ? mouseScopesWithoutInheritance : trackpadScopesWithoutInheritance;
+                if (inherits)
+                    [scopesWithoutInheritance removeObject:application];
+                else
+                    [scopesWithoutInheritance addObject:application];
+                continue;
+            }
             NSDictionary *slugs = [device isEqualToString:@"mouse"]
                 ? [Config mouseGestureSlugs] : [Config trackpadGestureSlugs];
             NSArray *engineNames = [slugs objectForKey:key];
@@ -1968,8 +1987,9 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
     BOOL leftHanded = [[stripQuotes(str(@"dominant-hand", @"right")) lowercaseString]
         isEqualToString:@"left"];
 
-    NSArray *(^commands)(NSMutableDictionary *, NSMutableArray *) =
-        ^NSArray *(NSMutableDictionary *scopes, NSMutableArray *order) {
+    NSArray *(^commands)(NSMutableDictionary *, NSMutableArray *, NSSet *) =
+        ^NSArray *(NSMutableDictionary *scopes, NSMutableArray *order,
+                   NSSet *scopesWithoutInheritance) {
             NSMutableArray *result = [NSMutableArray array];
             NSMutableSet *reportedMissingActions = [NSMutableSet set];
             NSMutableDictionary *globalByGesture = [NSMutableDictionary dictionary];
@@ -2010,15 +2030,19 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
                     [merged setObject:[binding objectForKey:@"SourceText"] forKey:@"SourceText"];
                     [resolved addObject:merged];
                 }
-                [result addObject:@{@"Application": app,
-                                    @"Path": @"",
-                                    @"Gestures": resolved}];
+                NSMutableDictionary *applicationResult = [NSMutableDictionary dictionaryWithDictionary:
+                    @{@"Application": app, @"Path": @"", @"Gestures": resolved}];
+                if ([scopesWithoutInheritance containsObject:app])
+                    [applicationResult setObject:@NO forKey:@"InheritGlobalBindings"];
+                [result addObject:applicationResult];
             }
             return result;
         };
 
-    NSArray *resolvedTrackpadCommands = commands(trackpadScopes, trackpadScopeOrder);
-    NSArray *resolvedMouseCommands = commands(mouseScopes, mouseScopeOrder);
+    NSArray *resolvedTrackpadCommands = commands(
+        trackpadScopes, trackpadScopeOrder, trackpadScopesWithoutInheritance);
+    NSArray *resolvedMouseCommands = commands(
+        mouseScopes, mouseScopeOrder, mouseScopesWithoutInheritance);
 
     // A declaration key is "device|scope|slug". Application scopes do not change
     // whether a motion collides with a built-in gesture, so every active binding

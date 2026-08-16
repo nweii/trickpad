@@ -806,6 +806,7 @@ static NSDictionary *resolvedBindingForGesture(NSString *gesture,
                                                BOOL includeUnassigned,
                                                NSString **matchedApplication,
                                                BOOL *declared) {
+    BOOL blocksGlobal = NO;
     for (NSString *application in applications) {
         NSDictionary *applicationBindings = [commandMap objectForKey:application];
         NSDictionary *binding = [applicationBindings objectForKey:gesture];
@@ -826,7 +827,12 @@ static NSDictionary *resolvedBindingForGesture(NSString *gesture,
                 return [[binding objectForKey:@"Enable"] boolValue] ? binding : nil;
             }
         }
+        if ([[applicationBindings objectForKey:@"InheritGlobalBindings"] isEqual:@NO])
+            blocksGlobal = YES;
     }
+
+    if (blocksGlobal)
+        return nil;
 
     NSDictionary *binding = [[commandMap objectForKey:@"All Applications"] objectForKey:gesture];
     if (binding != nil && matchedApplication != NULL)
