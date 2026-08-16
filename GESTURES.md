@@ -373,7 +373,7 @@ One kind of overlap is easy to miss. A built-in gesture that uses a *double* tap
 
 ## Choosing one
 
-The `hold-` gestures hold one finger still while another taps or slides. A resting hand does not produce that shape and macOS binds nothing to it, so they stay clear on both counts. Bind those for anything you would regret firing by accident.
+The `hold-` gestures keep one or more fingers still while another taps or slides. A resting hand does not produce that shape and macOS binds nothing to it, so they stay clear on both counts. Bind those for anything you would regret firing by accident.
 
 A tap fires while your hand rests on the surface. A swipe competes with scrolling. Both are fine for something harmless.
 
