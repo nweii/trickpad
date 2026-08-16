@@ -4284,6 +4284,110 @@ static int gestureMagicMouseOneFixOneTap(const Finger *data, int nFingers, doubl
     return 0;
 }
 
+static int gestureMagicMouseTwoFixOneTap(const Finger *data, int nFingers, double timestamp) {
+    static double sttime = -1;
+    static float fixedPositions[2][2];
+    static float tapPositionStart[2];
+    static int step = 0;
+    static int fixedIds[2];
+    static int tapId = -1;
+    static int tapPosition = 0;
+
+    if (CGEventSourceButtonState(kCGEventSourceStateHIDSystemState, kCGMouseButtonLeft))
+        sttime = -1;
+
+    if (step == 0 && nFingers == 2) {
+        step = 1;
+        fixedIds[0] = data[0].identifier;
+        fixedIds[1] = data[1].identifier;
+        sttime = -1;
+    } else if (step == 1) {
+        if (nFingers == 3) {
+            int fixedIndexes[2] = {-1, -1};
+            int tapIndex = -1;
+            for (int i = 0; i < 3; i++) {
+                if (data[i].identifier == fixedIds[0])
+                    fixedIndexes[0] = i;
+                else if (data[i].identifier == fixedIds[1])
+                    fixedIndexes[1] = i;
+                else
+                    tapIndex = i;
+            }
+            BOOL anchorsWereHeld = tapIndex >= 0 && fixedIndexes[0] >= 0 &&
+                fixedIndexes[1] >= 0 &&
+                MGContactOnsetTrackerContactArrivedAfter(&magicMouseContactOnsets,
+                    fixedIds[0], data[tapIndex].identifier,
+                    kMagicMouseTwoFingerTapMaximumOnsetSpread) &&
+                MGContactOnsetTrackerContactArrivedAfter(&magicMouseContactOnsets,
+                    fixedIds[1], data[tapIndex].identifier,
+                    kMagicMouseTwoFingerTapMaximumOnsetSpread);
+            if (!anchorsWereHeld) {
+                MGTraceRecordCandidate(@"two-fix-one-tap", @"canceled", @"anchors-not-held");
+                step = 0;
+            } else {
+                float minimumX = MIN(data[fixedIndexes[0]].px, data[fixedIndexes[1]].px);
+                float maximumX = MAX(data[fixedIndexes[0]].px, data[fixedIndexes[1]].px);
+                tapPosition = data[tapIndex].px < minimumX ? -1 :
+                    data[tapIndex].px > maximumX ? 1 : 0;
+                tapId = data[tapIndex].identifier;
+                sttime = timestamp;
+                for (int i = 0; i < 2; i++) {
+                    fixedPositions[i][0] = data[fixedIndexes[i]].px;
+                    fixedPositions[i][1] = data[fixedIndexes[i]].py;
+                }
+                tapPositionStart[0] = data[tapIndex].px;
+                tapPositionStart[1] = data[tapIndex].py;
+                step = 2;
+            }
+        } else if (nFingers == 2) {
+            BOOL sameAnchors =
+                (data[0].identifier == fixedIds[0] && data[1].identifier == fixedIds[1]) ||
+                (data[0].identifier == fixedIds[1] && data[1].identifier == fixedIds[0]);
+            if (!sameAnchors) {
+                fixedIds[0] = data[0].identifier;
+                fixedIds[1] = data[1].identifier;
+            }
+        } else {
+            step = 0;
+        }
+    } else if (step == 2) {
+        if (nFingers == 2) {
+            BOOL anchorsRemain =
+                ((data[0].identifier == fixedIds[0] && data[1].identifier == fixedIds[1]) ||
+                 (data[0].identifier == fixedIds[1] && data[1].identifier == fixedIds[0])) &&
+                data[0].identifier != tapId && data[1].identifier != tapId;
+            if (timestamp - sttime <= clickSpeed && anchorsRemain) {
+                BOOL dispatched = NO;
+                if (tapPosition < 0)
+                    dispatched = dispatchExclusiveCommand(@"Two-Fix Left-Tap", MAGICMOUSE, kGestureOwnerHoldTap);
+                else if (tapPosition > 0)
+                    dispatched = dispatchExclusiveCommand(@"Two-Fix Right-Tap", MAGICMOUSE, kGestureOwnerHoldTap);
+                else
+                    dispatched = dispatchExclusiveCommand(@"Two-Fix Between-Tap", MAGICMOUSE, kGestureOwnerHoldTap);
+                if (dispatched)
+                    customMagicMouseTapSuppressionUntil = CFAbsoluteTimeGetCurrent() + 0.18;
+            }
+            step = 0;
+        } else if (nFingers == 3) {
+            for (int i = 0; i < 3; i++) {
+                int savedIndex = data[i].identifier == fixedIds[0] ? 0 :
+                    data[i].identifier == fixedIds[1] ? 1 : 2;
+                float startX = savedIndex < 2 ? fixedPositions[savedIndex][0] : tapPositionStart[0];
+                float startY = savedIndex < 2 ? fixedPositions[savedIndex][1] : tapPositionStart[1];
+                if ((savedIndex == 2 && data[i].identifier != tapId) ||
+                    lenSqr(data[i].px, data[i].py, startX, startY) > 0.0007) {
+                    step = 0;
+                    break;
+                }
+            }
+        } else {
+            step = 0;
+        }
+    }
+
+    return 0;
+}
+
 
 static int magicMouseCallback(MGMultitouchDeviceRef device, Finger *data, int nFingers, double timestamp, int frame) {
     int ignore = 0;
@@ -4424,6 +4528,7 @@ static int magicMouseCallback(MGMultitouchDeviceRef device, Finger *data, int nF
         gestureMagicMouseSwipeThreeFingers(data, nFingers, timestamp, thumbPresent);
         gestureMagicMouseTwoFingers(data, nFingers, timestamp, thumbPresent);
         gestureMagicMouseOneFixOneTap(tapData, tapContactCount, timestamp);
+        gestureMagicMouseTwoFixOneTap(tapData, tapContactCount, timestamp);
         gestureMagicMouseV(data, nFingers);
         gestureMagicMouseTwoFixOneSlide(data, nFingers, timestamp, thumbPresent);
         gestureMagicMouseMiddleClick(data, nFingers);

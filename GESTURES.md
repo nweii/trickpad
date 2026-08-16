@@ -23,6 +23,9 @@ Magic Mouse gestures use up to three fingers. Trackpad taps use up to five finge
 |---|---|
 | `hold-left-tap-right` | Hold one finger still and tap to its right with another, keeping the hold through the tap |
 | `hold-right-tap-left` | Hold one finger still and tap to its left with another, keeping the hold through the tap |
+| `hold-two-tap-left` | Hold two fingers still and tap to their left with another, keeping both holds through the tap |
+| `hold-two-tap-right` | Hold two fingers still and tap to their right with another, keeping both holds through the tap |
+| `hold-two-tap-between` | Hold two fingers still and tap between them with another, keeping both holds through the tap |
 | `one-finger-tap` | Tap with one finger |
 | `two-finger-tap` | Tap with two fingers |
 | `three-finger-tap` | Tap with three fingers |

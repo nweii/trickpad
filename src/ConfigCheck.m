@@ -1316,6 +1316,22 @@ int main(void) {
             fail(@"menu collapses engine aliases for one public gesture",
                  @"Middle-Fix Index-Near-Tap", canonicalMouseHold);
 
+        NSArray *mouseTwoFingerHoldTap = [[Config mouseGestureSlugs]
+            objectForKey:@"hold-two-tap-left"];
+        if (![mouseTwoFingerHoldTap isEqualToArray:@[@"Two-Fix Left-Tap"]])
+            fail(@"mouse exposes hold two, tap left",
+                 @[@"Two-Fix Left-Tap"], mouseTwoFingerHoldTap ?: @[]);
+        mouseTwoFingerHoldTap = [[Config mouseGestureSlugs]
+            objectForKey:@"hold-two-tap-right"];
+        if (![mouseTwoFingerHoldTap isEqualToArray:@[@"Two-Fix Right-Tap"]])
+            fail(@"mouse exposes hold two, tap right",
+                 @[@"Two-Fix Right-Tap"], mouseTwoFingerHoldTap ?: @[]);
+        mouseTwoFingerHoldTap = [[Config mouseGestureSlugs]
+            objectForKey:@"hold-two-tap-between"];
+        if (![mouseTwoFingerHoldTap isEqualToArray:@[@"Two-Fix Between-Tap"]])
+            fail(@"mouse exposes hold two, tap between",
+                 @[@"Two-Fix Between-Tap"], mouseTwoFingerHoldTap ?: @[]);
+
         // Every slug must appear in the canonical gesture reference. The
         // installed agent guide points there instead of duplicating the list.
         NSArray *args = [[NSProcessInfo processInfo] arguments];
@@ -1531,6 +1547,7 @@ int main(void) {
                 @"gestureMagicMouseThreeFingerTap(tapData, tapContactCount, timestamp, 0)",
                 @"gestureMagicMouseOneFingerTap(tapData, tapContactCount, timestamp)",
                 @"gestureMagicMouseOneFixOneTap(tapData, tapContactCount, timestamp)",
+                @"gestureMagicMouseTwoFixOneTap(tapData, tapContactCount, timestamp)",
                 @"gestureMagicMouseTwoFingerSwipe(data, nFingers, timestamp, thumbPresent)",
                 @"gestureTrackpadTwoFingerTap(data, nFingers,",
                 @"gestureTrackpadHoldSlide(data, nFingers)",
@@ -1562,6 +1579,19 @@ int main(void) {
                 threeTapCall.location >= twoTapCall.location)
                 fail(@"mouse tap discriminator evaluates exact higher count first",
                      @"filtered three-finger tap before filtered two-finger tap", @"missing or reversed");
+            NSRange handedness = [mouseCallback rangeOfString:@"if (enMMHanded)"];
+            NSRange thumbFilter = [mouseCallback rangeOfString:
+                @"int thumbPresent = gestureMagicMouseThumb(data, nFingers)"];
+            NSRange contactFilter = [mouseCallback rangeOfString:
+                @"MGMagicMouseContactDecision qualityDecision"];
+            NSRange twoFixedTapCall = [mouseCallback rangeOfString:
+                @"gestureMagicMouseTwoFixOneTap(tapData, tapContactCount, timestamp)"];
+            if (handedness.location == NSNotFound || thumbFilter.location == NSNotFound ||
+                contactFilter.location == NSNotFound || twoFixedTapCall.location == NSNotFound ||
+                handedness.location >= thumbFilter.location || thumbFilter.location >= contactFilter.location ||
+                contactFilter.location >= twoFixedTapCall.location)
+                fail(@"mouse two-finger hold-tap uses mirrored fingertip contacts without the thumb",
+                     @"handedness before thumb and quality filters before recognizer", @"missing or reversed");
             for (NSString *required in @[
                 @"if (nFingers >= 3)", @"kTwoFingerTapRejectedUntilLift",
                 @"gesture = @\"Two-Finger Click\"", @"gesture = @\"Three-Finger Click\"",

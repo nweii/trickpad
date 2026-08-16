@@ -72,6 +72,8 @@ If a recommendation carries a risk, tell the user plainly what could collide and
 
 **Gestures may overlap with simpler variants.** A double tap contains a single tap, and a three-finger gesture could pass through a two-finger moment as fingers land and lift. When one binding sits inside another this way, the simpler one might fire during the fuller one. Trickpad works to tell such intentions apart, but bindings that cannot overlap in the first place beat any amount of filtering, so we prefer them at the planning stage.
 
+The Magic Mouse can hold two fingers and tap another to the left, right, or between them with `hold-two-tap-left`, `hold-two-tap-right`, and `hold-two-tap-between`.
+
 **The device counts contacts, not fingers.** A resting finger can add one to the count. A light touch or an edge contact can drop one. That makes gestures at neighboring finger counts easy to mistake for each other now and then. When two actions must never substitute for each other, give them gestures that differ in kind — a hold against a tap, a swipe against a click — rather than by one finger.
 
 **Conflicts can come from three places. Check each.**
