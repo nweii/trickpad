@@ -59,6 +59,11 @@ The trackpad recognizes a hold-and-slide in one direction only, so it has one sl
 |---|---|
 | `hold-left-tap-right` | Hold one finger still and tap to its right with another, keeping the hold through the tap |
 | `hold-right-tap-left` | Hold one finger still and tap to its left with another, keeping the hold through the tap |
+| `hold-two-tap-left` | Hold two fingers still and tap to their left with another, keeping the hold through the tap |
+| `hold-two-tap-right` | Hold two fingers still and tap to their right with another, keeping the hold through the tap |
+| `hold-two-tap-between` | Hold two fingers still and tap between them with another, keeping the hold through the tap |
+| `hold-three-tap-left` | Hold three fingers still and tap to their left with another, keeping the hold through the tap |
+| `hold-three-tap-right` | Hold three fingers still and tap to their right with another, keeping the hold through the tap |
 | `hold-slide` | Hold one finger still, slide another |
 | `two-finger-tap` | Tap with two fingers |
 | `three-finger-tap` | Tap with three fingers |
