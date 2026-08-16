@@ -46,6 +46,15 @@ static NSDictionary *bindingForApplication(NSDictionary *settings, NSString *dev
     return nil;
 }
 
+static NSDictionary *applicationScope(NSDictionary *settings, NSString *deviceKey,
+                                      NSString *application) {
+    for (NSDictionary *app in [settings objectForKey:deviceKey]) {
+        if ([[app objectForKey:@"Application"] isEqualToString:application])
+            return app;
+    }
+    return nil;
+}
+
 // Most semantic checks predate the TOML surface. Convert their compact fixture
 // spelling here so each assertion continues to exercise the production parser.
 static NSString *TOMLFixture(NSString *text) {
@@ -281,6 +290,46 @@ int main(void) {
             ![[tomlAppBinding objectForKey:@"Defer"] boolValue])
             fail(@"TOML application table and inline options",
                  @"a deferred URL binding", tomlAppBinding ?: @"missing");
+
+        tomlSettings = parseRawTOML(
+            @"[MOUSE]\n"
+             @"two-finger-click = \"escape\"\n"
+             @"[MOUSE.\"Final Cut Pro\"]\n"
+             @"inherit = false\n"
+             @"three-finger-click = \"return\"\n"
+             @"[TRACKPAD.\"Final Cut Pro\"]\n"
+             @"inherit = true\n",
+            &tomlProblems);
+        NSDictionary *mouseScope = applicationScope(
+            tomlSettings, @"MagicMouseCommands", @"Final Cut Pro");
+        NSDictionary *trackpadScope = applicationScope(
+            tomlSettings, @"TrackpadCommands", @"Final Cut Pro");
+        if ([tomlProblems count] != 0 ||
+            ![[mouseScope objectForKey:@"InheritGlobalBindings"] isEqual:@NO] ||
+            bindingForApplication(tomlSettings, @"MagicMouseCommands", @"Final Cut Pro",
+                                  @"Three-Finger Click") == nil ||
+            [trackpadScope objectForKey:@"InheritGlobalBindings"] != nil)
+            fail(@"application table controls global binding inheritance per device",
+                 @"mouse inheritance off, local mouse binding active, trackpad unchanged",
+                 tomlSettings ?: tomlProblems);
+
+        for (NSString *rejected in @[@"\"false\"", @"0"]) {
+            NSArray *inheritProblems = nil;
+            tomlSettings = parseRawTOML([NSString stringWithFormat:
+                @"[MOUSE.\"Final Cut Pro\"]\ninherit = %@\nthree-finger-click = \"return\"\n",
+                rejected], &inheritProblems);
+            mouseScope = applicationScope(
+                tomlSettings, @"MagicMouseCommands", @"Final Cut Pro");
+            NSString *problem = [inheritProblems count] > 0 ? inheritProblems[0] : @"";
+            if ([inheritProblems count] != 1 ||
+                [mouseScope objectForKey:@"InheritGlobalBindings"] != nil ||
+                bindingForApplication(tomlSettings, @"MagicMouseCommands", @"Final Cut Pro",
+                                      @"Three-Finger Click") == nil ||
+                [problem rangeOfString:@"inherit must be true or false"].location == NSNotFound)
+                fail([@"invalid application inheritance is reported and skipped: "
+                      stringByAppendingString:rejected],
+                     @"one diagnostic and the table's binding", problem);
+        }
 
         tomlSettings = parseRawTOML(
             @"[MOUSE]\n"

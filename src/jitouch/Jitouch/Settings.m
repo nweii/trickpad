@@ -272,6 +272,8 @@ static int notSynchronize;
             for (NSDictionary *gesture in [app objectForKey:@"Gestures"]) {
                 [gestures setObject:gesture forKey:[gesture objectForKey:@"Gesture"]];
             }
+            if ([[app objectForKey:@"InheritGlobalBindings"] isEqual:@NO])
+                [gestures setObject:@NO forKey:@"InheritGlobalBindings"];
             [map setObject:gestures forKey:appName];
             [gestures release];
         }

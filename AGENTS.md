@@ -187,6 +187,8 @@ The file is TOML, parsed by the vendored `tomlc17` parser pinned under `third_pa
 
 `[MOUSE."Application"]` and `[TRACKPAD."Application"]` limit the bindings below them to one application. The quoted selector may be its display name or exact bundle identifier. Application bindings override the device-global binding for the same gesture. `"off"` excludes a global binding in that application.
 
+`inherit = false` in an application table stops that table from using any device-global bindings. The table's own bindings still dispatch, and inheritance remains enabled for the other device unless its application table also disables it.
+
 An expanded binding is a TOML inline table: `gesture = { action = "escape", haptic = false }`. `action` is required globally and may be omitted in an application scope to inherit the global action. `defer` is valid only for single-tap gestures. `haptic` is valid only for trackpad bindings and overrides `haptic-feedback` for that binding.
 
 `config-version` identifies the file format and is currently `3`. A missing version means the current format while the project is in alpha. An unsupported value rejects the entire reload so another format cannot be partially reinterpreted.

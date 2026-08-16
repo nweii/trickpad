@@ -142,6 +142,13 @@ Put an application name or exact bundle identifier in a device heading:
 
 The application section overrides global bindings for the same gesture. `off` excludes a global binding in that application. TOML tables cannot repeat, so keep an application's bindings together under its one device table.
 
+Set `inherit = false` to stop an application table from using any device-global bindings. Bindings in the application table still apply, and the other device keeps its global bindings unless its application table also sets `inherit = false`:
+
+    [MOUSE."Final Cut Pro"]
+
+    inherit = false
+    three-finger-click = "escape"
+
 ## Binding options
 
 Use braces when a binding needs options. Separate properties with commas; line breaks are optional:

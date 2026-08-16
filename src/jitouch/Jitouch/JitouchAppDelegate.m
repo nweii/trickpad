@@ -784,6 +784,9 @@ static BOOL runLaunchctl(NSArray *arguments) {
             NSString *application = [app objectForKey:@"Application"];
             NSString *scope = [application isEqualToString:@"All Applications"]
                 ? @"" : [NSString stringWithFormat:@"%@ · ", application];
+            if ([[app objectForKey:@"InheritGlobalBindings"] isEqual:@NO])
+                [appLines addObject:@[[NSString stringWithFormat:
+                    @"%@Inherited bindings  →  Off", scope], @""]];
             NSMutableSet *seenGestures = [NSMutableSet set];
             for (NSDictionary *g in [[app objectForKey:@"Gestures"] reverseObjectEnumerator]) {
                 NSString *gestureName = [g objectForKey:@"Gesture"];
