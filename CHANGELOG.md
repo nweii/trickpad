@@ -12,6 +12,21 @@
 
 # Changelog
 
+## 0.11.0
+
+Released 2026-08-18.
+
+### Added
+
+- Add built-in actions for the system function keys. The new actions are `play-pause`, `next-track`, `previous-track`, `mute`, `volume-up`, `volume-down`, `brightness-up`, `brightness-down`, `keyboard-backlight-up`, and `keyboard-backlight-down`. They send the same functions as the keys on an Apple keyboard.
+- Add hold-tap gestures that hold two or three fingers still and tap with another finger. `hold-two-tap-left`, `hold-two-tap-right`, and `hold-two-tap-between` work on both devices. `hold-three-tap-left` and `hold-three-tap-right` work on the trackpad.
+- Add `inherit = false` for application tables. It stops one application from using the device-global bindings. The table's own bindings still apply.
+
+### Changed
+
+- Make a physical click bound to `middle-click` hold the middle button until the click ends. This supports middle-button drags.
+- Move Diagnostics into the About Trickpad menu.
+
 ## 0.10.0
 
 Released 2026-08-13.
