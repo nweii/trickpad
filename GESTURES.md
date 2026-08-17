@@ -246,6 +246,8 @@ Write a key alone, modifiers plus one key, or modifier keys without a regular ke
     "⌘⇧A"
     "Cmd Shift A"
 
+Modifier names are case-insensitive. For example, `cmd`, `CMD`, `command`, and `Command` all mean the Command modifier.
+
 | Modifier | Write any of |
 |---|---|
 | Command | `cmd` `command` `⌘` |
