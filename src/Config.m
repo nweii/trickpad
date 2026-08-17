@@ -422,6 +422,16 @@ static NSString *gestureNameProblem(NSString *key, NSString *device,
             @"reopen-tab": @"Open Recently Closed Tab",
             @"maximize": @"Maximize",
             @"minimize": @"Minimize",
+            @"play-pause": @"Play / Pause",
+            @"next-track": @"Next Track",
+            @"previous-track": @"Previous Track",
+            @"mute": @"Mute",
+            @"volume-up": @"Volume Up",
+            @"volume-down": @"Volume Down",
+            @"brightness-up": @"Brightness Up",
+            @"brightness-down": @"Brightness Down",
+            @"keyboard-backlight-up": @"Keyboard Backlight Up",
+            @"keyboard-backlight-down": @"Keyboard Backlight Down",
         } retain];
     }
     return m;

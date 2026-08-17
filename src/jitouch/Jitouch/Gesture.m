@@ -1701,19 +1701,25 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
             } else if ([command isEqualToString:@"Application Switcher"]) {
                 CoreDockSendNotification(@"com.apple.appswitcher.awake", 0);
             } else if ([command isEqualToString:@"Play / Pause"]) {
-                [keyUtil simulateSpecialKey:NX_KEYTYPE_PLAY];
-            } else if ([command isEqualToString:@"Next"]) {
-                [keyUtil simulateSpecialKey:NX_KEYTYPE_NEXT];
-            } else if ([command isEqualToString:@"Previous"]) {
-                [keyUtil simulateSpecialKey:NX_KEYTYPE_PREVIOUS];
+                [keyUtil simulateSystemKey:NX_KEYTYPE_PLAY];
+            } else if ([command isEqualToString:@"Next Track"]) {
+                [keyUtil simulateSystemKey:NX_KEYTYPE_NEXT];
+            } else if ([command isEqualToString:@"Previous Track"]) {
+                [keyUtil simulateSystemKey:NX_KEYTYPE_PREVIOUS];
+            } else if ([command isEqualToString:@"Mute"]) {
+                [keyUtil simulateSystemKey:NX_KEYTYPE_MUTE];
             } else if ([command isEqualToString:@"Volume Up"]) {
-                [keyUtil simulateSpecialKey:NX_KEYTYPE_SOUND_UP];
+                [keyUtil simulateSystemKey:NX_KEYTYPE_SOUND_UP];
             } else if ([command isEqualToString:@"Volume Down"]) {
-                [keyUtil simulateSpecialKey:NX_KEYTYPE_SOUND_DOWN];
+                [keyUtil simulateSystemKey:NX_KEYTYPE_SOUND_DOWN];
             } else if ([command isEqualToString:@"Brightness Up"]) {
-                [keyUtil simulateSpecialKey:NX_KEYTYPE_BRIGHTNESS_UP];
+                [keyUtil simulateSystemKey:NX_KEYTYPE_BRIGHTNESS_UP];
             } else if ([command isEqualToString:@"Brightness Down"]) {
-                [keyUtil simulateSpecialKey:NX_KEYTYPE_BRIGHTNESS_DOWN];
+                [keyUtil simulateSystemKey:NX_KEYTYPE_BRIGHTNESS_DOWN];
+            } else if ([command isEqualToString:@"Keyboard Backlight Up"]) {
+                [keyUtil simulateSystemKey:NX_KEYTYPE_ILLUMINATION_UP];
+            } else if ([command isEqualToString:@"Keyboard Backlight Down"]) {
+                [keyUtil simulateSystemKey:NX_KEYTYPE_ILLUMINATION_DOWN];
             } else {
                 if ([commandDict objectForKey:@"OpenFilePath"]) {
                     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];

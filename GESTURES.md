@@ -269,9 +269,13 @@ Fn cannot be sent. It is a HID usage rather than an ordinary key event, so no ge
 
 `middle-click` `mission-control` `app-expose` `show-desktop` `app-switcher` `next-tab` `previous-tab` `new-tab` `close-tab` `reopen-tab` `maximize` `minimize`
 
+`play-pause` `next-track` `previous-track` `mute` `volume-up` `volume-down` `brightness-up` `brightness-down` `keyboard-backlight-up` `keyboard-backlight-down`
+
 `mission-control`, `app-expose`, `show-desktop`, and `app-switcher` ask macOS for those views directly rather than sending their keyboard shortcuts. An application cannot intercept them, and they work whether or not the matching shortcut is enabled in System Settings.
 
 `middle-click` posts a real middle-button event, which gives a Magic Mouse a button it does not otherwise have. A physical click bound to it holds the middle button until the click ends. A tap bound to it sends one press and release.
+
+The media, volume, display brightness, and keyboard backlight actions send the matching system function key. They do not change the meaning of `f1` through `f12`, which remain literal function keys.
 
 ### URL bindings and app deep links
 

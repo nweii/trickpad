@@ -562,6 +562,13 @@ int main(void) {
         if (![[g objectForKey:@"Command"] isEqualToString:@"Middle Click"])
             fail(@"action name", @"Middle Click", [g objectForKey:@"Command"]);
 
+        s = parse(@"[mouse]\nthree-finger-tap = play-pause\n");
+        g = bindingFor(s, @"MagicMouseCommands", @"Three-Finger Tap");
+        if (![[g objectForKey:@"IsAction"] boolValue])
+            fail(@"system action is not a keystroke", @YES, [g objectForKey:@"IsAction"]);
+        if (![[g objectForKey:@"Command"] isEqualToString:@"Play / Pause"])
+            fail(@"system action name", @"Play / Pause", [g objectForKey:@"Command"]);
+
         NSArray *mouseClickProblems = nil;
         s = parseWithProblems(@"[mouse]\ntwo-finger-click = return\nthree-finger-click = escape\n",
                               &mouseClickProblems);

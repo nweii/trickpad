@@ -128,7 +128,7 @@ static void languageChanged(CFNotificationCenterRef center, void *observer, CFSt
     [self simulateKeyCode:km ShftDown:shft CtrlDown:ctrl AltDown:alt CmdDown:cmd];
 }
 
-- (void)simulateSpecialKey:(int)key {
+- (void)simulateSystemKey:(int)key {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
     NSEvent *event = [NSEvent otherEventWithType:NSSystemDefined location:NSZeroPoint modifierFlags:0xa00 timestamp:0 windowNumber:0 context:NULL subtype:8 data1:(key << 16) | (0xa00) data2:-1];
