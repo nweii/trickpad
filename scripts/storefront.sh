@@ -208,5 +208,14 @@ FINAL_SIZE=$(api GET "/v1/files/?ids=$FILE_ID" | json 'd=json.load(sys.stdin); p
   exit 1
 }
 
+# Only after the benefit verifiably serves the new file: the replaced files
+# are detached and invisible in the dashboard, so they would otherwise pile up.
+print -r -- "$CURRENT_FILES" | json 'd=json.load(sys.stdin); [print(i) for i in d]' | while IFS= read -r old_id; do
+  [[ "$old_id" == "$FILE_ID" ]] && continue
+  STATUS=$("$CURL_BIN" -sS -o /dev/null -w "%{http_code}" -X DELETE \
+    -H "Authorization: Bearer $POLAR_ACCESS_TOKEN" "$API/v1/files/$old_id")
+  echo "  removed replaced file $old_id ($STATUS)"
+done
+
 echo "Published $DMG_NAME to the storefront benefit and verified the read-back."
 echo "A buyer's next download serves Trickpad $VERSION."
