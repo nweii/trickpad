@@ -116,6 +116,7 @@ git tag -a vX.Y.Z -m "X.Y.Z"  # local until the package and preview verify
 ./scripts/package.sh          # requires the tag at HEAD; prints every file the update feed names
 ./scripts/publish.sh          # read-only preview of R2 and the public feed
 ./scripts/publish.sh --publish X.Y.Z  # after approving that preview
+./scripts/storefront.sh       # preview, then --publish X.Y.Z: replace the Polar benefit DMG
 git push origin main --tags
 gh release create vX.Y.Z --title "X.Y.Z" --notes "..."
 # start the next train: set APP_VERSION to the next patch number plus -dev, commit
@@ -157,7 +158,7 @@ Write the entries in ASD-STE100 Simplified Technical English: one idea per sente
 
 1. The product website's reference pages, which carry their own copy of the configuration syntax and are updated by hand, so a change to `GESTURES.md` reaches them only when someone ports it.
 2. Any surface that derives from `CHANGELOG.md`, which needs a rebuild to pick up the new entry.
-3. The storefront listing, where any copy naming a feature the release changed is maintained by hand.
+3. The storefront listing, where any copy naming a feature the release changed is maintained by hand. The listing's downloadable DMG is not hand-maintained: `scripts/storefront.sh` uploads the packaged image to Polar and points the benefit at it, with the same preview, `--publish`, and read-back discipline as `publish.sh`, reading `POLAR_ACCESS_TOKEN` from the same Infisical folder.
 
 ## Cross-surface product facts
 
