@@ -36,7 +36,7 @@ A step can report success it did not achieve. Proving a check fails, reading a b
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` and `docs/adr/` at the repository root. See `docs/agents/domain.md`.
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repository root. See `docs/agents/domain.md`.
 
 ## Vendored engine, local config layer
 

@@ -10,11 +10,15 @@ Maps Magic Mouse and Magic Trackpad multi-touch gestures to keystrokes, built-in
 One configuration line that pairs a gesture with an action: the gesture slug on the left of `=`, the binding value on the right. Bindings live under a device table (`[MOUSE]` or `[TRACKPAD]`) or an application scope within one.
 
 **Action**:
-What Trickpad does when a bound gesture fires. The reader-facing umbrella for everything a binding value can name: a keystroke, a built-in action, a custom URL, or an executable script.
+What Trickpad does when a bound gesture fires. The reader-facing umbrella for everything a binding value can name: a keystroke, a built-in action, a custom URL, an executable script, a system sound, spoken words, or a sequence of these.
 _Avoid_: command, mapping, output
 
 **Binding value**:
-The exact TOML value after `=` in a binding. Either a quoted string naming the action directly, or an expanded binding whose `action` key names it. Use this term when the precise TOML syntax matters; use "action" when describing what the gesture does.
+The exact TOML value after `=` in a binding. A quoted string naming one action, an array naming a sequence, or an expanded binding whose `action` key carries either. Use this term when the precise TOML syntax matters; use "action" when describing what the gesture does.
+
+**Sequence**:
+A binding value written as a TOML array, whose elements run in order when the gesture fires. Each element validates like a standalone binding value; `wait:MS` elements pause between them. Distinct from a contact sequence.
+_Avoid_: macro, chain
 
 **Built-in action**:
 An action the engine performs itself, named by a slug such as `mission-control`, rather than by sending a keystroke, URL, or script.
