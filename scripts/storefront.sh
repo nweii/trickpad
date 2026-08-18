@@ -145,6 +145,10 @@ PY
 )
 CREATED=$(api POST "/v1/files/" "$CREATE_BODY")
 FILE_ID=$(print -r -- "$CREATED" | json 'd=json.load(sys.stdin); print(d["id"])')
+# Completion identifies the S3 multipart upload, not the Polar file: it needs
+# the upload's own id and path from the create response.
+UPLOAD_ID=$(print -r -- "$CREATED" | json 'd=json.load(sys.stdin); print(d["upload"]["id"])')
+UPLOAD_PATH=$(print -r -- "$CREATED" | json 'd=json.load(sys.stdin); print(d["upload"]["path"])')
 PART_URL=$(print -r -- "$CREATED" | json 'd=json.load(sys.stdin); print(d["upload"]["parts"][0]["url"])')
 PART_HEADERS=$(print -r -- "$CREATED" | json 'd=json.load(sys.stdin); [print(f"{k}: {v}") for k,v in d["upload"]["parts"][0].get("headers",{}).items()]')
 
@@ -154,18 +158,25 @@ header_args=()
 while IFS= read -r line; do
   [[ -n "$line" ]] && header_args+=(-H "$line")
 done <<< "$PART_HEADERS"
-ETAG=$("$CURL_BIN" -sS --fail-with-body -X PUT --data-binary "@$DMG" "${header_args[@]}" \
-        -D - -o /dev/null "$PART_URL" | perl -ne 'print $1 if m/^etag:\s*"?([^"\r\n]+)/i')
+# S3 answers an occasional transient 500; the presigned URL stays valid, so a
+# short retry is safe and idempotent.
+ETAG=""
+for attempt in 1 2 3; do
+  ETAG=$("$CURL_BIN" -sS -X PUT --data-binary "@$DMG" "${header_args[@]}" \
+          -D - -o /dev/null "$PART_URL" | perl -ne 'print $1 if m/^etag:\s*"?([^"\r\n]+)/i') && [[ -n "$ETAG" ]] && break
+  echo "Upload attempt $attempt failed; retrying."
+  sleep $attempt
+done
 [[ -n "$ETAG" ]] || {
   echo "The storage upload returned no ETag; the file stays incomplete on Polar." >&2
   exit 1
 }
 
-COMPLETE_BODY=$(python3 - "$FILE_ID" "$ETAG" "$SHA256_B64" <<'PY'
+COMPLETE_BODY=$(python3 - "$UPLOAD_ID" "$UPLOAD_PATH" "$ETAG" "$SHA256_B64" <<'PY'
 import json, sys
-print(json.dumps({"id": sys.argv[1], "path": "", "parts": [{
-    "number": 1, "checksum_etag": sys.argv[2],
-    "checksum_sha256_base64": sys.argv[3]}]}))
+print(json.dumps({"id": sys.argv[1], "path": sys.argv[2], "parts": [{
+    "number": 1, "checksum_etag": sys.argv[3],
+    "checksum_sha256_base64": sys.argv[4]}]}))
 PY
 )
 UPLOADED=$(api POST "/v1/files/$FILE_ID/uploaded" "$COMPLETE_BODY")
