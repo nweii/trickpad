@@ -55,6 +55,37 @@ static NSString *activeTraceProtocolTitle = nil;
 static NSString *activeTraceProtocolOverview = nil;
 static NSString *activeTraceObservedGesture = nil;
 
+static BOOL configDiagnosticIsWarning(NSDictionary *diagnostic) {
+    return [[diagnostic objectForKey:@"Severity"] isEqualToString:@"warning"];
+}
+
+static NSUInteger configWarningCount(void) {
+    NSUInteger count = 0;
+    for (NSDictionary *diagnostic in lastConfigDiagnostics) {
+        if (configDiagnosticIsWarning(diagnostic))
+            count++;
+    }
+    return count;
+}
+
+static NSUInteger configSkippedCount(void) {
+    return [lastConfigDiagnostics count] - configWarningCount();
+}
+
+static NSString *configDiagnosticSummary(void) {
+    NSUInteger skipped = configSkippedCount();
+    NSUInteger warnings = configWarningCount();
+    if (skipped == 0)
+        return [NSString stringWithFormat:@"%lu warning%@", (unsigned long)warnings,
+                warnings == 1 ? @"" : @"s"];
+    if (warnings == 0)
+        return [NSString stringWithFormat:@"%lu line%@ skipped", (unsigned long)skipped,
+                skipped == 1 ? @"" : @"s"];
+    return [NSString stringWithFormat:@"%lu line%@ skipped, %lu warning%@",
+            (unsigned long)skipped, skipped == 1 ? @"" : @"s",
+            (unsigned long)warnings, warnings == 1 ? @"" : @"s"];
+}
+
 static BOOL internalTraceDiagnosticsEnabled(void) {
     return [[NSUserDefaults standardUserDefaults]
         boolForKey:@"InternalTraceDiagnostics"];
@@ -621,8 +652,8 @@ static BOOL runLaunchctl(NSArray *arguments) {
         [self preferences:nil];
 }
 
-// Skipped lines are the common failure in a hand-edited file, and nothing else
-// in the app would show them.
+// Configuration diagnostics are the only place the app explains a source line
+// that was skipped or normalized, so the heading must match what happened.
 - (void)showConfigProblems:(id)sender {
     if ([lastConfigDiagnostics count] == 0)
         return;
@@ -630,9 +661,8 @@ static BOOL runLaunchctl(NSArray *arguments) {
     NSString *body = [[lastConfigDiagnostics valueForKey:@"Message"]
         componentsJoinedByString:@"\n\n"];
     NSAlert *alert = [[NSAlert alloc] init];
-    [alert setMessageText:[NSString stringWithFormat:@"%lu line%@ skipped in config.toml",
-                           (unsigned long)[lastConfigDiagnostics count],
-                           [lastConfigDiagnostics count] == 1 ? @"" : @"s"]];
+    [alert setMessageText:[NSString stringWithFormat:@"%@ in config.toml",
+                           configDiagnosticSummary()]];
     [alert setInformativeText:[NSString stringWithFormat:@"%@\n\nEverything else was applied.", body]];
     [alert setAlertStyle:NSAlertStyleWarning];
     [alert addButtonWithTitle:@"OK"];
@@ -711,10 +741,10 @@ static BOOL runLaunchctl(NSArray *arguments) {
                         (long)lastConfigBindingCount,
                         lastConfigBindingCount == 1 ? @"" : @"s"]];
     } else {
-        [item setTitle:[NSString stringWithFormat:@"%ld binding%@ loaded, %lu skipped",
+        [item setTitle:[NSString stringWithFormat:@"%ld binding%@ loaded, %@",
                         (long)lastConfigBindingCount,
                         lastConfigBindingCount == 1 ? @"" : @"s",
-                        (unsigned long)n]];
+                        configDiagnosticSummary()]];
     }
 }
 
@@ -746,9 +776,7 @@ static BOOL runLaunchctl(NSArray *arguments) {
     if (lastConfigRejected || [lastConfigDiagnostics count] > 0) {
         NSString *detailsTitle = lastConfigRejected
             ? @"Reload failed — details…"
-            : [NSString stringWithFormat:@"%lu line%@ skipped — details…",
-               (unsigned long)[lastConfigDiagnostics count],
-               [lastConfigDiagnostics count] == 1 ? @"" : @"s"];
+            : [NSString stringWithFormat:@"%@ — details…", configDiagnosticSummary()];
         NSMenuItem *details = [sub addItemWithTitle:detailsTitle
                                              action:@selector(showConfigProblems:)
                                       keyEquivalent:@""];
@@ -766,6 +794,8 @@ static BOOL runLaunchctl(NSArray *arguments) {
     NSMutableDictionary *skippedByDevice = [NSMutableDictionary dictionary];
     if (!lastConfigRejected) {
         for (NSDictionary *diagnostic in lastConfigDiagnostics) {
+            if (configDiagnosticIsWarning(diagnostic))
+                continue;
             NSString *device = [diagnostic objectForKey:@"Device"];
             if (device == nil)
                 continue;
@@ -891,16 +921,19 @@ static BOOL runLaunchctl(NSArray *arguments) {
     if (stamp != nil)
         version = [NSString stringWithFormat:@"%@ (%@)", version, stamp];
     NSString *configPath = [Config resolvedPath] ?: @"missing";
+    NSUInteger skipped = configSkippedCount();
+    NSUInteger warnings = configWarningCount();
     return [NSString stringWithFormat:
         @"Trickpad %@\nmacOS %@\nAccessibility: %@\nConfiguration: %@\n"
-         "%ld binding%@ loaded\n%lu line%@ skipped\nGestures: %@\n"
+         "%ld binding%@ loaded\n%lu line%@ skipped\n%lu warning%@\nGestures: %@\n"
          "Mouse: %@\nTrackpad: %@\nVerbose logging: %@\n",
         version,
         [[NSProcessInfo processInfo] operatingSystemVersionString],
         AXIsProcessTrusted() ? @"granted" : @"needed",
         configPath,
         (long)lastConfigBindingCount, lastConfigBindingCount == 1 ? @"" : @"s",
-        (unsigned long)[lastConfigDiagnostics count], [lastConfigDiagnostics count] == 1 ? @"" : @"s",
+        (unsigned long)skipped, skipped == 1 ? @"" : @"s",
+        (unsigned long)warnings, warnings == 1 ? @"" : @"s",
         enAll ? @"on" : @"off",
         enMMAll ? @"on" : @"off",
         enTPAll ? @"on" : @"off",

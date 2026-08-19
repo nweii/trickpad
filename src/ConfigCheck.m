@@ -11,6 +11,7 @@
 #import <Foundation/Foundation.h>
 #import <ApplicationServices/ApplicationServices.h>
 #import <IOKit/hidsystem/IOLLEvent.h>
+#import <math.h>
 #import "Config.h"
 
 static int failures = 0;
@@ -149,6 +150,27 @@ static NSString *section(NSString *text, NSString *start, NSString *end) {
     NSRange endRange = [text rangeOfString:end options:0 range:searchRange];
     NSUInteger bodyEnd = endRange.location == NSNotFound ? [text length] : endRange.location;
     return [text substringWithRange:NSMakeRange(bodyStart, bodyEnd - bodyStart)];
+}
+
+typedef NS_ENUM(NSInteger, AreaClickRegionKind) {
+    AreaClickRegionNone = 0,
+    AreaClickRegionCorner,
+    AreaClickRegionEdge,
+};
+
+// Exercises the normalized geometry boundary without depending on bindings or
+// hardware. The source check below keeps this seam paired with Gesture.m.
+static AreaClickRegionKind normalizedAreaClickRegion(float x, float y, float depth) {
+    float cornerSize = fminf(depth * 2.0f, 0.20f);
+    BOOL left = x <= cornerSize;
+    BOOL right = x >= 1.0f - cornerSize;
+    BOOL bottom = y <= cornerSize;
+    BOOL top = y >= 1.0f - cornerSize;
+    if ((left || right) && (bottom || top))
+        return AreaClickRegionCorner;
+    if (x <= depth || x >= 1.0f - depth || y <= depth || y >= 1.0f - depth)
+        return AreaClickRegionEdge;
+    return AreaClickRegionNone;
 }
 
 static void expectDeviceSlugs(NSString *label, NSString *text, NSDictionary *slugs) {
@@ -481,6 +503,42 @@ int main(void) {
                  @"default enabled and one problem",
                  [NSString stringWithFormat:@"%@; %@", [tomlSettings objectForKey:@"enMMAll"],
                                                     tomlProblems]);
+
+        ConfigResult *edgeDepthResult = parseResult(
+            @"[GENERAL]\ntrackpad-edge-gesture-depth = 0.25\n");
+        if ([[[edgeDepthResult settings] objectForKey:@"AreaClickDepth"] doubleValue] != 0.25 ||
+            [[edgeDepthResult diagnostics] count] != 0)
+            fail(@"edge depth accepts the maximum without a warning",
+                 @"0.25 and no diagnostics",
+                 [NSString stringWithFormat:@"%@; %@",
+                  [[edgeDepthResult settings] objectForKey:@"AreaClickDepth"],
+                  [edgeDepthResult diagnostics]]);
+
+        edgeDepthResult = parseResult(
+            @"[GENERAL]\ntrackpad-edge-gesture-depth = 0.4\n");
+        NSDictionary *edgeDepthWarning = [[edgeDepthResult diagnostics] firstObject];
+        if ([[[edgeDepthResult settings] objectForKey:@"AreaClickDepth"] doubleValue] != 0.25 ||
+            [[edgeDepthResult diagnostics] count] != 1 ||
+            ![[edgeDepthWarning objectForKey:@"Severity"] isEqualToString:@"warning"] ||
+            ![[edgeDepthWarning objectForKey:@"Message"] containsString:@"capped at 0.25"])
+            fail(@"edge depth above the maximum is capped and reported as a warning",
+                 @"0.25 and one cap warning",
+                 [NSString stringWithFormat:@"%@; %@",
+                  [[edgeDepthResult settings] objectForKey:@"AreaClickDepth"],
+                  [edgeDepthResult diagnostics]]);
+
+        for (NSString *invalidDepth in @[@"0", @"-0.1", @"\"not-a-number\""]) {
+            NSArray *invalidProblems = nil;
+            NSDictionary *invalidSettings = parseWithProblems(
+                [NSString stringWithFormat:@"[GENERAL]\ntrackpad-edge-gesture-depth = %@\n",
+                                           invalidDepth], &invalidProblems);
+            if (fabs([[invalidSettings objectForKey:@"AreaClickDepth"] doubleValue] - 0.06) > 0.0001 ||
+                [invalidProblems count] != 1)
+                fail([NSString stringWithFormat:@"invalid edge depth %@ is rejected", invalidDepth],
+                     @"default 0.06 and one diagnostic",
+                     [NSString stringWithFormat:@"%@; %@",
+                      [invalidSettings objectForKey:@"AreaClickDepth"], invalidProblems]);
+        }
 
         NSString *bypassingRecognizer =
             @"static void recognizer(void) {\n"
@@ -1738,6 +1796,28 @@ int main(void) {
                 }
                 previousLocation = found.location;
             }
+
+            // A large edge depth keeps its edge band while the corner target
+            // stops at its cap. The points are normalized trackpad positions.
+            NSString *areaGeometry = section(engine,
+                @"#pragma mark - Trackpad area clicks",
+                @"static NSString *boundTrackpadAreaClickGesture");
+            for (NSString *required in @[
+                @"trackpadAreaCornerSizeForDepth",
+                @"return fminf(depth * 2.0f, 0.20f);",
+                @"#define kTrackpadAreaEdgeBandDepth (areaClickDepth)",
+                @"#define kTrackpadAreaCornerSize (trackpadAreaCornerSizeForDepth(areaClickDepth))",
+            ]) {
+                if ([areaGeometry rangeOfString:required].location == NSNotFound)
+                    fail(@"area-click geometry keeps the edge depth independent from the corner cap",
+                         required, @"missing");
+            }
+            if (normalizedAreaClickRegion(0.10f, 0.10f, 0.06f) != AreaClickRegionCorner ||
+                normalizedAreaClickRegion(0.04f, 0.50f, 0.06f) != AreaClickRegionEdge ||
+                normalizedAreaClickRegion(0.19f, 0.19f, 0.25f) != AreaClickRegionCorner ||
+                normalizedAreaClickRegion(0.21f, 0.21f, 0.25f) != AreaClickRegionEdge)
+                fail(@"normalized area-click geometry resolves low and high depths",
+                     @"default corners and edges, capped corners and reachable edges", @"mismatch");
 
             // The family fallback runs only when no entry names the direction,
             // so an explicit directional "off" keeps excluding the direction.

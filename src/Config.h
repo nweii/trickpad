@@ -21,8 +21,9 @@
 // It is nil when the file cannot be read or the complete reload is rejected.
 @property(nonatomic, readonly, retain) NSDictionary *settings;
 
-// Each diagnostic carries Message. A skipped binding also carries Device,
-// Title, and Reason so presentation code does not interpret the message.
+// Each diagnostic carries Message. An applied normalization carries warning
+// Severity. A skipped binding also carries Device, Title, and Reason so
+// presentation code does not interpret the message.
 @property(nonatomic, readonly, retain) NSArray *diagnostics;
 
 // Returns the trailing comment for one configured engine binding.

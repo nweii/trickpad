@@ -1380,6 +1380,16 @@ static void addDiagnostic(NSMutableArray *diagnostics, NSString *message,
     [diagnostics addObject:diagnostic];
 }
 
+// Warnings describe a value that remains active after a safe normalization.
+// They stay separate from skipped diagnostics so the menu can report the
+// applied setting without implying that the source line was ignored.
+static void addWarning(NSMutableArray *diagnostics, NSString *message) {
+    NSMutableDictionary *diagnostic = [NSMutableDictionary dictionaryWithObject:message
+                                                                           forKey:@"Message"];
+    [diagnostic setObject:@"warning" forKey:@"Severity"];
+    [diagnostics addObject:diagnostic];
+}
+
 // Extracts trailing TOML comments once while Config owns the source. tomlc17's
 // line numbers then attach each comment to the binding parsed from that line.
 static NSArray *sourceComments(NSString *text) {
@@ -1951,9 +1961,19 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
             }
             if ([key isEqualToString:@"trackpad-edge-gesture-depth"]) {
                 double depth = 0;
-                if (!parsePositiveNumber(value, &depth) || depth >= 0.5) {
-                    report(line, @"trackpad-edge-gesture-depth must be a fraction of the surface above 0 and below 0.5");
+                if (!parsePositiveNumber(value, &depth)) {
+                    report(line, @"trackpad-edge-gesture-depth must be a fraction of the surface above 0 and up to 0.25");
                     continue;
+                }
+                if (depth > 0.25) {
+                    NSString *requested = [stripQuotes(value)
+                        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+                    NSString *reason = [NSString stringWithFormat:
+                        @"value %@ was capped at 0.25", requested];
+                    addWarning(diagnostics,
+                               [NSString stringWithFormat:@"line %ld:  %@\n          %@",
+                                (long)lineNumber, line, reason]);
+                    value = @"0.25";
                 }
             }
             if ([key isEqualToString:@"dominant-hand"] &&

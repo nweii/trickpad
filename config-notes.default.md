@@ -46,7 +46,7 @@ If the user wants ideas, find a few concrete options that fit their workflow:
 
 Use a bare swipe when its action does not depend on direction. Use `defer = true` when a single tap and its matching double tap both have bindings.
 
-Area clicks replace the native click inside their bound regions. Prefer a few separated edges or corners that the user does not click during ordinary pointing. An area click needs one contact, so tell the user to lift resting fingers and the palm. Check whether macOS assigns secondary click to a proposed bottom corner.
+Area clicks replace the native click inside their bound regions. Prefer a few separated edges or corners that the user does not click during ordinary pointing. An area click needs one contact, so tell the user to lift resting fingers and the palm. Check whether macOS assigns secondary click to a proposed bottom corner. If a user misses a region, increase its size one step at a time. Edge regions and corners stop at separate maximum sizes. Read `GESTURES.md` for the current values and limits.
 
 Some useful app commands have no shortcut. Recommend a macOS App Shortcut when appropriate, and verify it in the target app before binding it. Do not automate System Settings for this because its interface and menu titles can change.
 

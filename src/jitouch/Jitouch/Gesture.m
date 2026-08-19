@@ -4836,11 +4836,15 @@ static int magicMouseCallback(MGMultitouchDeviceRef device, Finger *data, int nF
 // regions are absolute surface positions, so dominant-hand mirroring does not
 // apply. Starter geometry; these thresholds await hardware validation.
 // The configurable trackpad-edge-gesture-depth setting sets how far an edge band reaches
-// into the surface. Corner squares span twice that, giving a corner target
-// larger than the bands it overrides. The default stays narrow so bands sit
-// under the bezel-adjacent strip a resting hand rarely clicks.
+// into the surface. Corner squares span twice that, up to a fixed maximum, so
+// edge bands remain reachable when the setting grows. The default stays narrow
+// so bands sit under the bezel-adjacent strip a resting hand rarely clicks.
+static float trackpadAreaCornerSizeForDepth(float depth) {
+    return fminf(depth * 2.0f, 0.20f);
+}
+
 #define kTrackpadAreaEdgeBandDepth (areaClickDepth)
-#define kTrackpadAreaCornerSize (areaClickDepth * 2.0f)
+#define kTrackpadAreaCornerSize (trackpadAreaCornerSizeForDepth(areaClickDepth))
 
 static NSString *trackpadAreaCornerClickName(float x, float y) {
     BOOL left = x <= kTrackpadAreaCornerSize;

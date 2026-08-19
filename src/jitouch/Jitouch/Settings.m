@@ -222,8 +222,10 @@ static int notSynchronize;
     enAll = [[settings objectForKey:@"enAll"] intValue];
     clickSpeed = [[settings objectForKey:@"ClickSpeed"] floatValue];
     areaClickDepth = [[settings objectForKey:@"AreaClickDepth"] floatValue];
-    if (areaClickDepth <= 0.0f || areaClickDepth >= 0.5f)
+    if (areaClickDepth <= 0.0f)
         areaClickDepth = 0.06f;
+    else if (areaClickDepth > 0.25f)
+        areaClickDepth = 0.25f;
     stvt = [[settings objectForKey:@"Sensitivity"] floatValue];
     hapticFeedback = [[settings objectForKey:@"HapticFeedback"] intValue];
     logLevel = [[settings objectForKey:@"LogLevel"] intValue];
