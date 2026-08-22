@@ -135,7 +135,7 @@ An area click fires only when the clicking finger is the only contact on the sur
 | `bottom-left-corner-click` | The bottom left corner |
 | `bottom-right-corner-click` | The bottom right corner |
 
-On both devices, a confidently recognized configured click replaces the native click: the bound action fires on release and the click does not reach the application. An ambiguous click, such as one with a resting palm, stays native and does not fire the bound action. A drag keeps its native events and does not fire the configured click action. A click bound to `middle-click` presses the middle button with the physical click, sends middle-button drags during movement, and releases the button when the click ends.
+On both devices, a confidently recognized configured click replaces the native click: the bound action fires on release and the click does not reach the application. An ambiguous click, such as one with a resting palm, stays native and does not fire the bound action. A drag keeps its native events and does not fire the configured click action. A click bound to `middle-click` or `mouse-3` through `mouse-32` presses that button with the physical click, sends matching button drags during movement, and releases the button when the click ends.
 
 One continuous touch sequence can run one kind of configured gesture. A swipe or hold gesture may repeat while it owns the sequence, but a physical click, tap, or different gesture will not also run until every finger lifts.
 
@@ -263,19 +263,36 @@ Keys: any letter or digit, plus `return` `escape` `tab` `space` `delete` `forwar
 
 Aliases: `enter` is `return`, `esc` is `escape`, `backspace` and `del` are `delete`, `spacebar` is `space`.
 
-Fn cannot be sent. It is a HID usage rather than an ordinary key event, so no gesture can stand in for an Fn shortcut.
+Fn can qualify a gesture on the left side of a binding, but it cannot be sent as part of the action on the right. It is a HID usage rather than an ordinary key event, so no gesture can stand in for an Fn shortcut.
 
 ### Actions
 
-`middle-click` `mission-control` `app-expose` `show-desktop` `app-switcher` `next-tab` `previous-tab` `new-tab` `close-tab` `reopen-tab` `maximize` `minimize`
+`middle-click` `mouse-3` through `mouse-32` `mission-control` `app-expose` `show-desktop` `app-switcher` `next-tab` `previous-tab` `new-tab` `close-tab` `reopen-tab` `maximize` `minimize`
 
 `play-pause` `next-track` `previous-track` `mute` `volume-up` `volume-down` `brightness-up` `brightness-down` `keyboard-backlight-up` `keyboard-backlight-down`
 
 `mission-control`, `app-expose`, `show-desktop`, and `app-switcher` ask macOS for those views directly rather than sending their keyboard shortcuts. An application cannot intercept them, and they work whether or not the matching shortcut is enabled in System Settings.
 
-`middle-click` posts a real middle-button event, which gives a Magic Mouse a button it does not otherwise have. A physical click bound to it holds the middle button until the click ends. A tap bound to it sends one press and release.
+`mouse-3` through `mouse-32` post real mouse-button events, giving a Magic Mouse or Magic Trackpad buttons the hardware does not have. A physical click bound to one holds that button until the click ends, including matching drag events. A tap sends one press and release. `middle-click` remains an alias for `mouse-3`.
 
 The media, volume, display brightness, and keyboard backlight actions send the matching system function key. They do not change the meaning of `f1` through `f12`, which remain literal function keys.
+
+## Fn as a gesture modifier
+
+Add `fn_` before a gesture name to make that binding run only while the physical Fn key is held:
+
+    [TRACKPAD]
+
+    three-finger-tap = "mission-control"
+    fn_three-finger-tap = "show-desktop"
+
+If the same gesture also has an ordinary binding, the Fn binding takes precedence while Fn is held. Without an ordinary binding, the gesture runs only with Fn; without Fn, it stays native.
+
+`function_` is an alias for `fn_`. The quoted chord-like forms `"fn+three-finger-tap"` and `"function+three-finger-tap"` are equivalent.
+
+Fn must remain held through a physical click or every repetition of a repeated tap. Releasing and pressing Fn again between two taps starts a separate sequence. A deferred Fn-qualified single tap that has already completed still runs after its waiting window.
+
+Application-specific Fn bindings follow the same override and inheritance rules as ordinary bindings. The menu displays every accepted spelling as `Fn +` followed by the gesture name.
 
 ### URL bindings and app deep links
 
@@ -348,7 +365,7 @@ App updates and localizations can change menu titles. Update the App Shortcut if
 | `enable-trackpad` | `true` or `false` |
 | `dominant-hand` | `left` or `right`; mirrors positional recognition for left-handed use, default `right` |
 | `tap-speed` | Seconds a tap may last, default `0.25` |
-| `trackpad-edge-gesture-depth` | How far an edge band reaches inward, as a fraction of the trackpad. Use a value above 0 and up to 0.25. Larger values use 0.25. Corners span twice this depth, up to 0.20. Default `0.06` |
+| `trackpad-edge-gesture-depth` | How far an edge band reaches inward, as a fraction of the trackpad. Use a positive value. If you enter a value above 0.25, Trickpad uses 0.25 instead. Corners span twice this depth, up to 0.20. Default `0.06` |
 | `haptic-feedback` | `true` requests confirmation for configured trackpad gestures, default `true` |
 | `menu-bar-icon` | `trickpad`, or `sf:` followed by a name from [SF Symbols](https://developer.apple.com/sf-symbols/); default `trickpad` |
 | `verbose-logging` | `true` logs every gesture and keystroke to Console |
