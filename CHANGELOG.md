@@ -12,6 +12,19 @@
 
 # Changelog
 
+## 0.12.0
+
+Released 2026-08-22.
+
+### Added
+
+- Add 30 mouse-button actions, `mouse-3` through `mouse-32`. A tap sends one press and release. A physical click holds the selected button through drags until the click ends. `middle-click` remains an alias for `mouse-3`.
+- Add the `fn_` gesture prefix for actions that run only while Fn is held. Use it to add another action to a gesture without replacing its ordinary binding, or to make the gesture available only with Fn.
+
+### Fixed
+
+- Prevent large edge-click regions from taking over space used for ordinary clicks. Edge regions now stop at 0.25 and corners at 0.20. Higher values use the maximum and appear as warnings instead of skipped settings.
+
 ## 0.11.0
 
 Released 2026-08-18.
