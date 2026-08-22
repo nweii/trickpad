@@ -90,6 +90,11 @@
 // any gesture that does not pair with a double tap.
 + (NSString *)doubleTapGestureName:(NSString *)engineName;
 
+// Internal engine-map name for a gesture that requires the physical Fn key,
+// and its inverse. The prefix never appears in the public gesture catalog.
++ (NSString *)functionQualifiedGestureName:(NSString *)engineName;
++ (NSString *)baseGestureNameFromFunctionQualifiedName:(NSString *)engineName;
+
 // Every action slug the configuration accepts, mapped to the engine command
 // string it dispatches.
 + (NSDictionary *)actionNames;

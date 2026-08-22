@@ -1,6 +1,6 @@
-// Owns the held middle-button state shared by Magic Mouse and trackpad click paths.
+// Owns held numbered-button state shared by Magic Mouse and trackpad click paths.
 
-#import "MiddleButtonLifecycle.h"
+#import "MouseButtonLifecycle.h"
 
 #import <math.h>
 
@@ -15,57 +15,75 @@ static const double kTrackpadHeightMillimeters = 115.0;
 static const double kPointsPerMillimeter = 72.0 / 25.4;
 static const double kTrackpadMiddleDragThresholdPoints = 1.0;
 
-void MGMiddleButtonLifecycleInitialize(MGMiddleButtonLifecycle *lifecycle) {
+void MGMouseButtonLifecycleInitialize(MGMouseButtonLifecycle *lifecycle) {
     lifecycle->held = NO;
-    lifecycle->device = MGMiddleButtonDeviceInvalid;
+    lifecycle->device = MGMouseButtonDeviceInvalid;
+    lifecycle->buttonNumber = -1;
     lifecycle->contactCount = 0;
     lifecycle->accumulatedDragX = 0;
     lifecycle->accumulatedDragY = 0;
     lifecycle->lastFrameTimestamp = 0;
 }
 
-MGMiddleButtonDevice MGMiddleButtonDeviceFromEngineDevice(int engineDevice) {
+MGMouseButtonDevice MGMouseButtonDeviceFromEngineDevice(int engineDevice) {
     if (engineDevice == 0)
-        return MGMiddleButtonDeviceTrackpad;
+        return MGMouseButtonDeviceTrackpad;
     if (engineDevice == 1)
-        return MGMiddleButtonDeviceMagicMouse;
-    return MGMiddleButtonDeviceInvalid;
+        return MGMouseButtonDeviceMagicMouse;
+    return MGMouseButtonDeviceInvalid;
 }
 
-BOOL MGMiddleButtonLifecycleShouldRewriteMouseDown(
-    MGMiddleButtonLifecycle *lifecycle,
-    MGMiddleButtonDevice device,
+NSInteger MGMouseButtonNumberForCommand(NSString *command) {
+    if ([command isEqualToString:@"Middle Click"])
+        return 2;
+    NSString *prefix = @"Mouse Button ";
+    if (![command hasPrefix:prefix])
+        return -1;
+    NSString *writtenNumber = [command substringFromIndex:[prefix length]];
+    NSInteger publicNumber = [writtenNumber integerValue];
+    if (publicNumber < 3 || publicNumber > 32 ||
+        ![writtenNumber isEqualToString:
+            [NSString stringWithFormat:@"%ld", (long)publicNumber]])
+        return -1;
+    return publicNumber - 1;
+}
+
+BOOL MGMouseButtonLifecycleShouldRewriteMouseDown(
+    MGMouseButtonLifecycle *lifecycle,
+    MGMouseButtonDevice device,
     NSString *command) {
-    if (![command isEqualToString:@"Middle Click"] || lifecycle->held ||
-        device == MGMiddleButtonDeviceInvalid)
+    NSInteger buttonNumber = MGMouseButtonNumberForCommand(command);
+    if (buttonNumber < 0 || lifecycle->held ||
+        device == MGMouseButtonDeviceInvalid)
         return NO;
     lifecycle->held = YES;
     lifecycle->device = device;
+    lifecycle->buttonNumber = buttonNumber;
     return YES;
 }
 
-BOOL MGMiddleButtonLifecycleShouldDispatchOnMouseUp(
-    const MGMiddleButtonLifecycle *lifecycle,
-    MGMiddleButtonDevice device) {
-    return device == MGMiddleButtonDeviceInvalid || !lifecycle->held ||
+BOOL MGMouseButtonLifecycleShouldDispatchOnMouseUp(
+    const MGMouseButtonLifecycle *lifecycle,
+    MGMouseButtonDevice device) {
+    return device == MGMouseButtonDeviceInvalid || !lifecycle->held ||
         lifecycle->device != device;
 }
 
-BOOL MGMiddleButtonLifecycleShouldRewriteDrag(
-    const MGMiddleButtonLifecycle *lifecycle) {
+BOOL MGMouseButtonLifecycleShouldRewriteDrag(
+    const MGMouseButtonLifecycle *lifecycle) {
     return lifecycle->held;
 }
 
-BOOL MGMiddleButtonLifecycleTrackpadDragDelta(
-    MGMiddleButtonLifecycle *lifecycle,
+BOOL MGMouseButtonLifecycleTrackpadDragDelta(
+    MGMouseButtonLifecycle *lifecycle,
     const int *contactIDs,
     const double *contactXs,
     const double *contactYs,
     int contactCount,
     double timestamp,
-    MGMiddleButtonDragDelta *delta) {
+    MGMouseButtonDragDelta *delta) {
     if (!lifecycle->held ||
-        lifecycle->device != MGMiddleButtonDeviceTrackpad || delta == NULL)
+        lifecycle->device != MGMouseButtonDeviceTrackpad || delta == NULL)
         return NO;
 
     int count = MIN(MAX(contactCount, 0), 16);
@@ -122,17 +140,22 @@ BOOL MGMiddleButtonLifecycleTrackpadDragDelta(
     return YES;
 }
 
-BOOL MGMiddleButtonLifecycleIsHeld(const MGMiddleButtonLifecycle *lifecycle) {
+BOOL MGMouseButtonLifecycleIsHeld(const MGMouseButtonLifecycle *lifecycle) {
     return lifecycle->held;
 }
 
-MGMiddleButtonDevice MGMiddleButtonLifecycleHoldingDevice(
-    const MGMiddleButtonLifecycle *lifecycle) {
-    return lifecycle->held ? lifecycle->device : MGMiddleButtonDeviceInvalid;
+MGMouseButtonDevice MGMouseButtonLifecycleHoldingDevice(
+    const MGMouseButtonLifecycle *lifecycle) {
+    return lifecycle->held ? lifecycle->device : MGMouseButtonDeviceInvalid;
 }
 
-BOOL MGMiddleButtonLifecycleEnd(MGMiddleButtonLifecycle *lifecycle) {
+NSInteger MGMouseButtonLifecycleHoldingButtonNumber(
+    const MGMouseButtonLifecycle *lifecycle) {
+    return lifecycle->held ? lifecycle->buttonNumber : -1;
+}
+
+BOOL MGMouseButtonLifecycleEnd(MGMouseButtonLifecycle *lifecycle) {
     BOOL held = lifecycle->held;
-    MGMiddleButtonLifecycleInitialize(lifecycle);
+    MGMouseButtonLifecycleInitialize(lifecycle);
     return held;
 }

@@ -8,8 +8,8 @@ The default configuration gives a Magic Mouse a middle click and maps a hold-and
 
 ## Features
 
-- **Keyboard shortcuts, actions, URLs, and scripts.** Send a shortcut, run a built-in action such as middle click or Mission Control, open a web URL or deeplink, or launch one executable script. URLs can include clipboard text or the current date and time.
-- **Flexible gestures for each device.** Configure taps, swipes, and hold gestures independently for a Magic Mouse and Magic Trackpad. A binding can apply everywhere, only in named applications, or everywhere except them.
+- **Keyboard shortcuts, actions, URLs, and scripts.** Send a shortcut, add any of macOS's 30 extra mouse buttons, run a built-in action such as Mission Control, open a web URL or deeplink, or launch one executable script. URLs can include clipboard text or the current date and time.
+- **Flexible gestures for each device.** Configure taps, swipes, and hold gestures independently for a Magic Mouse and Magic Trackpad. Bind gestures that run only while Fn is held. A binding can apply everywhere, only in named applications, or everywhere except them.
 - **Simple TOML configuration.** All bindings and settings live in one readable file that is easy to inspect, edit, and back up.
 - **Agent-native configuration.** Detects installed coding agents such as Claude Code and Codex and opens one with editing guidance and your configuration. The agent can tailor bindings to your workflow, construct deeplinks, and manage installation and updates.
 - **Works alongside macOS.** Unbound clicks, scrolling, and system gestures continue to behave as configured. Trackpad gestures request haptic confirmation by default, with per-binding overrides for quieter gestures.

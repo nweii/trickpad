@@ -472,6 +472,54 @@ int main(void) {
             fail(@"an uncommented app override does not inherit the global comment",
                  @"no comment", comment);
 
+        NSArray *fnProblems = nil;
+        NSDictionary *fnSettings = parseRawTOML(
+            @"[TRACKPAD]\n"
+             @"three-finger-tap = \"escape\"\n"
+             @"fn_three-finger-tap = \"return\"\n"
+             @"function_four-finger-tap = \"tab\"\n"
+             @"\"fn+three-finger-swipe-up\" = \"space\"\n"
+             @"\"function+three-finger-swipe-down\" = \"delete\"\n",
+            &fnProblems);
+        for (NSString *gesture in @[@"Fn+Three-Finger Tap", @"Fn+Four-Finger Tap",
+                                    @"Fn+Three-Swipe-Up", @"Fn+Three-Swipe-Down"]) {
+            if (bindingFor(fnSettings, @"TrackpadCommands", gesture) == nil)
+                fail([@"Fn qualifier spelling loads " stringByAppendingString:gesture],
+                     @"a binding", @"missing");
+        }
+        if ([fnProblems count] != 0 ||
+            ![[fnSettings objectForKey:@"BindingCount"] isEqual:@5])
+            fail(@"Fn aliases normalize without changing the binding count",
+                 @"five bindings and no diagnostics",
+                 [NSString stringWithFormat:@"%@; %@",
+                  [fnSettings objectForKey:@"BindingCount"], fnProblems]);
+        if (![[Config humanNameForGesture:@"Fn+Three-Finger Tap"]
+              isEqualToString:@"Fn + Tap with three fingers"])
+            fail(@"Fn-qualified menu name", @"Fn + Tap with three fingers",
+                 [Config humanNameForGesture:@"Fn+Three-Finger Tap"]);
+
+        fnSettings = parseRawTOML(
+            @"[TRACKPAD]\n"
+             @"fn_three-finger-tap = \"return\"\n"
+             @"\"fn+three-finger-tap\" = \"escape\"\n",
+            &fnProblems);
+        if ([fnProblems count] != 1 ||
+            ![[fnProblems firstObject] containsString:@"duplicate Fn-qualified binding"])
+            fail(@"equivalent Fn aliases report a duplicate",
+                 @"one duplicate diagnostic", fnProblems);
+
+        fnSettings = parseRawTOML(
+            @"[TRACKPAD]\n"
+             @"fn_three-finger-tap = \"return\"\n"
+             @"[TRACKPAD.\"Safari\"]\n"
+             @"\"function+three-finger-tap\" = \"off\"\n",
+            &fnProblems);
+        NSDictionary *fnOff = bindingForApplication(
+            fnSettings, @"TrackpadCommands", @"Safari", @"Fn+Three-Finger Tap");
+        if (fnOff == nil || [[fnOff objectForKey:@"Enable"] boolValue])
+            fail(@"application scope can disable an Fn-qualified binding",
+                 @"a disabled Fn binding", fnOff ?: @"missing");
+
         // CRLF endings: a comment must not smuggle its carriage return into the
         // reconstructed text, where it becomes a phantom line that inflates the
         // reported line number of every diagnostic after it.
@@ -619,6 +667,25 @@ int main(void) {
             fail(@"action is not a keystroke", @YES, [g objectForKey:@"IsAction"]);
         if (![[g objectForKey:@"Command"] isEqualToString:@"Middle Click"])
             fail(@"action name", @"Middle Click", [g objectForKey:@"Command"]);
+
+        s = parse(@"[trackpad]\nthree-finger-tap = mouse-3\nfour-finger-tap = mouse-32\n");
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Tap");
+        if (![[g objectForKey:@"Command"] isEqualToString:@"Mouse Button 3"])
+            fail(@"mouse 3 action name", @"Mouse Button 3",
+                 [g objectForKey:@"Command"]);
+        g = bindingFor(s, @"TrackpadCommands", @"Four-Finger Tap");
+        if (![[g objectForKey:@"Command"] isEqualToString:@"Mouse Button 32"])
+            fail(@"mouse 32 action name", @"Mouse Button 32",
+                 [g objectForKey:@"Command"]);
+
+        for (NSString *bad in @[@"mouse-2", @"mouse-33", @"mouse-three"]) {
+            NSString *conf = [NSString stringWithFormat:
+                @"[trackpad]\nthree-finger-tap = %@\n", bad];
+            if (bindingFor(parse(conf), @"TrackpadCommands",
+                           @"Three-Finger Tap") != nil)
+                fail([@"mouse button action rejected: "
+                      stringByAppendingString:bad], @"nothing", @"a binding");
+        }
 
         s = parse(@"[mouse]\nthree-finger-tap = play-pause\n");
         g = bindingFor(s, @"MagicMouseCommands", @"Three-Finger Tap");
@@ -1598,34 +1665,35 @@ int main(void) {
             // The engine maps its zero-valued trackpad constant through the
             // lifecycle boundary. The lifecycle owns both click decisions.
             for (NSString *required in @[
-                @"MGMiddleButtonDeviceFromEngineDevice(TRACKPAD)",
-                @"MGMiddleButtonDeviceFromEngineDevice(device)",
-                @"MGMiddleButtonLifecycleShouldRewriteMouseDown",
-                @"MGMiddleButtonLifecycleShouldDispatchOnMouseUp",
-                @"MGMiddleButtonLifecycleShouldRewriteDrag",
-                @"MGMiddleButtonLifecycleEnd(&middleButtonLifecycle)",
-                @"releaseHeldMiddleButton();",
+                @"MGMouseButtonDeviceFromEngineDevice(TRACKPAD)",
+                @"MGMouseButtonDeviceFromEngineDevice(device)",
+                @"MGMouseButtonLifecycleShouldRewriteMouseDown",
+                @"MGMouseButtonLifecycleShouldDispatchOnMouseUp",
+                @"MGMouseButtonLifecycleShouldRewriteDrag",
+                @"MGMouseButtonLifecycleHoldingButtonNumber",
+                @"MGMouseButtonLifecycleEnd(&mouseButtonLifecycle)",
+                @"releaseHeldMouseButton();",
                 @"kCGEventOtherMouseDragged",
             ]) {
                 if ([clickCallback rangeOfString:required].location == NSNotFound)
-                    fail(@"physical clicks use the shared middle-button lifecycle",
+                    fail(@"physical clicks use the shared mouse-button lifecycle",
                          required, @"missing");
             }
             for (NSString *reset in @[@"static void turnOffTrackpad",
                                        @"static void turnOffMagicMouse"]) {
                 NSString *body = section(engine, reset, @"\n}");
                 if (body == nil ||
-                    [body rangeOfString:@"releaseHeldMiddleButton();"].location == NSNotFound)
-                    fail(@"a device reset releases a held middle button",
+                    [body rangeOfString:@"releaseHeldMouseButton();"].location == NSNotFound)
+                    fail(@"a device reset releases a held mouse button",
                          reset, @"no release");
             }
             for (NSString *required in @[
                 @"postTrackpadMiddleButtonDrag(data, nFingers, timestamp)",
-                @"MGMiddleButtonLifecycleTrackpadDragDelta",
+                @"MGMouseButtonLifecycleTrackpadDragDelta",
                 @"CGEventSetIntegerValueField(event, kCGMouseEventDeltaX",
                 @"CGEventSetIntegerValueField(event, kCGMouseEventDeltaY",
                 @"CGEventSetIntegerValueField(event, kCGEventSourceUserData",
-                @"CGEventSetLocation(event, trackpadMiddleButtonLocation)",
+                @"CGEventSetLocation(event, trackpadMouseButtonLocation)",
                 @"nativeClickChordMouseUp",
             ]) {
                 if ([engine rangeOfString:required].location == NSNotFound)
@@ -1666,10 +1734,16 @@ int main(void) {
             }
 
             for (NSString *command in [[Config actionNames] allValues]) {
+                if ([command isEqualToString:@"Middle Click"] ||
+                    [command hasPrefix:@"Mouse Button "])
+                    continue;
                 NSString *branch = [NSString stringWithFormat:@"isEqualToString:@\"%@\"", command];
                 if ([engine rangeOfString:branch].location == NSNotFound)
                     fail([@"action dispatch " stringByAppendingString:command], branch, @"missing");
             }
+            if ([engine rangeOfString:@"MGMouseButtonNumberForCommand(command)"].location == NSNotFound)
+                fail(@"numbered mouse-button actions share one dispatch branch",
+                     @"MGMouseButtonNumberForCommand(command)", @"missing");
 
             NSArray *invocations = @[
                 @"gestureMagicMouseThreeFingerTap(tapData, tapContactCount, timestamp, 0)",
@@ -1824,7 +1898,7 @@ int main(void) {
             NSString *resolver = section(engine,
                 @"static NSDictionary *bindingForGestureWithMatch",
                 @"static NSDictionary *bindingForGesture(");
-            for (NSString *required in @[@"directionlessGestureName:gesture",
+            for (NSString *required in @[@"directionlessGestureName:baseGesture",
                                          @"binding != nil || declared"]) {
                 if ([resolver rangeOfString:required].location == NSNotFound)
                     fail(@"binding lookup falls back to the swipe family name",

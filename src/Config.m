@@ -353,6 +353,22 @@ static NSString *gestureNameProblem(NSString *key, NSString *device,
     return [reasons componentsJoinedByString:@" "];
 }
 
+// The underscore forms are bare TOML keys; the plus forms arrive here without
+// their TOML quotes. All accepted spellings normalize to one internal layer.
+static NSString *gestureKeyByRemovingFunctionQualifier(NSString *key,
+                                                       BOOL *qualified) {
+    for (NSString *prefix in @[@"fn_", @"function_", @"fn+", @"function+"]) {
+        if ([key hasPrefix:prefix] && [key length] > [prefix length]) {
+            if (qualified != NULL)
+                *qualified = YES;
+            return [key substringFromIndex:[prefix length]];
+        }
+    }
+    if (qualified != NULL)
+        *qualified = NO;
+    return key;
+}
+
 + (NSString *)canonicalGestureName:(NSString *)raw inSlugs:(NSDictionary *)slugs {
     for (NSString *slug in slugs) {
         NSArray *engineNames = [slugs objectForKey:slug];
@@ -404,12 +420,21 @@ static NSString *gestureNameProblem(NSString *key, NSString *device,
     return [doubles objectForKey:engineName];
 }
 
++ (NSString *)functionQualifiedGestureName:(NSString *)engineName {
+    return [@"Fn+" stringByAppendingString:engineName];
+}
+
++ (NSString *)baseGestureNameFromFunctionQualifiedName:(NSString *)engineName {
+    return [engineName hasPrefix:@"Fn+"]
+        ? [engineName substringFromIndex:[@"Fn+" length]] : engineName;
+}
+
 // Built-in engine commands, keyed by the slug the configuration uses. The value
 // is the exact string dispatchCommand compares against in Gesture.m.
 + (NSDictionary *)actionNames {
     static NSDictionary *m = nil;
     if (m == nil) {
-        m = [@{
+        NSMutableDictionary *actions = [NSMutableDictionary dictionaryWithDictionary:@{
             @"middle-click": @"Middle Click",
             @"mission-control": @"Mission Control",
             @"app-expose": @"Application Windows",
@@ -432,7 +457,14 @@ static NSString *gestureNameProblem(NSString *key, NSString *device,
             @"brightness-down": @"Brightness Down",
             @"keyboard-backlight-up": @"Keyboard Backlight Up",
             @"keyboard-backlight-down": @"Keyboard Backlight Down",
-        } retain];
+        }];
+        for (NSInteger button = 3; button <= 32; button++) {
+            [actions setObject:
+                [NSString stringWithFormat:@"Mouse Button %ld", (long)button]
+                         forKey:
+                [NSString stringWithFormat:@"mouse-%ld", (long)button]];
+        }
+        m = [actions copy];
     }
     return m;
 }
@@ -440,6 +472,8 @@ static NSString *gestureNameProblem(NSString *key, NSString *device,
 // Engine gesture names phrased as the motion a hand makes, for the menu. Every
 // name reachable from a slug table needs an entry; scripts/check.sh enforces it.
 + (NSString *)humanNameForGesture:(NSString *)raw {
+    BOOL functionQualified = [raw hasPrefix:@"Fn+"];
+    raw = [Config baseGestureNameFromFunctionQualifiedName:raw];
     static NSDictionary *phrases = nil;
     if (phrases == nil) {
         phrases = [@{
@@ -524,8 +558,8 @@ static NSString *gestureNameProblem(NSString *key, NSString *device,
             @"Pinky-To-Index": @"Brush pinky toward index",
         } retain];
     }
-    NSString *phrase = [phrases objectForKey:raw];
-    return phrase ?: raw;
+    NSString *phrase = [phrases objectForKey:raw] ?: raw;
+    return functionQualified ? [@"Fn + " stringByAppendingString:phrase] : phrase;
 }
 
 #pragma mark - Keystroke vocabulary
@@ -1613,6 +1647,7 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
     __block NSString *section = @"general";
     NSString *application = nil;
     NSMutableSet *activeBindingKeys = [NSMutableSet set];
+    NSMutableSet *declaredBindingKeys = [NSMutableSet set];
     __block NSInteger lineNumber = 0;
     NSInteger physicalLineNumber = 0;
     NSInteger pendingBlockLine = 0;
@@ -1872,6 +1907,8 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
             }
             NSDictionary *slugs = [device isEqualToString:@"mouse"]
                 ? [Config mouseGestureSlugs] : [Config trackpadGestureSlugs];
+            BOOL functionQualified = NO;
+            key = gestureKeyByRemovingFunctionQualifier(key, &functionQualified);
             NSArray *engineNames = [slugs objectForKey:key];
             if (engineNames == nil) {
                 // A reordered gesture name canonicalizes here, so the
@@ -1911,8 +1948,16 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
                 ? mouseScopes : trackpadScopes;
             NSString *scopeName = application ?: @"All Applications";
             NSMutableArray *target = [scopes objectForKey:scopeName];
+            NSString *qualifiedKey = functionQualified
+                ? [@"fn+" stringByAppendingString:key] : key;
             NSString *declarationKey = [NSString stringWithFormat:@"%@|%@|%@",
-                                         device, scopeName, key];
+                                         device, scopeName, qualifiedKey];
+            if ([declaredBindingKeys containsObject:declarationKey]) {
+                report(line, [NSString stringWithFormat:
+                    @"duplicate Fn-qualified binding for \"%@\"", key]);
+                continue;
+            }
+            [declaredBindingKeys addObject:declarationKey];
             if ([[binding objectForKey:@"InheritAction"] boolValue] ||
                 [[binding objectForKey:@"Enable"] boolValue])
                 [activeBindingKeys addObject:declarationKey];
@@ -1920,7 +1965,9 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
                 [activeBindingKeys removeObject:declarationKey];
             for (NSString *name in engineNames) {
                 NSMutableDictionary *g = [[binding mutableCopy] autorelease];
-                [g setObject:name forKey:@"Gesture"];
+                [g setObject:functionQualified
+                    ? [Config functionQualifiedGestureName:name] : name
+                       forKey:@"Gesture"];
                 [g setObject:@(lineNumber) forKey:@"SourceLine"];
                 [g setObject:line forKey:@"SourceText"];
                 if ([sourceComment length] > 0)
@@ -2083,8 +2130,10 @@ static NSString *legacyTextFromTOML(toml_datum_t root, NSMutableArray *diagnosti
         NSArray *parts = [declarationKey componentsSeparatedByString:@"|"];
         if ([parts count] != 3)
             continue;
+        NSString *slug = [parts[2] hasPrefix:@"fn+"]
+            ? [parts[2] substringFromIndex:[@"fn+" length]] : parts[2];
         [([parts[0] isEqualToString:@"mouse"] ? mouseSlugs : trackpadSlugs)
-            addObject:parts[2]];
+            addObject:slug];
     }
 
     return @{
