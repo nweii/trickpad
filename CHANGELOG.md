@@ -12,6 +12,14 @@
 
 # Changelog
 
+## 0.12.1
+
+Released 2026-08-23.
+
+### Fixed
+
+- Make apps recognize `middle-click` and `mouse-3` through `mouse-32` actions from physical click gestures regardless of which app opens first. Apps opened after Trickpad could previously miss the remapped click.
+
 ## 0.12.0
 
 Released 2026-08-22.
