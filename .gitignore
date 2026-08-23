@@ -5,7 +5,13 @@ run/
 *.app
 *.dSYM
 .scratch/
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/trickpad-release
+
+# Local pointer to the private product vision in the Brain vault.
+VISION.md
 
 # Vendored frameworks carry nested application bundles that belong in the
 # repository, so a clean checkout builds without downloading anything.
