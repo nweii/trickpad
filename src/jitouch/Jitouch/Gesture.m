@@ -28,6 +28,7 @@
 #import "ContactTapRecognizer.h"
 #import "DeferredGestureDispatcher.h"
 #import "GestureSequence.h"
+#import "MouseButtonEventReplacement.h"
 #import "MouseButtonLifecycle.h"
 #import "MouseClickInteraction.h"
 #import "MouseContactFilter.h"
@@ -157,7 +158,6 @@ static int trigger = 0;
 // one-contact clicks never take this path.
 static const useconds_t kMagicMouseClickClassificationWaitMicroseconds = 20000;
 static const useconds_t kMagicMouseClickClassificationPollMicroseconds = 500;
-static const int64_t kTrickpadReplayedMouseEvent = 0x545249434b504144;
 static CGPoint trackpadMouseButtonLocation;
 static BOOL trackpadMouseButtonLocationValid = NO;
 // A new primary or secondary down cannot be the down that already holds an
@@ -179,9 +179,35 @@ static void postMouseButtonEventAtLocation(CGEventType type, CGPoint location,
                                                (CGMouseButton)buttonNumber);
     CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, buttonNumber);
     CGEventSetIntegerValueField(event, kCGEventSourceUserData,
-                                kTrickpadReplayedMouseEvent);
+                                MGTrickpadReplayedMouseEventMarker);
     CGEventPost(kCGSessionEventTap, event);
     CFRelease(event);
+}
+
+// Reinsert a transformed copy before every session tap and suppress the
+// physical source event by returning NULL to the callback. This makes the
+// replacement visible even to event taps that ran before Trickpad saw it.
+static CGEventRef replaceMouseButtonEventAtLocation(
+    CGEventRef source,
+    CGEventType replacementType,
+    NSInteger buttonNumber,
+    const CGPoint *location) {
+    CGEventRef replacement = MGCreateMouseButtonReplacementEvent(
+        source, replacementType, buttonNumber);
+    if (replacement != NULL) {
+        if (location != NULL)
+            CGEventSetLocation(replacement, *location);
+        CGEventPost(kCGSessionEventTap, replacement);
+        CFRelease(replacement);
+    }
+    return NULL;
+}
+
+static CGEventRef replaceMouseButtonEvent(CGEventRef source,
+                                          CGEventType replacementType,
+                                          NSInteger buttonNumber) {
+    return replaceMouseButtonEventAtLocation(
+        source, replacementType, buttonNumber, NULL);
 }
 
 static void postMouseButtonEvent(CGEventType type, NSInteger buttonNumber) {
@@ -241,7 +267,7 @@ static void postTrackpadMiddleButtonDrag(const Finger *data, int nFingers,
     CGEventSetIntegerValueField(event, kCGMouseEventDeltaX, llround(delta.x));
     CGEventSetIntegerValueField(event, kCGMouseEventDeltaY, llround(delta.y));
     CGEventSetIntegerValueField(event, kCGEventSourceUserData,
-                                kTrickpadReplayedMouseEvent);
+                                MGTrickpadReplayedMouseEventMarker);
     CGEventPost(kCGSessionEventTap, event);
     CFRelease(event);
 }
@@ -259,7 +285,7 @@ static void replayPendingMagicMousePrimaryDown(void) {
     if (pendingMagicMousePrimaryDown == NULL) return;
     CGEventSetIntegerValueField(pendingMagicMousePrimaryDown,
                                kCGEventSourceUserData,
-                               kTrickpadReplayedMouseEvent);
+                               MGTrickpadReplayedMouseEventMarker);
     CGEventPost(kCGSessionEventTap, pendingMagicMousePrimaryDown);
     clearPendingMagicMouseClick();
 }
@@ -284,7 +310,7 @@ static void replayPendingTrackpadPrimaryDown(void) {
     if (pendingTrackpadPrimaryDown == NULL) return;
     CGEventSetIntegerValueField(pendingTrackpadPrimaryDown,
                                kCGEventSourceUserData,
-                               kTrickpadReplayedMouseEvent);
+                               MGTrickpadReplayedMouseEventMarker);
     CGEventPost(kCGSessionEventTap, pendingTrackpadPrimaryDown);
     clearPendingTrackpadClick();
 }
@@ -5054,7 +5080,7 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
         return event;
     }
     if (CGEventGetIntegerValueField(event, kCGEventSourceUserData) ==
-        kTrickpadReplayedMouseEvent)
+        MGTrickpadReplayedMouseEventMarker)
         return event;
     if (nativeClickChordMouseUp != kCGEventNull &&
         type == nativeClickChordMouseUp) {
@@ -5147,15 +5173,13 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
         MGMouseClickInteractionRecordDrag(&magicMouseClickInteraction,
             (int)CGEventGetIntegerValueField(event, kCGMouseEventDeltaX),
             (int)CGEventGetIntegerValueField(event, kCGMouseEventDeltaY));
-        // A held press owns this movement. Return the rewritten event before
-        // legacy recognizers can consume it as gesture input.
+        // A held press owns this movement. Repost its replacement before every
+        // session tap and suppress the physical drag.
         if (MGMouseButtonLifecycleShouldRewriteDrag(&mouseButtonLifecycle)) {
-            CGEventSetIntegerValueField(
-                event, kCGMouseEventButtonNumber,
+            return replaceMouseButtonEvent(
+                event, kCGEventOtherMouseDragged,
                 MGMouseButtonLifecycleHoldingButtonNumber(
                     &mouseButtonLifecycle));
-            CGEventSetType(event, kCGEventOtherMouseDragged);
-            return event;
         }
     }
 
@@ -5261,12 +5285,10 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
                     commandForGesture(configuredTrackpadClickGesture, TRACKPAD))) {
                 trackpadMouseButtonLocation = CGEventGetLocation(event);
                 trackpadMouseButtonLocationValid = YES;
-                CGEventSetIntegerValueField(
-                    event, kCGMouseEventButtonNumber,
+                return replaceMouseButtonEvent(
+                    event, kCGEventOtherMouseDown,
                     MGMouseButtonLifecycleHoldingButtonNumber(
                         &mouseButtonLifecycle));
-                CGEventSetType(event, kCGEventOtherMouseDown);
-                return event;
             }
             pendingTrackpadPrimaryDown = CGEventCreateCopy(event);
             return NULL;
@@ -5308,11 +5330,14 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
             } else if (MGMouseButtonLifecycleShouldRewriteMouseDown(
                            &mouseButtonLifecycle,
                            MGMouseButtonDeviceFromEngineDevice(device), command)) {
-                CGEventSetIntegerValueField(
-                    event, kCGMouseEventButtonNumber,
+                if (!MGTraceIsActive() && command != nil &&
+                    logLevel >= LOG_LEVEL_INFO)
+                    NSLog(@"Gesture \"%@\" -> \"%@\" for %@", gesture,
+                          command, deviceTypeName[device]);
+                return replaceMouseButtonEvent(
+                    event, kCGEventOtherMouseDown,
                     MGMouseButtonLifecycleHoldingButtonNumber(
                         &mouseButtonLifecycle));
-                CGEventSetType(event, kCGEventOtherMouseDown);
             } else if ([command isEqualToString:@"Left Click"]) {
                 simulating = LEFTBUTTONDOWN;
                 CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, 0);
@@ -5367,15 +5392,16 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
         NSInteger heldButtonNumber =
             MGMouseButtonLifecycleHoldingButtonNumber(&mouseButtonLifecycle);
         if (MGMouseButtonLifecycleEnd(&mouseButtonLifecycle)) {
-            CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber,
-                                        heldButtonNumber);
-            CGEventSetType(event, kCGEventOtherMouseUp);
-            if (heldButtonDevice == MGMouseButtonDeviceTrackpad &&
-                trackpadMouseButtonLocationValid)
-                CGEventSetLocation(event, trackpadMouseButtonLocation);
+            BOOL useTrackpadLocation =
+                heldButtonDevice == MGMouseButtonDeviceTrackpad &&
+                trackpadMouseButtonLocationValid;
+            CGPoint replacementLocation = trackpadMouseButtonLocation;
             trackpadMouseButtonLocationValid = NO;
             if (logLevel >= LOG_LEVEL_DEBUG)
                 NSLog(@"Simulated MouseButton%ldUp", (long)heldButtonNumber + 1);
+            return replaceMouseButtonEventAtLocation(
+                event, kCGEventOtherMouseUp, heldButtonNumber,
+                useTrackpadLocation ? &replacementLocation : NULL);
         } else if (simulating == LEFTBUTTONDOWN) {
             CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, 0);
             CGEventSetType(event, kCGEventLeftMouseUp);
@@ -5456,12 +5482,10 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
             selectSafariTab();
         } else if (MGMouseButtonLifecycleShouldRewriteDrag(
                        &mouseButtonLifecycle)) {
-            CGEventSetIntegerValueField(
-                event, kCGMouseEventButtonNumber,
+            return replaceMouseButtonEvent(
+                event, kCGEventOtherMouseDragged,
                 MGMouseButtonLifecycleHoldingButtonNumber(
                     &mouseButtonLifecycle));
-            CGEventSetType(event, kCGEventOtherMouseDragged);
-            return event;
         }
     } else if (type == kCGEventLeftMouseDragged || type == kCGEventRightMouseDragged) {
         if (simulating == IGNOREMOUSE) {

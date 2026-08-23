@@ -204,6 +204,7 @@ clang \
   "$ROOT/src/GestureSequence.m" \
   "$ROOT/src/InputModifierState.m" \
   "$ROOT/src/KeyEventSequence.m" \
+  "$ROOT/src/MouseButtonEventReplacement.m" \
   "$ROOT/src/MouseButtonLifecycle.m" \
   "$ROOT/src/MouseContactFilter.m" \
   "$ROOT/src/MouseClickInteraction.m" \

@@ -291,6 +291,20 @@ static NSUInteger directDispatchLineCount(NSString *source, NSString *line) {
     return count;
 }
 
+static NSUInteger stringOccurrenceCount(NSString *source, NSString *needle) {
+    NSUInteger count = 0;
+    NSRange remaining = NSMakeRange(0, [source length]);
+    while (remaining.length > 0) {
+        NSRange match = [source rangeOfString:needle options:0 range:remaining];
+        if (match.location == NSNotFound)
+            break;
+        count++;
+        NSUInteger next = NSMaxRange(match);
+        remaining = NSMakeRange(next, [source length] - next);
+    }
+    return count;
+}
+
 int main(void) {
     @autoreleasepool {
         NSUInteger CMD = kCGEventFlagMaskCommand | NX_DEVICELCMDKEYMASK;
@@ -1673,11 +1687,37 @@ int main(void) {
                 @"MGMouseButtonLifecycleHoldingButtonNumber",
                 @"MGMouseButtonLifecycleEnd(&mouseButtonLifecycle)",
                 @"releaseHeldMouseButton();",
+                @"replaceMouseButtonEvent(",
                 @"kCGEventOtherMouseDragged",
             ]) {
                 if ([clickCallback rangeOfString:required].location == NSNotFound)
                     fail(@"physical clicks use the shared mouse-button lifecycle",
                          required, @"missing");
+            }
+            for (NSString *required in @[
+                @"MGCreateMouseButtonReplacementEvent(",
+                @"CGEventPost(kCGSessionEventTap, replacement)",
+                @"MGTrickpadReplayedMouseEventMarker",
+            ]) {
+                if ([engine rangeOfString:required].location == NSNotFound)
+                    fail(@"numbered-button replacements reenter the session event stream",
+                         required, @"missing");
+            }
+            if (stringOccurrenceCount(
+                    clickCallback, @"return replaceMouseButtonEvent(") != 4 ||
+                stringOccurrenceCount(
+                    clickCallback,
+                    @"return replaceMouseButtonEventAtLocation(") != 1)
+                fail(@"every physical numbered-button phase reposts and suppresses its source",
+                     @"two downs, two drag paths, and one up", @"branch missing");
+            for (NSString *oldMutation in @[
+                @"CGEventSetType(event, kCGEventOtherMouseDown)",
+                @"CGEventSetType(event, kCGEventOtherMouseDragged)",
+                @"CGEventSetType(event, kCGEventOtherMouseUp)",
+            ]) {
+                if ([clickCallback rangeOfString:oldMutation].location != NSNotFound)
+                    fail(@"physical numbered-button events are copied instead of mutated",
+                         @"no in-place numbered-button mutation", oldMutation);
             }
             for (NSString *reset in @[@"static void turnOffTrackpad",
                                        @"static void turnOffMagicMouse"]) {
@@ -1693,7 +1733,7 @@ int main(void) {
                 @"CGEventSetIntegerValueField(event, kCGMouseEventDeltaX",
                 @"CGEventSetIntegerValueField(event, kCGMouseEventDeltaY",
                 @"CGEventSetIntegerValueField(event, kCGEventSourceUserData",
-                @"CGEventSetLocation(event, trackpadMouseButtonLocation)",
+                @"replaceMouseButtonEventAtLocation",
                 @"nativeClickChordMouseUp",
             ]) {
                 if ([engine rangeOfString:required].location == NSNotFound)
