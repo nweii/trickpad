@@ -8,12 +8,14 @@ Small single-file programs for diagnosing keyboard and input problems by hand. N
 - `release-right-control.m` — releases a right-Control modifier left held down.
 - `dock-notification-probe.m` — reports which `CoreDockSendNotification` call form macOS honors, so a Mission Control or App Expose action that does nothing can be told apart from a gesture that never fired.
 - `watch-middle-button.m` — prints every middle-button down, drag, and up, so a `middle-click` binding can be watched without an application that uses the middle button. A press that never prints its up left the button down.
+- `stress-middle-button.m` — measures Trickpad DEV's CPU use during a sustained Mouse3 drag and reports duplicate, missing, or out-of-order button events.
 
 Compile one with clang, naming the frameworks it imports:
 
 ```bash
 clang -framework Carbon scripts/debug/check-secure-input.m -o /tmp/check-secure-input
 clang -framework ApplicationServices scripts/debug/right-control-test.m -o /tmp/right-control-test
+clang -framework AppKit -framework ApplicationServices scripts/debug/stress-middle-button.m -o /tmp/stress-middle-button
 ```
 
 To check a trackpad middle-click lifecycle:
@@ -24,3 +26,10 @@ To check a trackpad middle-click lifecycle:
 4. Interrupt a held click with a reload, wake, or device disable. Each down must have one up. A click on the other device must pass through while the middle button stays held.
 5. Bind the same physical click to a non-middle action. The action must run once, with no middle-button events.
 6. Drag across selectable text with one finger. Native selection must continue to work.
+
+To check the reposted Mouse3 path for performance and lifecycle regressions:
+
+1. Launch `/Applications/Trickpad DEV.app` and compile `stress-middle-button.m` with the command above.
+2. Run `/tmp/stress-middle-button` and wait for its ready message.
+3. Hold the physical gesture bound to `middle-click`, move continuously for 10 seconds, then release.
+4. Confirm the pointer stayed smooth. The monitor must report one down, one up, no lifecycle failures, at least 40 drag events, and the measured drag and idle CPU percentages.
