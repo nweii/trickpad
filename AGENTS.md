@@ -150,7 +150,7 @@ Two of these fail quietly, and one is already guarded.
 
 **`CHANGELOG.md` is an interface, not only prose.** A downstream surface parses it to render a customer-facing changelog and the version it advertises. The shape it relies on: `## X.Y.Z` per release, a `Released YYYY-MM-DD.` line, a `### Section` heading per group, `- ` bullets that may wrap, and any trailing paragraph as closing notes. Entries are written in the imperative, so the section heading supplies the tense. Changing that structure degrades a page outside this repository, which no check here will catch.
 
-Write the entries in ASD-STE100 Simplified Technical English: one idea per sentence, sentences under 25 words, no semicolons, and none of "should", "may", "might", or "could". The `simple-english` skill carries the full rules. Customers decide from this file whether an update affects them, and many of them do not read English as a first language, so an entry that needs a second reading has failed. Describing a fix in the vocabulary of the code that caused it is the way these go wrong.
+Write entries according to the [Google developer documentation style guide](https://developers.google.com/style), starting with its highlights. Use clear, concise US English for a global audience. Prefer active voice, familiar words, and unambiguous sentences. Keep Trickpad's project-specific imperative and neutral-voice rules even where the general guide uses second person. Customers decide from this file whether an update affects them, and many do not read English as a first language. Describe customer effects rather than the implementation that caused them.
 
 **Publishing the tag does not publish the release.** Surfaces that read this repository do so when they build, not when it changes, so each needs a rebuild of its own before a customer sees the new version. Treat a release as delivered only once every surface below has been refreshed.
 
@@ -227,7 +227,9 @@ Every engine name a slug reaches needs a phrase in `humanNameForGesture:`, or Cu
 
 `dominant-hand = right` preserves the engine's original coordinate axis. `dominant-hand = left` mirrors positional recognition on both devices, including hold-tap direction and thumb-side filtering.
 
-Shift, Control, Option, and Command are the available modifiers. Fn is a HID usage rather than a key event and cannot be synthesized. Written modifiers may use a `left-` or `right-` prefix. An unspecified side and modifier symbols use the left-side key.
+Shift, Control, Option, and Command are the available output modifiers. Fn is a HID usage rather than a key event and cannot be synthesized. Written modifiers may use a `left-` or `right-` prefix. An unspecified side and modifier symbols use the left-side key.
+
+Physical Fn can qualify a gesture input. Prefix a gesture key with `fn_`; `function_`, quoted `"fn+"`, and quoted `"function+"` prefixes normalize to the same layer. The Fn-qualified binding wins while Fn is held, and the ordinary binding remains the fallback when that layer is absent. Repeated taps require one continuous Fn hold, tracked through modifier transitions rather than delayed action timing. Fn remains unavailable as an output modifier.
 
 The `appID` CFPreferences domain in `Settings.h` is vestigial — only the removed preference pane wrote to it.
 

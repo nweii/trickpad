@@ -1,10 +1,10 @@
 <!-- Records user-visible Trickpad releases in reverse chronological order.
      Entries are written in the imperative, following Keep a Changelog: the
      Added/Changed/Fixed heading supplies the tense, so the bullet does not.
-     Entries follow ASD-STE100 Simplified Technical English: one idea per
-     sentence, sentences under 25 words, no semicolons, and no "should", "may",
-     or "might". A reader decides from this file whether an update affects
-     them, and many of them do not read English as a first language.
+     Entries follow the Google developer documentation style guide. Use clear,
+     concise US English for a global audience, with active voice, familiar
+     words, and unambiguous sentences. A reader decides from this file whether
+     an update affects them, and many do not read English as a first language.
 
      Lead with what changed for the reader, not with the mechanism behind it.
      Keep the voice neutral: no "you" or "your", and no claim about the state
