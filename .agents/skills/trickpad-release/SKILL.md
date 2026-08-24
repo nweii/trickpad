@@ -15,6 +15,12 @@ Use the repository's release conventions while preserving their approval gates a
 
 If execution mode has no VERSION, inspect `APP_VERSION` in `scripts/build.sh`, the latest tag, and the configuration-interface changes since that tag. Propose the semantic version and get the user's confirmation before editing it.
 
+## Use a release train branch
+
+When unreleased work needs to soak away from `main`, create `releases/X.Y.Z` from the current `main` branch after the version is confirmed. Set `APP_VERSION` to `X.Y.Z-dev` and keep the complete train there. Committing or pushing this branch does not publish a release.
+
+Before cutting the release, require a clean release train with passing checks, then get approval to integrate it into local `main`. Run the preparation checks again on `main`. The `Release X.Y.Z` commit, annotated tag, package, and publication all remain on `main`; never tag or publish directly from the release train branch.
+
 ## Prepare the release
 
 1. Run these read-only checks from the repository root:
@@ -28,7 +34,7 @@ If execution mode has no VERSION, inspect `APP_VERSION` in `scripts/build.sh`, t
    rg -n '^(APP_VERSION|APP_BUILD_NUMBER)=' scripts/build.sh
    ```
 
-2. Stop if the branch is not `main`, the checkout contains unrelated work, or the release contents are not committed. List the exact condition the user must settle. Do not absorb unrelated changes into the release.
+2. Accept `main` or the exact `releases/X.Y.Z` branch during preparation. Stop if the branch is anything else, the checkout contains unrelated work, or the release contents are not committed. List the exact condition the user must settle. Do not absorb unrelated changes into the release. Do not begin the build-and-stage sequence until the approved train has been integrated into local `main`.
 
 3. Determine the version from Trickpad's configuration-interface semantic versioning in `AGENTS.md`. Identify every renamed or removed configuration name since the previous release. Any rename or removal requires a migration note.
 
