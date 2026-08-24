@@ -2,6 +2,7 @@
 // Requested modifiers already held by the user are never pressed or released.
 
 #import "KeyEventSequence.h"
+#import <Carbon/Carbon.h>
 #import <IOKit/hidsystem/IOLLEvent.h>
 
 typedef struct {
@@ -16,8 +17,10 @@ size_t MGPlanKeyEventSequence(CGKeyCode keyCode,
                               bool hasKey,
                               CGEventFlags requestedFlags,
                               CGEventFlags physicalFlags,
-                              MGKeyEventStep steps[18]) {
+                              MGKeyEventStep steps[20]) {
     static const MGModifier modifiers[] = {
+        {kVK_Function, kCGEventFlagMaskSecondaryFn, kCGEventFlagMaskSecondaryFn,
+            kCGEventFlagMaskSecondaryFn, kCGEventFlagMaskSecondaryFn},
         {56, kCGEventFlagMaskShift, NX_DEVICELSHIFTKEYMASK,
             NX_DEVICELSHIFTKEYMASK | NX_DEVICERSHIFTKEYMASK,
             kCGEventFlagMaskShift | NX_DEVICELSHIFTKEYMASK},
@@ -44,7 +47,7 @@ size_t MGPlanKeyEventSequence(CGKeyCode keyCode,
             kCGEventFlagMaskCommand | NX_DEVICERCMDKEYMASK},
     };
     size_t count = 0;
-    size_t pressed[8];
+    size_t pressed[9];
     size_t pressedCount = 0;
     CGEventFlags activeFlags = 0;
 

@@ -13,4 +13,4 @@ size_t MGPlanKeyEventSequence(CGKeyCode keyCode,
                               bool hasKey,
                               CGEventFlags requestedFlags,
                               CGEventFlags physicalFlags,
-                              MGKeyEventStep steps[18]);
+                              MGKeyEventStep steps[20]);

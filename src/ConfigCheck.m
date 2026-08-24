@@ -310,6 +310,7 @@ int main(void) {
         NSUInteger CMD = kCGEventFlagMaskCommand | NX_DEVICELCMDKEYMASK;
         NSUInteger SHIFT = kCGEventFlagMaskShift | NX_DEVICELSHIFTKEYMASK;
         NSUInteger CTRL = kCGEventFlagMaskControl | NX_DEVICELCTLKEYMASK;
+        NSUInteger FN = kCGEventFlagMaskSecondaryFn;
 
         NSArray *tomlProblems = nil;
         NSDictionary *tomlSettings = parseRawTOML(
@@ -629,6 +630,9 @@ int main(void) {
                   kCGEventFlagMaskControl | NX_DEVICERCTLKEYMASK);
         expectKey(@"right control with hyphen separators", @"right-control-space", 49,
                   kCGEventFlagMaskControl | NX_DEVICERCTLKEYMASK);
+        expectKey(@"Fn modifier", @"fn+space", 49, FN);
+        expectKey(@"Function modifier alias", @"function+space", 49, FN);
+        expectKey(@"Globe modifier alias", @"globe+space", 49, FN);
         expectKey(@"right-side modifier chord",
                   @"right-shift+right-option+right-command+a", 0,
                   kCGEventFlagMaskShift | NX_DEVICERSHIFTKEYMASK |
@@ -637,6 +641,7 @@ int main(void) {
         expectKeyDisplay(@"digit shortcut display", @"shift+cmd+4", @"⇧⌘4");
         expectKeyDisplay(@"right modifier display", @"right-control+space",
                          @"Right Control + Space");
+        expectKeyDisplay(@"Fn modifier display", @"fn+space", @"Fn+Space");
         expectKeyDisplay(@"mixed modifier side display", @"left-shift+right-command+4",
                          @"Left Shift + Right Command + 4");
         expectModifierChord(@"both Command keys", @"left-cmd+right-cmd",
@@ -648,6 +653,8 @@ int main(void) {
                             kCGEventFlagMaskCommand | NX_DEVICELCMDKEYMASK |
                             NX_DEVICERCMDKEYMASK,
                             @"Left Command + Right Command");
+        expectModifierChord(@"Fn modifier alone", @"fn",
+                            kCGEventFlagMaskSecondaryFn, @"Fn");
 
         NSDictionary *punctuation = @{
             @"[": @33, @"]": @30, @"-": @27, @"=": @24, @";": @41,
@@ -1695,6 +1702,18 @@ int main(void) {
                          required, @"missing");
             }
             for (NSString *required in @[
+                @"beginHeldKeystrokeForPhysicalClick(",
+                @"endHeldKeystrokeForPhysicalClick(TRACKPAD)",
+                @"endHeldKeystrokeForPhysicalClick(MAGICMOUSE)",
+                @"releaseHeldKeystroke();",
+                @"classified-after-mouse-down",
+            ]) {
+                if ([clickCallback rangeOfString:required].location == NSNotFound &&
+                    [engine rangeOfString:required].location == NSNotFound)
+                    fail(@"physical-click keystrokes use the held lifecycle",
+                         required, @"missing");
+            }
+            for (NSString *required in @[
                 @"MGCreateMouseButtonReplacementEvent(",
                 @"CGEventPost(kCGSessionEventTap, replacement)",
                 @"MGTrickpadReplayedMouseEventMarker",
@@ -1725,6 +1744,10 @@ int main(void) {
                 if (body == nil ||
                     [body rangeOfString:@"releaseHeldMouseButton();"].location == NSNotFound)
                     fail(@"a device reset releases a held mouse button",
+                         reset, @"no release");
+                if (body == nil ||
+                    [body rangeOfString:@"releaseHeldKeystroke();"].location == NSNotFound)
+                    fail(@"a device reset releases a held keystroke",
                          reset, @"no release");
             }
             for (NSString *required in @[

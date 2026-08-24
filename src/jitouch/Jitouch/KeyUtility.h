@@ -7,6 +7,9 @@
 
 #import <Cocoa/Cocoa.h>
 #import <IOKit/hidsystem/ev_keymap.h>
+#import "KeyEventSequence.h"
+
+extern const int64_t MGTrickpadSyntheticKeyEventMarker;
 
 @interface KeyUtility : NSObject {
     NSMutableDictionary *keyMap;
@@ -14,6 +17,7 @@
 
 - (void)simulateKeyCode:(CGKeyCode)code ShftDown:(BOOL)shft CtrlDown:(BOOL)ctrl AltDown:(BOOL)alt CmdDown:(BOOL)cmd;
 - (void)simulateKeyCode:(CGKeyCode)code hasKey:(BOOL)hasKey ModifierFlags:(CGEventFlags)flags;
+- (void)postKeyEventSteps:(const MGKeyEventStep *)steps count:(size_t)count;
 - (void)simulateKey:(NSString *)key ShftDown:(BOOL)shft CtrlDown:(BOOL)ctrl AltDown:(BOOL)alt CmdDown:(BOOL)cmd;
 - (void)simulateSystemKey:(int)key;
 - (CGKeyCode)charToCode:(NSString*) chr;

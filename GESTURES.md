@@ -135,7 +135,9 @@ An area click fires only when the clicking finger is the only contact on the sur
 | `bottom-left-corner-click` | The bottom left corner |
 | `bottom-right-corner-click` | The bottom right corner |
 
-On both devices, a confidently recognized configured click replaces the native click: the bound action fires on release and the click does not reach the application. An ambiguous click, such as one with a resting palm, stays native and does not fire the bound action. A drag keeps its native events and does not fire the configured click action. A click bound to `middle-click` or `mouse-3` through `mouse-32` presses that button with the physical click, sends matching button drags during movement, and releases the button when the click ends.
+On both devices, a confidently recognized configured click replaces the native click. A keystroke binding presses its keys when the physical click begins and releases them when the click ends. This lets a binding such as `f5` act like holding the physical F5 key. A built-in action, URL, script, sound, speech, or sequence runs when the click ends. A click bound to `middle-click` or `mouse-3` through `mouse-32` presses that button with the physical click, sends matching button drags during movement, and releases the button when the click ends.
+
+An ambiguous click, such as one with a resting palm, stays native and does not run the binding. If a configured keystroke click becomes a drag, Trickpad releases the keystroke and restores the native click for the drag. The application can receive the short key hold that occurred before the movement established the drag.
 
 One continuous touch sequence can run one kind of configured gesture. A swipe or hold gesture may repeat while it owns the sequence, but a physical click, tap, or different gesture will not also run until every finger lifts.
 
@@ -254,6 +256,7 @@ Modifier names are case-insensitive. For example, `cmd`, `CMD`, `command`, and `
 | Control | `ctrl` `control` `⌃` |
 | Option | `opt` `option` `alt` `⌥` |
 | Shift | `shift` `⇧` |
+| Fn | `fn` `function` `globe` |
 
 Modifiers default to the left-side key. Prefix a written name with `left-` or `right-` when an application distinguishes the two sides, such as `right-control+space`. The prefix works with every written alias, including `right-ctrl`, `right-cmd`, and `right-alt`. Modifier symbols use the default left side.
 
@@ -263,7 +266,7 @@ Keys: any letter or digit, plus `return` `escape` `tab` `space` `delete` `forwar
 
 Aliases: `enter` is `return`, `esc` is `escape`, `backspace` and `del` are `delete`, `spacebar` is `space`.
 
-Fn can qualify a gesture on the left side of a binding, but it cannot be sent as part of the action on the right. It is a HID usage rather than an ordinary key event, so no gesture can stand in for an Fn shortcut.
+Fn can also be sent as a modifier or by itself. For example, `fn+space` holds Fn while it sends Space, and `fn` sends an Fn press and release. `function` and `globe` are aliases for `fn` in an action. A physical click holds Fn and any other configured keys until the click ends; a tap sends one press and release.
 
 ### Actions
 

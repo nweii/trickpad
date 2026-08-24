@@ -16,7 +16,7 @@ if [[ "${1:-}" == "--dev" ]]; then
   BUNDLE_ID="fyi.thirdwind.trickpad.dev"
 fi
 
-APP_VERSION="0.12.2-dev"
+APP_VERSION="0.13.0-dev"
 APP_BUILD_NUMBER="22"
 MIN_MACOS_VERSION="11.0"
 ARCHITECTURES=(x86_64 arm64)
@@ -203,6 +203,8 @@ clang \
   "$ROOT/src/DeferredGestureDispatcher.m" \
   "$ROOT/src/GestureSequence.m" \
   "$ROOT/src/InputModifierState.m" \
+  "$ROOT/src/HeldKeystrokeLifecycle.m" \
+  "$ROOT/src/HeldModifierLifecycle.m" \
   "$ROOT/src/KeyEventSequence.m" \
   "$ROOT/src/MouseButtonEventReplacement.m" \
   "$ROOT/src/MouseButtonLifecycle.m" \

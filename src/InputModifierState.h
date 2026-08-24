@@ -16,4 +16,8 @@ typedef struct {
 
 void MGInputModifierStateInit(MGInputModifierState *state, BOOL functionDown);
 void MGInputModifierStateObserveFunction(MGInputModifierState *state, BOOL functionDown);
+void MGInputModifierStateObserveFlagsChanged(MGInputModifierState *state,
+                                             uint16_t keyCode,
+                                             BOOL functionDown,
+                                             BOOL synthesizedByTrickpad);
 MGInputModifierSnapshot MGInputModifierStateSnapshot(MGInputModifierState *state);

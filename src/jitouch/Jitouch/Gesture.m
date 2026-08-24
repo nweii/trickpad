@@ -14,6 +14,7 @@
 #import <ApplicationServices/ApplicationServices.h>
 #import <AudioToolbox/AudioServices.h>
 #import <AVFAudio/AVFAudio.h>
+#import <Carbon/Carbon.h>
 #import <Foundation/Foundation.h>
 
 #import "Settings.h"
@@ -28,6 +29,7 @@
 #import "ContactTapRecognizer.h"
 #import "DeferredGestureDispatcher.h"
 #import "GestureSequence.h"
+#import "HeldKeystrokeLifecycle.h"
 #import "MouseButtonEventReplacement.h"
 #import "MouseButtonLifecycle.h"
 #import "MouseClickInteraction.h"
@@ -42,23 +44,23 @@
 
 static const NSString* deviceTypeName[] = {@"trackpad", @"magicmouse", @"charrec"};
 
-static BOOL physicalFunctionFlagIsDown(void) {
-    return (CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState) &
-            kCGEventFlagMaskSecondaryFn) != 0;
+static BOOL physicalFunctionKeyIsDown(void) {
+    return CGEventSourceKeyState(
+        kCGEventSourceStateHIDSystemState, kVK_Function);
 }
 
 static MGInputModifierState *inputModifierState(void) {
     static MGInputModifierState state;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        MGInputModifierStateInit(&state, physicalFunctionFlagIsDown());
+        MGInputModifierStateInit(&state, physicalFunctionKeyIsDown());
     });
     return &state;
 }
 
 static MGInputModifierSnapshot currentInputModifierSnapshot(void) {
     MGInputModifierState *state = inputModifierState();
-    MGInputModifierStateObserveFunction(state, physicalFunctionFlagIsDown());
+    MGInputModifierStateObserveFunction(state, physicalFunctionKeyIsDown());
     return MGInputModifierStateSnapshot(state);
 }
 
@@ -138,6 +140,7 @@ static MGTrackpadInteraction trackpadInteraction = {0};
 static MGMouseClickInteraction magicMouseClickInteraction = {0};
 // Both devices share one press, so each down has exactly one matching up.
 static MGMouseButtonLifecycle mouseButtonLifecycle = {0};
+static MGHeldKeystrokeLifecycle heldKeystrokeLifecycle = {0};
 static MGContactOnsetTracker magicMouseContactOnsets = {0};
 static int lastLoggedMagicMouseClickContactCount = -1;
 static BOOL trackpadRewritingSecondaryClick = NO;
@@ -164,6 +167,8 @@ static BOOL trackpadMouseButtonLocationValid = NO;
 // extra button. Pair that chord at the callback boundary so neither edge
 // enters another device's release or gesture paths.
 static CGEventType nativeClickChordMouseUp = kCGEventNull;
+
+static void releaseHeldKeystroke(void);
 
 static CGPoint currentPointerLocation(void) {
     CGEventRef locationEvent = CGEventCreate(NULL);
@@ -452,6 +457,7 @@ static void turnOffTrackpad() {
     trackpadNFingers = 0;
     MGTrackpadInteractionInitialize(&trackpadInteraction);
     releaseHeldMouseButton();
+    releaseHeldKeystroke();
     clearPendingTrackpadClick();
     [pendingTrackpadAreaClickGesture release];
     pendingTrackpadAreaClickGesture = nil;
@@ -462,6 +468,7 @@ static void turnOffMagicMouse() {
     magicMouseTwoFingerFlag = 0;
     magicMouseThreeFingerFlag = 0;
     releaseHeldMouseButton();
+    releaseHeldKeystroke();
     simulating = 0;
     disableHorizontalScroll = 0;
     quickTabSwitching = 0;
@@ -1156,6 +1163,93 @@ static NSString* commandForGesture(NSString *gesture, int device) {
     return [bindingForGesture(gesture, device) objectForKey:@"Command"];
 }
 
+static BOOL bindingIsKeystroke(NSDictionary *binding) {
+    if (binding == nil || ![[binding objectForKey:@"Enable"] boolValue] ||
+        [[binding objectForKey:@"IsAction"] boolValue])
+        return NO;
+    return YES;
+}
+
+static CGEventFlags physicalFlagsForHeldKeystroke(void) {
+    CGEventFlags flags =
+        CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState);
+    MGInputModifierSnapshot snapshot =
+        currentInputModifierSnapshot();
+    if (snapshot.functionDown)
+        flags |= kCGEventFlagMaskSecondaryFn;
+    else
+        flags &= ~kCGEventFlagMaskSecondaryFn;
+    return flags;
+}
+
+static void confirmBindingDispatch(NSDictionary *binding, int device);
+static void requestHapticFeedbackForBinding(NSDictionary *binding, int device);
+
+static BOOL beginHeldKeystrokeForPhysicalClick(NSString *gesture, int device) {
+    NSDictionary *binding = bindingForGesture(gesture, device);
+    if (!bindingIsKeystroke(binding))
+        return NO;
+
+    BOOL hasKey = [binding objectForKey:@"HasKey"] == nil ||
+        [[binding objectForKey:@"HasKey"] boolValue];
+    CGKeyCode keyCode =
+        [[binding objectForKey:@"KeyCode"] unsignedShortValue];
+    BOOL physicalKeyDown = hasKey && CGEventSourceKeyState(
+        kCGEventSourceStateHIDSystemState, keyCode);
+    MGKeyEventStep steps[MG_HELD_KEYSTROKE_MAX_STEPS];
+    MGMouseButtonDevice owner = MGMouseButtonDeviceFromEngineDevice(device);
+    size_t count = MGHeldKeystrokeLifecycleBegin(
+        &heldKeystrokeLifecycle, owner, keyCode, hasKey,
+        [[binding objectForKey:@"ModifierFlags"] unsignedLongLongValue],
+        physicalFlagsForHeldKeystroke(), physicalKeyDown, steps);
+    if (!MGHeldKeystrokeLifecycleIsActiveForOwner(
+            &heldKeystrokeLifecycle, owner))
+        return NO;
+    CGFloat x, y;
+    getMousePosition(&x, &y);
+    CFTypeRef target = activateWindowAtPosition(x, y);
+    [keyUtil postKeyEventSteps:steps count:count];
+    CFSafeRelease(target);
+    requestHapticFeedbackForBinding(binding, device);
+    confirmBindingDispatch(binding, device);
+    if (logLevel >= LOG_LEVEL_INFO)
+        NSLog(@"Gesture \"%@\" began held keystroke \"%@\" for %@",
+              gesture, [Config keystrokeDisplayNameForBinding:binding],
+              deviceTypeName[device]);
+    return YES;
+}
+
+static BOOL endHeldKeystrokeForPhysicalClick(int device) {
+    MGMouseButtonDevice owner = MGMouseButtonDeviceFromEngineDevice(device);
+    if (!MGHeldKeystrokeLifecycleIsActiveForOwner(
+            &heldKeystrokeLifecycle, owner))
+        return NO;
+    CGKeyCode keyCode = 0;
+    BOOL physicalKeyDown =
+        MGHeldKeystrokeLifecycleHeldKeyCode(
+            &heldKeystrokeLifecycle, &keyCode) &&
+        CGEventSourceKeyState(kCGEventSourceStateHIDSystemState, keyCode);
+    MGKeyEventStep steps[MG_HELD_KEYSTROKE_MAX_STEPS];
+    size_t count = MGHeldKeystrokeLifecycleEnd(
+        &heldKeystrokeLifecycle, owner,
+        physicalFlagsForHeldKeystroke(), physicalKeyDown, steps);
+    [keyUtil postKeyEventSteps:steps count:count];
+    return YES;
+}
+
+static void releaseHeldKeystroke(void) {
+    CGKeyCode keyCode = 0;
+    BOOL physicalKeyDown =
+        MGHeldKeystrokeLifecycleHeldKeyCode(
+            &heldKeystrokeLifecycle, &keyCode) &&
+        CGEventSourceKeyState(kCGEventSourceStateHIDSystemState, keyCode);
+    MGKeyEventStep steps[MG_HELD_KEYSTROKE_MAX_STEPS];
+    size_t count = MGHeldKeystrokeLifecycleCancel(
+        &heldKeystrokeLifecycle, physicalFlagsForHeldKeystroke(),
+        physicalKeyDown, steps);
+    [keyUtil postKeyEventSteps:steps count:count];
+}
+
 static MGDeferredGestureDispatcher *deferredGestureDispatcher(void) {
     static MGDeferredGestureDispatcher *dispatcher = nil;
     static dispatch_once_t onceToken;
@@ -1526,7 +1620,19 @@ static void dispatchMagicMousePhysicalClickForContactCount(int contactCount) {
         MGTraceRecordOwnership(@"physical-click", gestureOwnerName(previous),
             gestureOwnerName(magicMouseSequence.owner), claimed);
         if (!claimed) return;
-        if (bindingForGesture(gesture, MAGICMOUSE) != nil)
+        NSString *matchedApplication = nil;
+        NSDictionary *binding = bindingForGestureWithMatch(
+            gesture, MAGICMOUSE, &matchedApplication);
+        // A held keystroke must begin at mouse-down. If contact filtering could
+        // classify only at mouse-up, do not turn it into a misleading pulse.
+        if (bindingIsKeystroke(binding)) {
+            NSString *scope = [matchedApplication isEqualToString:
+                @"All Applications"] ? @"global" : @"application";
+            MGTraceRecordDispatch(gesture, scope, @"keystroke",
+                                  @"classified-after-mouse-down");
+            return;
+        }
+        if (binding != nil)
             dispatchCommand(gesture, MAGICMOUSE);
         else
             MGTraceRecordDispatch(gesture, @"none", @"none", @"suppressed-for-trace");
@@ -5074,9 +5180,13 @@ static NSString *boundTrackpadAreaClickGesture(float x, float y) {
 
 static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon) {
     if (type == kCGEventFlagsChanged) {
-        MGInputModifierStateObserveFunction(
+        MGInputModifierStateObserveFlagsChanged(
             inputModifierState(),
-            (CGEventGetFlags(event) & kCGEventFlagMaskSecondaryFn) != 0);
+            (uint16_t)CGEventGetIntegerValueField(
+                event, kCGKeyboardEventKeycode),
+            (CGEventGetFlags(event) & kCGEventFlagMaskSecondaryFn) != 0,
+            CGEventGetIntegerValueField(event, kCGEventSourceUserData) ==
+                MGTrickpadSyntheticKeyEventMarker);
         return event;
     }
     if (CGEventGetIntegerValueField(event, kCGEventSourceUserData) ==
@@ -5169,6 +5279,7 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
         MGTrackpadInteractionRecordPhysicalDrag(&trackpadInteraction);
         // A suppressed trackpad click that becomes a drag keeps its native
         // events: restore the held mouse-down before the drag passes through.
+        releaseHeldKeystroke();
         replayPendingTrackpadPrimaryDown();
         MGMouseClickInteractionRecordDrag(&magicMouseClickInteraction,
             (int)CGEventGetIntegerValueField(event, kCGMouseEventDeltaX),
@@ -5186,7 +5297,10 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
     if ((type == kCGEventLeftMouseUp || type == kCGEventRightMouseUp) &&
         MGTrackpadInteractionHasPhysicalClick(&trackpadInteraction)) {
         BOOL trackpadClickReplacedNative = pendingTrackpadPrimaryDown != NULL;
+        BOOL trackpadHeldKeystrokeEnded =
+            endHeldKeystrokeForPhysicalClick(TRACKPAD);
         BOOL trackpadClickShouldDispatch =
+            !trackpadHeldKeystrokeEnded &&
             MGMouseButtonLifecycleShouldDispatchOnMouseUp(
                 &mouseButtonLifecycle,
                 MGMouseButtonDeviceFromEngineDevice(TRACKPAD));
@@ -5269,6 +5383,7 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
             return NULL;
         }
         releaseHeldMouseButton();
+        releaseHeldKeystroke();
         if (simulating) {   //simulating should be reset when mouseup, but sometimes mouseup doesn't get called
             simulating = 0; //so we have to reset it manually
             clearPendingMagicMouseClick();
@@ -5291,6 +5406,8 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
                         &mouseButtonLifecycle));
             }
             pendingTrackpadPrimaryDown = CGEventCreateCopy(event);
+            beginHeldKeystrokeForPhysicalClick(
+                configuredTrackpadClickGesture, TRACKPAD);
             return NULL;
         }
         NSString *gesture = nil;
@@ -5338,6 +5455,10 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
                     event, kCGEventOtherMouseDown,
                     MGMouseButtonLifecycleHoldingButtonNumber(
                         &mouseButtonLifecycle));
+            } else if (beginHeldKeystrokeForPhysicalClick(gesture, device)) {
+                simulating = IGNOREMOUSE;
+                pendingMagicMousePrimaryDown = CGEventCreateCopy(event);
+                return NULL;
             } else if ([command isEqualToString:@"Left Click"]) {
                 simulating = LEFTBUTTONDOWN;
                 CGEventSetIntegerValueField(event, kCGMouseEventButtonNumber, 0);
@@ -5377,6 +5498,8 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
         }
 
     } else if (type == kCGEventLeftMouseUp || type == kCGEventRightMouseUp) {
+        BOOL magicMouseHeldKeystrokeEnded =
+            endHeldKeystrokeForPhysicalClick(MAGICMOUSE);
         BOOL magicMouseClickDragged =
             MGMouseClickInteractionHasDragged(&magicMouseClickInteraction);
         int lateMagicMouseClickContactCount =
@@ -5384,8 +5507,9 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
         if (logLevel >= LOG_LEVEL_DEBUG)
             NSLog(@"Physical mouse up; correlated Magic Mouse contacts: %d",
                   lateMagicMouseClickContactCount);
-        dispatchMagicMousePhysicalClickForContactCount(
-            lateMagicMouseClickContactCount);
+        if (!magicMouseHeldKeystrokeEnded)
+            dispatchMagicMousePhysicalClickForContactCount(
+                lateMagicMouseClickContactCount);
 
         MGMouseButtonDevice heldButtonDevice =
             MGMouseButtonLifecycleHoldingDevice(&mouseButtonLifecycle);
@@ -5498,8 +5622,10 @@ static CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEve
             return NULL;
         }
     } else if (type == kCGEventTapDisabledByUserInput) {
+        releaseHeldKeystroke();
         CGEventTapEnable(eventTap, true);
     } else if (type == kCGEventTapDisabledByTimeout) {
+        releaseHeldKeystroke();
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
             if (recreatingEventTap) return;
             recreatingEventTap = TRUE;

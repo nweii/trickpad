@@ -96,6 +96,8 @@ run_system_gesture_check() {
 
 run_compiled_check config run_config_check "${OBJC_FLAGS[@]}" -I"$ROOT/third_party/tomlc17" -framework Foundation -framework ApplicationServices -framework Carbon "$ROOT/src/Config.m" "$ROOT/src/ConfigCheck.m" "$ROOT/src/SystemGestureClaims.m" "$ROOT/third_party/tomlc17/tomlc17.c"
 run_compiled_check key-event run_without_arguments "${OBJC_FLAGS[@]}" -framework ApplicationServices "$ROOT/src/KeyEventSequence.m" "$ROOT/src/KeyEventSequenceCheck.m"
+run_compiled_check held-modifier run_without_arguments "${OBJC_FLAGS[@]}" -framework ApplicationServices -framework Carbon "$ROOT/src/HeldModifierLifecycle.m" "$ROOT/src/HeldModifierLifecycleCheck.m"
+run_compiled_check held-keystroke run_without_arguments "${OBJC_FLAGS[@]}" -framework ApplicationServices -framework Carbon "$ROOT/src/HeldModifierLifecycle.m" "$ROOT/src/HeldKeystrokeLifecycle.m" "$ROOT/src/HeldKeystrokeLifecycleCheck.m"
 run_compiled_check deferred-gesture run_without_arguments -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/DeferredGestureDispatcher.m" "$ROOT/src/DeferredGestureDispatcherCheck.m"
 run_compiled_check sequence-dispatcher run_without_arguments -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/SequenceDispatcher.m" "$ROOT/src/SequenceDispatcherCheck.m"
 run_compiled_check contact-tap run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/ContactTapRecognizer.m" "$ROOT/src/ContactTapRecognizerCheck.m"

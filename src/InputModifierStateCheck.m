@@ -22,7 +22,19 @@ int main(void) {
         if (repeatedUp.functionGeneration != initial.functionGeneration)
             fail(@"a repeated state changed the generation");
 
-        MGInputModifierStateObserveFunction(&state, YES);
+        MGInputModifierStateObserveFlagsChanged(&state, 96, YES, NO);
+        MGInputModifierSnapshot functionKey = MGInputModifierStateSnapshot(&state);
+        if (functionKey.functionDown ||
+            functionKey.functionGeneration != initial.functionGeneration)
+            fail(@"F5 was mistaken for physical Fn");
+
+        MGInputModifierStateObserveFlagsChanged(&state, 63, YES, YES);
+        MGInputModifierSnapshot syntheticDown = MGInputModifierStateSnapshot(&state);
+        if (syntheticDown.functionDown ||
+            syntheticDown.functionGeneration != initial.functionGeneration)
+            fail(@"a synthetic Fn action changed physical input state");
+
+        MGInputModifierStateObserveFlagsChanged(&state, 63, YES, NO);
         MGInputModifierSnapshot down = MGInputModifierStateSnapshot(&state);
         if (!down.functionDown || down.functionGeneration == initial.functionGeneration)
             fail(@"Fn down did not advance the generation");

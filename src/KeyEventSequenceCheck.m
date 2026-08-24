@@ -16,7 +16,7 @@ static void expectStep(const char *label, MGKeyEventStep actual,
 }
 
 int main(void) {
-    MGKeyEventStep steps[18];
+    MGKeyEventStep steps[20];
     CGEventFlags control = kCGEventFlagMaskControl | NX_DEVICELCTLKEYMASK;
     CGEventFlags command = kCGEventFlagMaskCommand | NX_DEVICELCMDKEYMASK;
     CGEventFlags chord = control | command;
@@ -73,6 +73,27 @@ int main(void) {
     } else {
         expectStep("held right control chord down", steps[0], 49, true, rightControl);
         expectStep("held right control chord up", steps[1], 49, false, rightControl);
+    }
+
+    CGEventFlags function = kCGEventFlagMaskSecondaryFn;
+    count = MGPlanKeyEventSequence(49, true, function, 0, steps);
+    if (count != 4) {
+        fprintf(stderr, "FAIL  Fn-Space event count\n");
+        failures++;
+    } else {
+        expectStep("Fn down", steps[0], 63, true, function);
+        expectStep("Space with Fn down", steps[1], 49, true, function);
+        expectStep("Space with Fn up", steps[2], 49, false, function);
+        expectStep("Fn up", steps[3], 63, false, 0);
+    }
+
+    count = MGPlanKeyEventSequence(49, true, function, function, steps);
+    if (count != 2) {
+        fprintf(stderr, "FAIL  physically held Fn-Space event count\n");
+        failures++;
+    } else {
+        expectStep("held Fn is not pressed", steps[0], 49, true, function);
+        expectStep("held Fn is not released", steps[1], 49, false, function);
     }
 
     CGEventFlags bothCommands = kCGEventFlagMaskCommand |

@@ -639,6 +639,9 @@ static NSDictionary *modifierNames(void) {
             @"⇧": @(kCGEventFlagMaskShift | NX_DEVICELSHIFTKEYMASK),
             @"left-shift": @(kCGEventFlagMaskShift | NX_DEVICELSHIFTKEYMASK),
             @"right-shift": @(kCGEventFlagMaskShift | NX_DEVICERSHIFTKEYMASK),
+            @"fn": @(kCGEventFlagMaskSecondaryFn),
+            @"function": @(kCGEventFlagMaskSecondaryFn),
+            @"globe": @(kCGEventFlagMaskSecondaryFn),
         } retain];
     }
     return m;
@@ -1226,6 +1229,12 @@ static NSDictionary *parseSequence(NSString *rawValue, NSString **outProblem) {
     NSDictionary *sides = [binding objectForKey:@"ExplicitModifierSides"];
     if ([sides count] == 0) {
         NSMutableString *out = [NSMutableString string];
+        if (flags & kCGEventFlagMaskSecondaryFn) {
+            [out appendString:@"Fn"];
+            if ((flags & (kCGEventFlagMaskControl | kCGEventFlagMaskAlternate |
+                          kCGEventFlagMaskShift | kCGEventFlagMaskCommand)) || hasKey)
+                [out appendString:@"+"];
+        }
         if (flags & kCGEventFlagMaskControl)   [out appendString:@"⌃"];
         if (flags & kCGEventFlagMaskAlternate) [out appendString:@"⌥"];
         if (flags & kCGEventFlagMaskShift)     [out appendString:@"⇧"];
@@ -1236,6 +1245,8 @@ static NSDictionary *parseSequence(NSString *rawValue, NSString **outProblem) {
     }
 
     NSMutableArray *parts = [NSMutableArray array];
+    if (flags & kCGEventFlagMaskSecondaryFn)
+        [parts addObject:@"Fn"];
     NSArray *modifiers = @[
         @[@"control", @"Control", @(kCGEventFlagMaskControl),
           @(NX_DEVICELCTLKEYMASK), @(NX_DEVICERCTLKEYMASK)],

@@ -16,6 +16,8 @@
 
 @implementation KeyUtility
 
+const int64_t MGTrickpadSyntheticKeyEventMarker = 0x545249434b4b4559;
+
 static CGKeyCode a[128];
 
 static void languageChanged(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
@@ -87,12 +89,14 @@ static void languageChanged(CFNotificationCenterRef center, void *observer, CFSt
 
 - (void)simulateKeyCode:(CGKeyCode)code hasKey:(BOOL)hasKey ModifierFlags:(CGEventFlags)flags {
 
-    CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+    CGEventSourceStateID sourceState = (flags & kCGEventFlagMaskSecondaryFn)
+        ? kCGEventSourceStatePrivate : kCGEventSourceStateHIDSystemState;
+    CGEventSourceRef source = CGEventSourceCreate(sourceState);
     CGKeyCode key = a[code];
     CGEventFlags physicalFlags = CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState);
-    MGKeyEventStep steps[18];
+    MGKeyEventStep steps[20];
     size_t count = MGPlanKeyEventSequence(key, hasKey, flags, physicalFlags, steps);
-    CGEventRef events[18] = {NULL};
+    CGEventRef events[20] = {NULL};
 
     // Build the full sequence before posting any part of it. A failed event
     // allocation therefore cannot leave a synthetic modifier held down.
@@ -104,6 +108,8 @@ static void languageChanged(CFNotificationCenterRef center, void *observer, CFSt
             if (source) CFRelease(source);
             return;
         }
+        CGEventSetIntegerValueField(events[i], kCGEventSourceUserData,
+                                    MGTrickpadSyntheticKeyEventMarker);
         // A bare configured key keeps the old behavior of inheriting physical
         // modifiers. A configured chord owns the flags on its whole sequence.
         if (flags)
@@ -117,6 +123,33 @@ static void languageChanged(CFNotificationCenterRef center, void *observer, CFSt
         // right-Control plus Space stops reaching an application that listens
         // for that exact chord. A binding for a macOS view uses its built-in
         // action instead, which asks macOS directly and needs no keystroke.
+        CGEventPost(kCGSessionEventTap, events[i]);
+        CFRelease(events[i]);
+    }
+    if (source) CFRelease(source);
+}
+
+- (void)postKeyEventSteps:(const MGKeyEventStep *)steps count:(size_t)count {
+    // A held click spans separate posting calls. Its private source keeps the
+    // generated down edge out of the hardware state queried before mouse-up.
+    CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStatePrivate);
+    CGEventRef events[20] = {NULL};
+
+    for (size_t i = 0; i < count; i++) {
+        events[i] = CGEventCreateKeyboardEvent(
+            source, steps[i].keyCode, steps[i].keyDown);
+        if (events[i] == NULL) {
+            for (size_t j = 0; j < i; j++)
+                CFRelease(events[j]);
+            if (source) CFRelease(source);
+            return;
+        }
+        CGEventSetIntegerValueField(events[i], kCGEventSourceUserData,
+                                    MGTrickpadSyntheticKeyEventMarker);
+        CGEventSetFlags(events[i], steps[i].flags);
+    }
+
+    for (size_t i = 0; i < count; i++) {
         CGEventPost(kCGSessionEventTap, events[i]);
         CFRelease(events[i]);
     }
