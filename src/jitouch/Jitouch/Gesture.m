@@ -3054,30 +3054,19 @@ static void gestureTrackpadSwipeThreeFingers(const Finger *data, int nFingers) {
         } else if (moveLeft == 3 && type != 3) {
             if (sumx < -0.30) {
                 type = 3;
-                // TODO: should check if the ACTIVE app is Safari or Firefox and,
-                // if so, check if the mouse cursor is on its active WINDOW
-                // that is, is it able to receive multi-touch events?
-                CFTypeRef axui = axuiUnderMouse();
-                NSString *application = nameOfAxui(axui);
-                if (![application isEqualToString:@"Safari"] && ![application isEqualToString:@"Firefox"]) {
-                    dispatchExclusiveCommand(@"Three-Swipe-Left", TRACKPAD, kGestureOwnerThreeFingerSwipe);
-                    for (int i = 0; i < nFingers; i++) {
-                        startx[i] = data[i].px;
-                        starty[i] = data[i].py;
-                    }
+                dispatchExclusiveCommand(@"Three-Swipe-Left", TRACKPAD, kGestureOwnerThreeFingerSwipe);
+                for (int i = 0; i < nFingers; i++) {
+                    startx[i] = data[i].px;
+                    starty[i] = data[i].py;
                 }
             }
         } else if (moveRight == 3 && type != 4) {
             if (sumx > 0.30) {
                 type = 4;
-                CFTypeRef axui = axuiUnderMouse();
-                NSString *application = nameOfAxui(axui);
-                if (![application isEqualToString:@"Safari"] && ![application isEqualToString:@"Firefox"]) {
-                    dispatchExclusiveCommand(@"Three-Swipe-Right", TRACKPAD, kGestureOwnerThreeFingerSwipe);
-                    for (int i = 0; i < nFingers; i++) {
-                        startx[i] = data[i].px;
-                        starty[i] = data[i].py;
-                    }
+                dispatchExclusiveCommand(@"Three-Swipe-Right", TRACKPAD, kGestureOwnerThreeFingerSwipe);
+                for (int i = 0; i < nFingers; i++) {
+                    startx[i] = data[i].px;
+                    starty[i] = data[i].py;
                 }
             }
         } else {
