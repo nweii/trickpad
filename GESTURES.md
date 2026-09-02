@@ -135,7 +135,7 @@ An area click fires only when the clicking finger is the only contact on the sur
 | `bottom-left-corner-click` | The bottom left corner |
 | `bottom-right-corner-click` | The bottom right corner |
 
-On both devices, a confidently recognized configured click replaces the native click. A keystroke binding presses its keys when the physical click begins and releases them when the click ends. This lets a binding such as `f5` act like holding the physical F5 key. A built-in action, URL, script, sound, speech, or sequence runs when the click ends. A click bound to `middle-click` or `mouse-3` through `mouse-32` presses that button with the physical click, sends matching button drags during movement, and releases the button when the click ends.
+On both devices, a configured click replaces the native click when Trickpad can recognize it confidently. A keystroke bound to a physical click stays held until you release the click. Built-in actions, URLs, scripts, sounds, speech, and sequences run on release. A click bound to `middle-click` or `mouse-3` through `mouse-32` presses that button with the physical click, sends matching button drags during movement, and releases the button when the click ends. A tap still sends one press and release.
 
 An ambiguous click, such as one with a resting palm, stays native and does not run the binding. If a configured keystroke click becomes a drag, Trickpad releases the keystroke and restores the native click for the drag. The application can receive the short key hold that occurred before the movement established the drag.
 
@@ -265,8 +265,6 @@ A modifier-only binding presses and releases the named modifier keys. For exampl
 Keys: any letter or digit, plus `return` `escape` `tab` `space` `delete` `forward-delete` `up` `down` `left` `right` `home` `end` `page-up` `page-down` and `f1` through `f12`. Punctuation keys: `[` `]` `-` `=` `;` `'` `,` `.` `/` `\` and backtick (`` ` ``).
 
 Aliases: `enter` is `return`, `esc` is `escape`, `backspace` and `del` are `delete`, `spacebar` is `space`.
-
-Fn can also be sent as a modifier or by itself. For example, `fn+space` holds Fn while it sends Space, and `fn` sends an Fn press and release. `function` and `globe` are aliases for `fn` in an action. A physical click holds Fn and any other configured keys until the click ends; a tap sends one press and release.
 
 ### Actions
 
