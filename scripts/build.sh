@@ -16,8 +16,8 @@ if [[ "${1:-}" == "--dev" ]]; then
   BUNDLE_ID="fyi.thirdwind.trickpad.dev"
 fi
 
-APP_VERSION="0.13.0-dev"
-APP_BUILD_NUMBER="22"
+APP_VERSION="0.13.0"
+APP_BUILD_NUMBER="23"
 MIN_MACOS_VERSION="11.0"
 ARCHITECTURES=(x86_64 arm64)
 ROOT="${0:A:h:h}"

@@ -12,6 +12,18 @@
 
 # Changelog
 
+## 0.13.0
+
+Released 2026-09-02.
+
+### Added
+
+- Add Fn to keyboard shortcut actions. Use `fn`, `function`, or `globe` with another key, such as `fn+space`.
+
+### Changed
+
+- Keep a keystroke bound to a physical click held until the click ends. If the click becomes a drag, then Trickpad releases the keys and restores the native drag.
+
 ## 0.12.1
 
 Released 2026-08-23.
