@@ -206,6 +206,8 @@ clang \
   "$ROOT/src/HeldKeystrokeLifecycle.m" \
   "$ROOT/src/HeldModifierLifecycle.m" \
   "$ROOT/src/KeyEventSequence.m" \
+  "$ROOT/src/MenuCommandRunner.m" \
+  "$ROOT/src/MenuPath.m" \
   "$ROOT/src/MouseButtonEventReplacement.m" \
   "$ROOT/src/MouseButtonLifecycle.m" \
   "$ROOT/src/MouseContactFilter.m" \

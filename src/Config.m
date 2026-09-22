@@ -10,6 +10,7 @@
 #import <ApplicationServices/ApplicationServices.h>
 #import <IOKit/hidsystem/IOLLEvent.h>
 #import <math.h>
+#import "MenuPath.h"
 #import "SystemGestureClaims.h"
 #import "tomlc17.h"
 
@@ -1019,6 +1020,15 @@ static NSDictionary *parseBinding(NSString *rawValue) {
                   @"Enable": @YES };
     }
 
+    if ([value hasPrefix:@"menu:"]) {
+        NSArray *components = MGMenuPathComponents([unquoted substringFromIndex:5], NULL);
+        if (components == nil)
+            return nil;
+        return @{ @"Gesture": @"", @"Command": MGMenuPathDisplay(components),
+                  @"MenuPath": components, @"IsAction": @YES, @"ModifierFlags": @0,
+                  @"KeyCode": @0, @"Enable": @YES };
+    }
+
     if ([value hasPrefix:@"say:"]) {
         NSString *text = resolvedSpeechText([unquoted substringFromIndex:4], NULL);
         if (text == nil)
@@ -1133,6 +1143,11 @@ static NSString *bindingProblem(NSString *rawValue) {
         resolvedSoundName([unquoted substringFromIndex:6], &problem);
         return problem;
     }
+    if ([lower hasPrefix:@"menu:"]) {
+        NSString *problem = nil;
+        MGMenuPathComponents([unquoted substringFromIndex:5], &problem);
+        return problem;
+    }
     if ([lower hasPrefix:@"say:"]) {
         NSString *problem = nil;
         resolvedSpeechText([unquoted substringFromIndex:4], &problem);
@@ -1141,7 +1156,7 @@ static NSString *bindingProblem(NSString *rawValue) {
     if ([lower hasPrefix:@"wait:"])
         return @"wait: is available only inside a sequence array";
     return [NSString stringWithFormat:
-            @"\"%@\" is not a key, shortcut, action, URL, script, sound, or speech", rawValue];
+            @"\"%@\" is not a key, shortcut, action, URL, script, sound, speech, or menu command", rawValue];
 }
 
 static NSDictionary *parseSequence(NSString *rawValue, NSString **outProblem) {

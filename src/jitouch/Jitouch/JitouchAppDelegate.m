@@ -327,6 +327,9 @@ static NSString *describeBinding(NSDictionary *g) {
         return [NSString stringWithFormat:@"Run sequence (%lu action%@)",
                 (unsigned long)actions, actions == 1 ? @"" : @"s"];
     }
+    NSArray *menuPath = [g objectForKey:@"MenuPath"];
+    if ([menuPath count] > 0)
+        return [@"Menu: " stringByAppendingString:[menuPath componentsJoinedByString:@" › "]];
     NSString *script = [g objectForKey:@"ScriptPath"];
     if ([script length] > 0)
         return [@"Run " stringByAppendingString:[script lastPathComponent]];

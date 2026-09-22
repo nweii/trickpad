@@ -38,6 +38,7 @@ int main(void) {
         [dispatcher dispatchSequence:@[prefix, @{ @"WaitMilliseconds": @120 }, key, url]
                          stepHandler:^(NSDictionary *step) {
             [emitted addObject:[step objectForKey:@"Name"]];
+            return YES;
         }];
         require([emitted count] == 0 && [scheduled count] == 1,
                 "dispatch returns before the first action runs");
@@ -55,6 +56,7 @@ int main(void) {
         [emitted removeAllObjects];
         [dispatcher dispatchSequence:@[prefix, key] stepHandler:^(NSDictionary *step) {
             [emitted addObject:[step objectForKey:@"Name"]];
+            return YES;
         }];
         runFirstScheduled(scheduled);
         require(fabs([[[scheduled firstObject] objectForKey:@"delay"] doubleValue] - 0.03) < 0.0001,
@@ -71,6 +73,7 @@ int main(void) {
         NSDictionary *keyB = @{ @"Name": @"key-b", @"IsAction": @NO };
         MGSequenceStepHandler collect = ^(NSDictionary *step) {
             [emitted addObject:[step objectForKey:@"Name"]];
+            return YES;
         };
         [dispatcher dispatchSequence:@[prefix, key] stepHandler:collect];
         [dispatcher dispatchSequence:@[prefixB, keyB] stepHandler:collect];
@@ -92,6 +95,43 @@ int main(void) {
             runFirstScheduled(scheduled);
         require([emitted isEqual:@[@"prefix", @"url"]],
                 "cancellation drops both the active remainder and queued sequences");
+
+        // A step that reports failure stops its own sequence, and the next
+        // queued sequence still runs.
+        [scheduled removeAllObjects];
+        [emitted removeAllObjects];
+        MGSequenceStepHandler stopAtPrefix = ^(NSDictionary *step) {
+            [emitted addObject:[step objectForKey:@"Name"]];
+            return (BOOL)![[step objectForKey:@"Name"] isEqualToString:@"prefix"];
+        };
+        [dispatcher dispatchSequence:@[prefix, key, url] stepHandler:stopAtPrefix];
+        [dispatcher dispatchSequence:@[prefixB, keyB] stepHandler:stopAtPrefix];
+        while ([scheduled count] > 0)
+            runFirstScheduled(scheduled);
+        require([emitted isEqual:@[@"prefix", @"prefix-b", @"key-b"]],
+                "a failed step stops the rest of its sequence only");
+
+        // Limited sequences count the running one and every queued one;
+        // unlimited sequences never count and are never refused.
+        [scheduled removeAllObjects];
+        [emitted removeAllObjects];
+        require([dispatcher dispatchSequence:@[prefix] limitedTo:3 stepHandler:collect],
+                "a limited sequence is admitted under its limit");
+        require([dispatcher dispatchSequence:@[key] limitedTo:3 stepHandler:collect] &&
+                [dispatcher dispatchSequence:@[url] limitedTo:3 stepHandler:collect],
+                "limited sequences queue up to the limit");
+        [dispatcher dispatchSequence:@[prefixB] stepHandler:collect];
+        require(![dispatcher dispatchSequence:@[keyB] limitedTo:3 stepHandler:collect],
+                "a limited sequence beyond the limit is refused");
+        while ([scheduled count] > 0)
+            runFirstScheduled(scheduled);
+        require([emitted isEqual:@[@"prefix", @"key", @"url", @"prefix-b"]],
+                "refusal leaves the admitted and unlimited sequences in order");
+        require([dispatcher dispatchSequence:@[keyB] limitedTo:3 stepHandler:collect],
+                "finished limited sequences free their places");
+        [dispatcher cancelAll];
+        require([dispatcher dispatchSequence:@[prefix] limitedTo:1 stepHandler:collect],
+                "cancellation frees every limited place");
 
         if (failures == 0) {
             printf("sequence dispatcher: all checks passed\n");

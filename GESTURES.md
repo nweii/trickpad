@@ -215,7 +215,7 @@ Triple taps are not available.
 
 ## What a gesture can send
 
-A keystroke, a built-in action, a URL, an executable script, a sound, speech, or a sequence of these values.
+A keystroke, a built-in action, a URL, an executable script, a sound, speech, a menu command, or a sequence of these values.
 
 ### Sequences
 
@@ -224,7 +224,7 @@ Use a TOML array to run several binding values in order:
     three-finger-tap = ["ctrl+space", "p"]
     four-finger-tap = ["cmd+shift+p", "wait:150", "escape"]
 
-Each element uses the same validation as a standalone keystroke, action, URL, script, sound, or speech binding. Trickpad reports the element number and skips the binding when one element is invalid.
+Each element uses the same validation as a standalone keystroke, action, URL, script, sound, speech, or menu binding. Trickpad reports the element number and skips the binding when one element is invalid.
 
 Use `wait:MS` to pause before the next element. `MS` is a positive whole number of milliseconds. The waits in one sequence can total up to 3000 ms. Use a `script:` binding for longer work. A standalone `wait:` value is invalid.
 
@@ -349,7 +349,37 @@ Written this way the sound replaces the action, which is what makes it a test. T
 
 A sound name is case-insensitive and carries no extension. Choose from `Basso`, `Blow`, `Bottle`, `Frog`, `Funk`, `Glass`, `Hero`, `Morse`, `Ping`, `Pop`, `Purr`, `Sosumi`, `Submarine`, or `Tink`. Trickpad checks the name against `/System/Library/Sounds` and reports a name it cannot find when settings reload. It also reports a `say:` with nothing after it.
 
+### Menu commands
+
+Prefix a menu path with `menu:` to choose that command from an application's menu bar:
+
+    three-finger-swipe-left = "menu:History > Back"
+    four-finger-tap = "menu:File > Open Recent > Clear Menu"
+
+The command goes to the application under the pointer, the same application a keystroke binding reaches. Trickpad brings that window forward first when it is not already in front.
+
+Write each menu title exactly as the application shows it, in the language it displays, from the menu bar down to the command. Titles are case-sensitive. Spacing around `>` does not matter, and `›` also separates titles. A slash is part of a title, as in `View > Show/Hide Sidebar`, so it never separates them. Three periods match a title that ends in `…`. To write a literal `>`, `›`, or backslash inside a title, put a backslash before it. In a double-quoted TOML string that backslash must itself be doubled, so a single-quoted string is easier:
+
+    three-finger-tap = 'menu:Tools > A \> B'
+
+A single title finds a command anywhere in the menu bar:
+
+    three-finger-tap = "menu:Save"
+
+Trickpad chooses the first enabled command with that title, reading the menus left to right and each menu top to bottom. A submenu's own title never matches, only a command inside it. A single title suits commands with a common name, such as `Save` or `Minimize`, across the applications that have them.
+
+Put a menu binding for one application's command in that application's table:
+
+    [TRACKPAD."Safari"]
+    three-finger-swipe-left = "menu:History > Back"
+
+A binding in the device table applies wherever the pointer is. When the application under the pointer has no such command, or the command is disabled, Trickpad plays the macOS alert sound and does nothing. Trickpad never opens a menu to look for a command, so a command in a menu that an application fills only when it opens cannot be found.
+
+In a sequence, a menu command that cannot run stops the rest of that sequence, because later steps usually depend on it.
+
 ## Turn a menu command into a shortcut
+
+A `menu:` binding chooses a menu command directly. To send a menu command as a keyboard shortcut instead, for example so it also works from the keyboard, give it an App Shortcut.
 
 An app may offer a useful menu command without its own keyboard shortcut. macOS can assign one: open **System Settings > Keyboard > Keyboard Shortcuts > App Shortcuts**, choose the app, and add the command.
 

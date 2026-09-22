@@ -138,7 +138,7 @@ The Fn key cannot be sent at all.
 
 Jitouch is a full gesture app with a catalog of actions built in. It switches browser tabs, snaps windows, opens Mission Control, and recognizes letters you draw on the trackpad. You pick from that catalog in a preference pane.
 
-Trickpad keeps Jitouch's recognizers but lets each gesture send a configurable keyboard shortcut, open a custom URL, or launch an executable script. Jitouch's built-in actions remain available, and a menu bar item replaces the preference pane.
+Trickpad keeps Jitouch's recognizers but lets each gesture send a configurable keyboard shortcut, choose a menu command, open a custom URL, or launch an executable script. Jitouch's built-in actions remain available, and a menu bar item replaces the preference pane.
 
 ## How it works
 

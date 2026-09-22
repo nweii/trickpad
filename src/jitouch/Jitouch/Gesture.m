@@ -37,6 +37,7 @@
 #import "MultitouchDeviceLifecycle.h"
 #import "ContactOnsetTracker.h"
 #import "InputModifierState.h"
+#import "MenuCommandRunner.h"
 #import "ScriptRunner.h"
 #import "SequenceDispatcher.h"
 #import "TraceRecorder.h"
@@ -1278,6 +1279,7 @@ static MGSequenceDispatcher *sequenceDispatcher(void) {
 
 void cancelPendingGestureSequences(void) {
     [sequenceDispatcher() cancelAll];
+    MGCancelRunningMenuSteps();
 }
 
 // One shared instance per sound name, restarted when a gesture fires during
@@ -1426,6 +1428,7 @@ static void dispatchCommand(NSString *gesture, int device) {
                            isEqualToString:@"All Applications"] ? @"global" : @"application";
         NSString *kind = ![[traced objectForKey:@"Enable"] boolValue] ? @"off" :
             [traced objectForKey:@"Sequence"] != nil ? @"sequence" :
+            [traced objectForKey:@"MenuPath"] != nil ? @"menu" :
             [traced objectForKey:@"ScriptPath"] != nil ? @"script" :
             [traced objectForKey:@"OpenURL"] != nil ? @"url" :
             [traced objectForKey:@"PlaySound"] != nil ? @"sound" :
@@ -1642,6 +1645,73 @@ static void dispatchMagicMousePhysicalClickForContactCount(int contactCount) {
 }
 
 
+// One menu-bearing invocation runs and at most eight wait behind it, so a
+// burst of repeated gestures cannot build an unbounded backlog of presses.
+static const NSUInteger kMenuInvocationLimit = 9;
+
+static BOOL sequenceHasMenuStep(NSArray *sequence) {
+    for (NSDictionary *step in sequence) {
+        if ([step objectForKey:@"MenuPath"] != nil)
+            return YES;
+    }
+    return NO;
+}
+
+// Presses a menu item in the application under the pointer, the application a
+// keystroke binding reaches, and reports whether the sequence may continue.
+// Runs on the sequence queue, never the gesture callback thread.
+static BOOL runMenuStep(NSDictionary *step) {
+    NSArray *components = [step objectForKey:@"MenuPath"];
+    CGFloat x, y;
+    getMousePosition(&x, &y);
+    pid_t target = 0;
+    CFTypeRef window = activateWindowAtPosition(x, y);
+    if (window != NULL) {
+        AXUIElementGetPid((AXUIElementRef)window, &target);
+        CFRelease(window);
+    }
+
+    uint64_t started = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+    MGMenuOutcome outcome = MGRunMenuStep(components, target, MGSystemMenuEnvironment());
+    double milliseconds = (double)(clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - started) / 1e6;
+
+    // Logs name the configured path only in verbose logging and never
+    // include menu titles discovered in the application.
+    NSString *bundle = target > 0
+        ? [[NSRunningApplication runningApplicationWithProcessIdentifier:target] bundleIdentifier]
+        : nil;
+    NSString *where = outcome.component > 0
+        ? [NSString stringWithFormat:@" at component %lu", (unsigned long)outcome.component] : @"";
+    if (outcome.result != MGMenuResultPressed || logLevel >= LOG_LEVEL_DEBUG)
+        NSLog(@"Menu command %@%@ in %@ (depth %lu, %.1f ms)%@",
+              MGMenuResultName(outcome.result), where, bundle ?: @"no application",
+              (unsigned long)[components count], milliseconds,
+              logLevel >= LOG_LEVEL_DEBUG
+                  ? [NSString stringWithFormat:@": %@", [step objectForKey:@"Command"]] : @"");
+
+    // An item the application lacks sounds like an unavailable shortcut.
+    if (MGMenuResultIsUnavailableItem(outcome.result))
+        dispatch_async(dispatch_get_main_queue(), ^{ NSBeep(); });
+    return outcome.result == MGMenuResultPressed;
+}
+
+static void dispatchGestureSequence(NSArray *sequence, NSString *gesture, int device,
+                                    NSString *matchedApplication) {
+    MGSequenceStepHandler handler = ^BOOL(NSDictionary *step) {
+        if ([step objectForKey:@"MenuPath"] != nil)
+            return runMenuStep(step);
+        doCommand(gesture, device, step, matchedApplication);
+        return YES;
+    };
+    if (!sequenceHasMenuStep(sequence)) {
+        [sequenceDispatcher() dispatchSequence:sequence stepHandler:handler];
+    } else if (![sequenceDispatcher() dispatchSequence:sequence
+                                             limitedTo:kMenuInvocationLimit
+                                           stepHandler:handler]) {
+        NSLog(@"Menu command %@ for %@", MGMenuResultName(MGMenuResultQueueFull), gesture);
+    }
+}
+
 static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                       NSString *matchedApplication) {
     CFTypeRef axui;
@@ -1676,11 +1746,12 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
             if (logLevel >= LOG_LEVEL_DEBUG) NSLog(@"Command \"%@\" for application \"%@\"", command, application);
 
             NSArray *sequence = [commandDict objectForKey:@"Sequence"];
+            // A standalone menu command runs as a one-step sequence, so it
+            // shares the ordering, limit, and cancellation of sequence steps.
+            if (sequence == nil && [commandDict objectForKey:@"MenuPath"] != nil)
+                sequence = @[commandDict];
             if (sequence != nil) {
-                [sequenceDispatcher() dispatchSequence:sequence
-                                            stepHandler:^(NSDictionary *step) {
-                    doCommand(gesture, device, step, matchedApplication);
-                }];
+                dispatchGestureSequence(sequence, gesture, device, matchedApplication);
             } else if ([command isEqualToString:@"-"]) {
 
             } else if ([command isEqualToString:@"Next Tab"]) {

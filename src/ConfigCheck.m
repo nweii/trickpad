@@ -1324,6 +1324,43 @@ int main(void) {
         if ([speechProblem rangeOfString:@"words to speak"].location == NSNotFound)
             fail(@"empty speech explains the requirement", @"words to speak", speechProblem);
 
+        // Menu bindings keep each title's case and spelling, since matching
+        // is exact, and accept a single title as well as a full path.
+        NSArray *menuTOMLProblems = nil;
+        s = parseRawTOML(@"[TRACKPAD]\nthree-finger-tap = \"menu:File > Open Recent>Clear Menu\"\n"
+                         @"four-finger-tap = 'menu:Save'\n"
+                         @"three-finger-double-tap = 'menu:Go › A \\> B'\n", &menuTOMLProblems);
+        if ([menuTOMLProblems count] != 0)
+            fail(@"menu bindings load without problems", @"none", menuTOMLProblems);
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Tap");
+        if (![[g objectForKey:@"MenuPath"] isEqual:@[@"File", @"Open Recent", @"Clear Menu"]] ||
+            ![[g objectForKey:@"IsAction"] boolValue])
+            fail(@"menu binding records its path", @"File, Open Recent, Clear Menu",
+                 [g objectForKey:@"MenuPath"] ?: @"missing");
+        g = bindingFor(s, @"TrackpadCommands", @"Four-Finger Tap");
+        if (![[g objectForKey:@"MenuPath"] isEqual:@[@"Save"]])
+            fail(@"menu binding accepts a single title", @"Save",
+                 [g objectForKey:@"MenuPath"] ?: @"missing");
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Double-Tap");
+        if (![[g objectForKey:@"MenuPath"] isEqual:@[@"Go", @"A > B"]])
+            fail(@"menu binding decodes an escaped separator in a TOML literal string",
+                 @"Go, A > B", [g objectForKey:@"MenuPath"] ?: @"missing");
+
+        NSArray *menuProblems = nil;
+        s = parseRawTOML(@"[TRACKPAD]\nthree-finger-tap = \"menu:File > > Save\"\n", &menuProblems);
+        if (bindingFor(s, @"TrackpadCommands", @"Three-Finger Tap") != nil)
+            fail(@"menu path with an empty component rejected", @"nothing", @"a binding");
+        NSString *menuProblem = [menuProblems count] > 0 ? [menuProblems objectAtIndex:0] : @"";
+        if ([menuProblem rangeOfString:@"component 2 is empty"].location == NSNotFound)
+            fail(@"empty menu component names its position", @"component 2 is empty", menuProblem);
+
+        s = parseRawTOML(@"[TRACKPAD]\nthree-finger-tap = [\"cmd+a\", \"menu:Edit > Copy\"]\n", NULL);
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Tap");
+        if (![[[[g objectForKey:@"Sequence"] lastObject] objectForKey:@"MenuPath"]
+              isEqual:@[@"Edit", @"Copy"]])
+            fail(@"menu binding works as a sequence step", @"Edit, Copy",
+                 [g objectForKey:@"Sequence"] ?: @"missing");
+
         NSDictionary *badURLs = @{
             @"url:raycast//extensions": @"URL is missing a valid scheme followed by \":\"",
             @"url:1raycast://extensions": @"URL scheme must begin with a letter",

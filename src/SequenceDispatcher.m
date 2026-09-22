@@ -6,6 +6,9 @@
 static const NSTimeInterval kSequenceInterKeystrokeDelay = 0.03;
 
 @interface MGSequenceDispatcher ()
+- (BOOL)enqueueSequence:(NSArray *)sequence
+                  limit:(NSUInteger)limit
+            stepHandler:(MGSequenceStepHandler)handler;
 - (void)startNextSequence;
 - (void)scheduleSequence:(NSArray *)sequence
                    index:(NSUInteger)index
@@ -34,14 +37,36 @@ static const NSTimeInterval kSequenceInterKeystrokeDelay = 0.03;
 }
 
 - (void)dispatchSequence:(NSArray *)sequence stepHandler:(MGSequenceStepHandler)handler {
+    [self enqueueSequence:sequence limit:0 stepHandler:handler];
+}
+
+- (BOOL)dispatchSequence:(NSArray *)sequence
+              limitedTo:(NSUInteger)limit
+             stepHandler:(MGSequenceStepHandler)handler {
+    return [self enqueueSequence:sequence limit:limit stepHandler:handler];
+}
+
+// A limit of zero admits the sequence unconditionally and leaves it out of
+// every limited count.
+- (BOOL)enqueueSequence:(NSArray *)sequence
+                  limit:(NSUInteger)limit
+            stepHandler:(MGSequenceStepHandler)handler {
     if ([sequence count] == 0 || handler == nil)
-        return;
+        return NO;
     NSDictionary *pending = @{
         @"Sequence": sequence,
         @"Handler": [[handler copy] autorelease],
+        @"Limited": @(limit > 0),
     };
     BOOL shouldStart = NO;
     @synchronized (self) {
+        if (limit > 0) {
+            NSUInteger limited = _sequenceRunning && _runningSequenceIsLimited ? 1 : 0;
+            for (NSDictionary *queued in _pendingSequences)
+                limited += [[queued objectForKey:@"Limited"] boolValue] ? 1 : 0;
+            if (limited >= limit)
+                return NO;
+        }
         [_pendingSequences addObject:pending];
         if (!_sequenceRunning) {
             _sequenceRunning = YES;
@@ -50,6 +75,7 @@ static const NSTimeInterval kSequenceInterKeystrokeDelay = 0.03;
     }
     if (shouldStart)
         [self startNextSequence];
+    return YES;
 }
 
 - (void)startNextSequence {
@@ -64,6 +90,7 @@ static const NSTimeInterval kSequenceInterKeystrokeDelay = 0.03;
         }
         pending = [[_pendingSequences firstObject] retain];
         [_pendingSequences removeObjectAtIndex:0];
+        _runningSequenceIsLimited = [[pending objectForKey:@"Limited"] boolValue];
         generation = _generation;
     }
     NSArray *sequence = [pending objectForKey:@"Sequence"];
@@ -80,6 +107,7 @@ static const NSTimeInterval kSequenceInterKeystrokeDelay = 0.03;
     @synchronized (self) {
         if (generation != _generation || !_sequenceRunning)
             return;
+        _runningSequenceIsLimited = NO;
         if ([_pendingSequences count] == 0)
             _sequenceRunning = NO;
         else
@@ -140,7 +168,10 @@ static const NSTimeInterval kSequenceInterKeystrokeDelay = 0.03;
     _scheduler(delay, ^{
         if (![self generationIsActive:generation])
             return;
-        handler(step);
+        if (!handler(step)) {
+            completion();
+            return;
+        }
         [self scheduleSequence:sequence index:nextIndex
            previousWasKeystroke:stepIsKeystroke generation:generation
                     stepHandler:handler completion:completion];
@@ -152,6 +183,7 @@ static const NSTimeInterval kSequenceInterKeystrokeDelay = 0.03;
         _generation++;
         [_pendingSequences removeAllObjects];
         _sequenceRunning = NO;
+        _runningSequenceIsLimited = NO;
     }
 }
 
