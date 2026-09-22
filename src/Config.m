@@ -584,7 +584,7 @@ static NSDictionary *keyNames(void) {
             @"f9": @101, @"f10": @109, @"f11": @103, @"f12": @111,
             @"[": @33, @"]": @30, @"-": @27, @"=": @24,
             @";": @41, @"'": @39, @",": @43, @".": @47, @"/": @44,
-            @"\\": @42, @"`": @50,
+            @"\\": @42, @"backslash": @42, @"`": @50,
         };
         [d addEntriesFromDictionary:named];
 
@@ -654,6 +654,7 @@ static NSString *keyDisplayName(NSString *token) {
         @"tab": @"Tab", @"space": @"Space", @"spacebar": @"Space",
         @"delete": @"Delete", @"backspace": @"Delete", @"del": @"Delete",
         @"forward-delete": @"Forward Delete", @"keypad-enter": @"Keypad Enter",
+        @"backslash": @"Backslash",
         @"left": @"Left", @"right": @"Right", @"down": @"Down", @"up": @"Up",
         @"home": @"Home", @"end": @"End",
         @"page-up": @"Page Up", @"page-down": @"Page Down",

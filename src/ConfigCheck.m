@@ -616,6 +616,7 @@ int main(void) {
         expectKey(@"escape", @"escape", 53, 0);
         expectKey(@"page-down survives hyphen split", @"page-down", 121, 0);
         expectKey(@"forward-delete survives hyphen split", @"forward-delete", 117, 0);
+        expectKey(@"backslash alias", @"Backslash", 42, 0);
 
         // Every documented spelling of a chord must produce the same binding.
         expectKey(@"plus separator", @"cmd+shift+a", 0, CMD | SHIFT);
@@ -642,6 +643,7 @@ int main(void) {
         expectKeyDisplay(@"right modifier display", @"right-control+space",
                          @"Right Control + Space");
         expectKeyDisplay(@"Fn modifier display", @"fn+space", @"Fn+Space");
+        expectKeyDisplay(@"backslash alias display", @"Backslash", @"Backslash");
         expectKeyDisplay(@"mixed modifier side display", @"left-shift+right-command+4",
                          @"Left Shift + Right Command + 4");
         expectModifierChord(@"both Command keys", @"left-cmd+right-cmd",
