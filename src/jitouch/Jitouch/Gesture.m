@@ -37,6 +37,8 @@
 #import "MultitouchDeviceLifecycle.h"
 #import "ContactOnsetTracker.h"
 #import "InputModifierState.h"
+#import "BindingFeedback.h"
+#import "GestureFeedback.h"
 #import "MenuCommandRunner.h"
 #import "ScriptRunner.h"
 #import "SequenceDispatcher.h"
@@ -1660,7 +1662,7 @@ static BOOL sequenceHasMenuStep(NSArray *sequence) {
 // Presses a menu item in the application under the pointer, the application a
 // keystroke binding reaches, and reports whether the sequence may continue.
 // Runs on the sequence queue, never the gesture callback thread.
-static BOOL runMenuStep(NSDictionary *step) {
+static BOOL runMenuStep(NSDictionary *step, NSString *gesture) {
     NSArray *components = [step objectForKey:@"MenuPath"];
     CGFloat x, y;
     getMousePosition(&x, &y);
@@ -1677,9 +1679,9 @@ static BOOL runMenuStep(NSDictionary *step) {
 
     // Logs name the configured path only in verbose logging and never
     // include menu titles discovered in the application.
-    NSString *bundle = target > 0
-        ? [[NSRunningApplication runningApplicationWithProcessIdentifier:target] bundleIdentifier]
-        : nil;
+    NSRunningApplication *application = target > 0
+        ? [NSRunningApplication runningApplicationWithProcessIdentifier:target] : nil;
+    NSString *bundle = [application bundleIdentifier];
     NSString *where = outcome.component > 0
         ? [NSString stringWithFormat:@" at component %lu", (unsigned long)outcome.component] : @"";
     if (outcome.result != MGMenuResultPressed || logLevel >= LOG_LEVEL_DEBUG)
@@ -1695,6 +1697,17 @@ static BOOL runMenuStep(NSDictionary *step) {
     // an unavailable shortcut, so a gesture never fails silently.
     if (MGMenuResultPlaysAlert(outcome.result))
         dispatch_async(dispatch_get_main_queue(), ^{ NSBeep(); });
+    // The sound says a gesture missed; the message says it was Trickpad's
+    // menu command and why.
+    NSString *message = MGMenuFailureMessage(outcome, components, [application localizedName]);
+    if (message != nil)
+        MGShowGestureFeedback(MGBindingFailureTitle([Config humanNameForGesture:gesture], @"menu",
+                                                    outcome.result == MGMenuResultPressOutcomeUncertain),
+                              message,
+                              outcome.result == MGMenuResultAccessibilityDenied
+                                  ? MGFeedbackActionAccessibilitySettings
+                                  : MGMenuFailureIsInSettings(outcome.result)
+                                  ? MGFeedbackActionEditSettings : MGFeedbackActionNone);
     return outcome.result == MGMenuResultPressed;
 }
 
@@ -1702,7 +1715,7 @@ static void dispatchGestureSequence(NSArray *sequence, NSString *gesture, int de
                                     NSString *matchedApplication) {
     MGSequenceStepHandler handler = ^BOOL(NSDictionary *step) {
         if ([step objectForKey:@"MenuPath"] != nil)
-            return runMenuStep(step);
+            return runMenuStep(step, gesture);
         doCommand(gesture, device, step, matchedApplication);
         return YES;
     };
@@ -1712,6 +1725,9 @@ static void dispatchGestureSequence(NSArray *sequence, NSString *gesture, int de
                                              limitedTo:kMenuInvocationLimit
                                            stepHandler:handler]) {
         NSLog(@"Menu command %@ for %@", MGMenuResultName(MGMenuResultQueueFull), gesture);
+        MGMenuOutcome skipped = { MGMenuResultQueueFull, 0, 0, 0, nil, nil };
+        MGShowGestureFeedback(MGBindingFailureTitle([Config humanNameForGesture:gesture], @"menu", NO),
+                              MGMenuFailureMessage(skipped, @[], nil), MGFeedbackActionNone);
     }
 }
 
@@ -2023,12 +2039,23 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                     [pool release];
                 } else if ([commandDict objectForKey:@"ScriptPath"]) {
                     NSString *scriptPath = [commandDict objectForKey:@"ScriptPath"];
+                    NSString *scriptTitle = MGBindingFailureTitle([Config humanNameForGesture:gesture],
+                                                                  @"script", NO);
                     NSError *error = nil;
                     if (![ScriptRunner launchScriptAtPath:scriptPath
                                                     error:&error
-                                       terminationHandler:nil])
+                                       terminationHandler:^(int status) {
+                            if (status != 0)
+                                MGShowGestureFeedback(scriptTitle, MGScriptExitMessage(scriptPath, status),
+                                                      MGFeedbackActionNone);
+                        }]) {
                         NSLog(@"Could not launch configured script \"%@\": %@",
                               scriptPath, [error localizedDescription]);
+                        MGShowGestureFeedback(scriptTitle,
+                                              MGScriptLaunchFailureMessage(scriptPath,
+                                                                           [error localizedDescription]),
+                                              MGFeedbackActionEditSettings);
+                    }
                 } else if ([commandDict objectForKey:@"PlaySound"]) {
                     // NSSound is AppKit, and playback must not hold the
                     // dispatch thread, so the main queue starts it and returns.
@@ -2044,18 +2071,33 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                                                                     clipboard:clipboard
                                                                          date:[NSDate date]
                                                                       problem:&problem];
+                    NSString *urlTitle = MGBindingFailureTitle([Config humanNameForGesture:gesture],
+                                                               @"URL", NO);
                     if (urlString == nil) {
                         // The expanded value may contain private clipboard text,
                         // so log only the configured URL binding and its problem.
                         NSLog(@"Could not resolve configured URL \"%@\": %@", configuredURL, problem);
+                        MGShowGestureFeedback(urlTitle, MGURLFailureMessage(configuredURL, problem),
+                                              MGFeedbackActionEditSettings);
                     } else if (![[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:urlString]]) {
                         NSLog(@"Could not open configured URL \"%@\": no application accepted it", configuredURL);
+                        MGShowGestureFeedback(urlTitle, MGURLFailureMessage(configuredURL, nil),
+                                              MGFeedbackActionEditSettings);
                     }
                     [pool release];
                 }
             }
         } else {
             // shortcut
+            // macOS drops synthesized keystrokes without Accessibility access
+            // or while Secure Input is on, and gives no sign that it did.
+            if (!AXIsProcessTrusted())
+                MGShowGestureFeedback(MGBindingFailureTitle([Config humanNameForGesture:gesture], @"keystroke", NO),
+                                      MGKeystrokesNeedAccessibilityMessage(),
+                                      MGFeedbackActionAccessibilitySettings);
+            else if (IsSecureEventInputEnabled())
+                MGShowGestureFeedback(MGBindingFailureTitle([Config humanNameForGesture:gesture], @"keystroke", NO),
+                                      MGKeystrokesBlockedBySecureInputMessage(), MGFeedbackActionNone);
             CFTypeRef tmpRef = nil;
             if (device != CHARRECOGNITION)
                 tmpRef = activateWindowAtPosition(x, y);

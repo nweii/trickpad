@@ -64,9 +64,10 @@ NSArray<NSString *> *MGMenuPathComponents(NSString *payload, NSString **outProbl
 }
 
 NSString *MGMenuTitleForMatching(NSString *title) {
-    if (![title hasSuffix:@"..."] || [title hasSuffix:@"...."])
-        return title;
-    return [[title substringToIndex:[title length] - 3] stringByAppendingString:@"…"];
+    if ([title hasSuffix:@"..."] && ![title hasSuffix:@"...."])
+        title = [[title substringToIndex:[title length] - 3] stringByAppendingString:@"…"];
+    return [title stringByFoldingWithOptions:NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch
+                                      locale:nil];
 }
 
 NSString *MGMenuPathDisplay(NSArray<NSString *> *components) {

@@ -16,6 +16,7 @@
 #import <CoreFoundation/CFPreferences.h>
 #import "SystemPreferences.h"
 #import "Config.h"
+#import "GestureFeedback.h"
 #import "SystemGestureClaims.h"
 #import "KeyUtility.h"
 #import "TraceRecorder.h"
@@ -1877,6 +1878,10 @@ static NSMenuItem *MGMenuSectionHeader(NSString *title) {
     // reassigns a position each launch and a deliberate placement is lost.
     [theItem setAutosaveName:@"TrickpadStatusItem"];
     [theItem setMenu:theMenu];
+    MGGestureFeedbackSetAnchor(theItem);
+    MGGestureFeedbackSetActionHandler(MGFeedbackActionEditSettings, ^{ [self preferences:nil]; });
+    MGGestureFeedbackSetActionHandler(MGFeedbackActionAccessibilitySettings,
+                                      ^{ [self openAccessibilitySettings:nil]; });
     [self updateIconImage];
     [self refreshAccessibilityItem];
     [self refreshBindingsSubmenu];
@@ -1884,6 +1889,7 @@ static NSMenuItem *MGMenuSectionHeader(NSString *title) {
 }
 
 - (void)hideIcon {
+    MGGestureFeedbackSetAnchor(nil);
     [[NSStatusBar systemStatusBar] removeStatusItem:theItem];
     [theItem release];
     theItem = nil;

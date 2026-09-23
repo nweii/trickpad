@@ -66,16 +66,18 @@ int main(void) {
         expectComponents([seventeen componentsJoinedByString:@" > "], seventeen,
                          "sixteen components are accepted");
 
-        require([MGMenuTitleForMatching(@"Settings...") isEqualToString:@"Settings…"],
+        require([MGMenuTitleForMatching(@"Settings...") isEqualToString:MGMenuTitleForMatching(@"Settings…")],
                 "three terminal periods match an ellipsis");
-        require([MGMenuTitleForMatching(@"Settings…") isEqualToString:@"Settings…"],
-                "an ellipsis is unchanged");
-        require([MGMenuTitleForMatching(@"Wait....") isEqualToString:@"Wait...."],
+        require(![MGMenuTitleForMatching(@"Wait....") isEqualToString:MGMenuTitleForMatching(@"Wait.…")],
                 "four terminal periods are not an ellipsis");
-        require([MGMenuTitleForMatching(@"a...b") isEqualToString:@"a...b"],
+        require(![MGMenuTitleForMatching(@"a...b") isEqualToString:MGMenuTitleForMatching(@"a…b")],
                 "interior periods are not an ellipsis");
-        require(![MGMenuTitleForMatching(@"save") isEqualToString:MGMenuTitleForMatching(@"Save")],
-                "matching is case-sensitive");
+        require([MGMenuTitleForMatching(@"save as...") isEqualToString:MGMenuTitleForMatching(@"Save As…")],
+                "matching ignores capitalization");
+        require([MGMenuTitleForMatching(@"Resume") isEqualToString:MGMenuTitleForMatching(@"Résumé")],
+                "matching ignores accents");
+        require(![MGMenuTitleForMatching(@"Find Next") isEqualToString:MGMenuTitleForMatching(@"Find  Next")],
+                "matching keeps interior spacing");
         require([MGMenuPathDisplay(path) isEqualToString:@"File › Open Recent › Clear Menu"],
                 "display joins components with ›");
     }

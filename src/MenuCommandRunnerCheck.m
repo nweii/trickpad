@@ -173,8 +173,15 @@ int main(void) {
         require(outcome.result == MGMenuResultComponentMissing && outcome.component == 1,
                 "a missing root names the first component");
 
-        outcome = run(environmentWithBar(bar), @[@"File", @"save"]);
-        require(outcome.result == MGMenuResultComponentMissing, "path matching is case-sensitive");
+        environment = environmentWithBar(bar);
+        outcome = run(environment, @[@"file", @"SAVE"]);
+        require(outcome.result == MGMenuResultPressed && environment.pressed == save,
+                "path matching ignores capitalization");
+
+        outcome = run(environmentWithBar(menuBar(@[submenu(@"Edit", @[item(@"Copy"), item(@"copy")])])),
+                      @[@"Edit", @"Copy"]);
+        require(outcome.result == MGMenuResultComponentAmbiguous,
+                "siblings that differ only in capitalization are ambiguous in a path");
 
         outcome = run(environmentWithBar(bar), @[@"File", @"Duplicate"]);
         require(outcome.result == MGMenuResultComponentAmbiguous && outcome.component == 2,
@@ -331,6 +338,88 @@ int main(void) {
         outcome = run(environment, @[@"File", @"Save"]);
         require(outcome.result == MGMenuResultPressOutcomeUncertain,
                 "a rejected press call is uncertain, not a pre-press failure");
+
+        // A likely misspelling names the application's closest title; a
+        // distant title suggests nothing.
+        outcome = run(environmentWithBar(bar), @[@"file", @"Sve"]);
+        require(outcome.result == MGMenuResultComponentMissing &&
+                [outcome.suggestedPath isEqual:@[@"File", @"Save"]],
+                "a misspelled path component suggests the closest title with its menu");
+        require([MGMenuFailureMessage(outcome, @[@"file", @"Sve"], @"Notes")
+                 isEqualToString:@"Your settings say “file › Sve”, but the Notes menu bar has “File › Save”."],
+                "a suggestion quotes the settings as written and the menu bar as shown");
+        outcome = run(environmentWithBar(bar), @[@"Fiel", @"Save"]);
+        require([outcome.suggestedPath isEqual:@[@"File"]],
+                "a misspelled menu suggests the closest menu");
+        require([MGMenuFailureMessage(outcome, @[@"Fiel", @"Save"], @"Notes")
+                 isEqualToString:@"Your settings say “Fiel”, but the Notes menu bar has “File”."],
+                "a misspelled menu quotes only the part that failed");
+        outcome = run(environmentWithBar(bar), @[@"Clear Menus"]);
+        require(outcome.result == MGMenuResultComponentMissing &&
+                [outcome.suggestedPath isEqual:@[@"File", @"Open Recent", @"Clear Menu"]],
+                "a misspelled title search suggests the closest command and where it is");
+        outcome = run(environmentWithBar(bar), @[@"Xylophone"]);
+        require(outcome.suggestedPath == nil, "a distant title suggests nothing");
+        outcome = run(environmentWithBar(bar), @[@"file", @"revert"]);
+        require(outcome.suggestedPath == nil &&
+                [MGMenuFailureMessage(outcome, @[@"file", @"revert"], @"Notes")
+                 isEqualToString:@"“File › Revert” is dimmed in the Notes menu bar right now."],
+                "a located command is quoted as the menu bar shows it");
+        outcome = run(environmentWithBar(bar), @[@"revert"]);
+        require(outcome.result == MGMenuResultLeafDisabled &&
+                [outcome.applicationPath isEqual:@[@"File", @"Revert"]],
+                "a title search that finds only a disabled item reports where it is");
+        outcome = run(environmentWithBar(bar), @[@"file", @"Close"]);
+        require([MGMenuFailureMessage(outcome, @[@"file", @"Close"], @"Notes")
+                 isEqualToString:@"The Notes menu bar has no “Close” under File."],
+                "a missing component quotes its menus as the menu bar shows them");
+        require(MGMenuFailureIsInSettings(MGMenuResultComponentMissing) &&
+                !MGMenuFailureIsInSettings(MGMenuResultDeadlineExceeded) &&
+                !MGMenuFailureIsInSettings(MGMenuResultLeafDisabled),
+                "only failures fixed in settings offer to open them");
+
+        // Failure messages name the configured command, the application, and
+        // the part of the path that failed, and stay quiet for a press.
+        MGMenuOutcome described = { MGMenuResultComponentMissing, 2, 0, 0, @[@"File"], nil };
+        require([MGMenuFailureMessage(described, @[@"File", @"Save"], @"Notes")
+                 isEqualToString:@"The Notes menu bar has no “Save” under File."],
+                "a missing path component is named with its parent");
+        described.component = 3;
+        described.applicationPath = @[@"File", @"Open Recent"];
+        require([MGMenuFailureMessage(described, @[@"File", @"Open Recent", @"Clear"], @"Notes")
+                 isEqualToString:@"The Notes menu bar has no “Clear” under File › Open Recent."],
+                "a deeper missing component names the whole parent path");
+        described.component = 1;
+        described.applicationPath = @[];
+        require([MGMenuFailureMessage(described, @[@"Save"], @"Notes")
+                 isEqualToString:@"The Notes menu bar has no command named “Save”."],
+                "a missing single title is described as a command");
+        require([MGMenuFailureMessage(described, @[@"Fiel", @"Save"], @"Notes")
+                 isEqualToString:@"The Notes menu bar has no “Fiel” menu."],
+                "a missing root is described as a menu");
+        described.result = MGMenuResultLeafDisabled;
+        described.component = 0;
+        require([MGMenuFailureMessage(described, @[@"File", @"Save"], @"Notes")
+                 isEqualToString:@"“File › Save” is dimmed in the Notes menu bar right now."],
+                "a disabled command is described as dimmed");
+        described.result = MGMenuResultDeadlineExceeded;
+        require([MGMenuFailureMessage(described, @[@"Save"], nil)
+                 hasPrefix:@"The application didn’t respond"],
+                "a message without an application name still reads naturally");
+        described.result = MGMenuResultPressed;
+        require(MGMenuFailureMessage(described, @[@"Save"], @"Notes") == nil,
+                "a press shows no message");
+        described.result = MGMenuResultCancelled;
+        require(MGMenuFailureMessage(described, @[@"Save"], @"Notes") == nil,
+                "a cancellation shows no message");
+        for (MGMenuResult result = MGMenuResultNoTargetApplication;
+             result <= MGMenuResultPressOutcomeUncertain; result++) {
+            described.result = result;
+            described.component = 1;
+            if (result != MGMenuResultCancelled &&
+                [MGMenuFailureMessage(described, @[@"File", @"Save"], @"Notes") length] == 0)
+                require(NO, "every failure other than cancellation has a message");
+        }
 
         require([MGMenuResultName(MGMenuResultPressOutcomeUncertain)
                  isEqualToString:@"press-outcome-uncertain"], "result names are stable");

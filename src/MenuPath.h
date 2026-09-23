@@ -13,8 +13,9 @@ extern const NSUInteger MGMenuPathMaximumComponents;
 // nil and sets outProblem when the payload is invalid.
 NSArray<NSString *> *MGMenuPathComponents(NSString *payload, NSString **outProblem);
 
-// Returns the form of a title used for matching: a terminal run of exactly
-// three periods reads as a Unicode ellipsis. Nothing else is folded.
+// Returns the form of a title used for matching: capitalization and accents
+// are ignored, and a terminal run of exactly three periods reads as a Unicode
+// ellipsis. Spacing and spelling still matter.
 NSString *MGMenuTitleForMatching(NSString *title);
 
 // Joins components for display, as in "File › Save".

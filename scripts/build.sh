@@ -198,9 +198,11 @@ clang \
   -framework MultitouchSupport \
   "$ROOT/src/main.m" \
   "$ROOT/src/ApplicationScopeCache.m" \
+  "$ROOT/src/BindingFeedback.m" \
   "$ROOT/src/Config.m" \
   "$ROOT/src/ContactTapRecognizer.m" \
   "$ROOT/src/DeferredGestureDispatcher.m" \
+  "$ROOT/src/GestureFeedback.m" \
   "$ROOT/src/GestureSequence.m" \
   "$ROOT/src/InputModifierState.m" \
   "$ROOT/src/HeldKeystrokeLifecycle.m" \

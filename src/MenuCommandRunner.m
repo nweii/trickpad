@@ -39,9 +39,14 @@ typedef struct {
     NSUInteger examined;
     MGMenuResult failure;
     NSUInteger failureComponent;
-    // Whether a title search passed over a matching item that was disabled.
-    BOOL sawDisabledMatch;
     NSTimeInterval activationWaitSeconds;
+    // The application's titles from the menu bar to the current position.
+    NSMutableArray *location;
+    // A title search's path to the first matching item that was disabled.
+    NSArray *disabledPath;
+    // The path to the closest title to a missing one, and its spelling distance.
+    NSArray *suggestion;
+    NSUInteger suggestionDistance;
 } MGMenuTraversal;
 
 static BOOL fail(MGMenuTraversal *traversal, MGMenuResult result, NSUInteger component) {
@@ -101,6 +106,55 @@ static NSArray *submenuItems(MGMenuTraversal *traversal, NSDictionary *itemDetai
     return menu == nil ? @[] : examineChildren(traversal, menu);
 }
 
+// The number of single-character insertions, deletions, substitutions, and
+// swaps of two neighboring characters between two strings. A swap counts as
+// one edit because it is one of the most common typing mistakes.
+static NSUInteger editDistance(NSString *a, NSString *b) {
+    NSUInteger n = [a length], m = [b length], width = m + 1;
+    NSUInteger *d = calloc((n + 1) * width, sizeof(NSUInteger));
+    for (NSUInteger i = 0; i <= n; i++)
+        d[i * width] = i;
+    for (NSUInteger j = 0; j <= m; j++)
+        d[j] = j;
+    for (NSUInteger i = 1; i <= n; i++) {
+        for (NSUInteger j = 1; j <= m; j++) {
+            unichar ai = [a characterAtIndex:i - 1], bj = [b characterAtIndex:j - 1];
+            NSUInteger cost = ai == bj ? 0 : 1;
+            NSUInteger best = MIN(MIN(d[(i - 1) * width + j] + 1, d[i * width + j - 1] + 1),
+                                  d[(i - 1) * width + j - 1] + cost);
+            if (i > 1 && j > 1 && ai == [b characterAtIndex:j - 2] &&
+                [a characterAtIndex:i - 2] == bj)
+                best = MIN(best, d[(i - 2) * width + j - 2] + 1);
+            d[i * width + j] = best;
+        }
+    }
+    NSUInteger distance = d[n * width + m];
+    free(d);
+    return distance;
+}
+
+// Remembers title as the suggestion for wanted when it is the closest so far
+// and near enough to be a likely misspelling: one edit for a short title,
+// two for a longer one. A wrong guess is worse than no suggestion.
+static void considerSuggestion(MGMenuTraversal *traversal, NSString *title, NSString *wanted) {
+    if (title == nil)
+        return;
+    NSString *have = MGMenuTitleForMatching(title);
+    NSString *want = MGMenuTitleForMatching(wanted);
+    NSUInteger allowed = [want length] <= 4 ? 1 : 2;
+    NSUInteger lengthGap = [have length] > [want length] ? [have length] - [want length]
+                                                         : [want length] - [have length];
+    if (lengthGap > allowed)
+        return;
+    NSUInteger distance = editDistance(have, want);
+    if (distance == 0 || distance > allowed)
+        return;
+    if (traversal->suggestion == nil || distance < traversal->suggestionDistance) {
+        traversal->suggestion = [traversal->location arrayByAddingObject:title];
+        traversal->suggestionDistance = distance;
+    }
+}
+
 static BOOL titleMatches(NSDictionary *details, NSString *wanted) {
     NSString *title = [details objectForKey:MGMenuDetailTitle];
     return title != nil &&
@@ -118,10 +172,13 @@ static id findPathLeaf(MGMenuTraversal *traversal, NSArray *items, NSArray *comp
         id match = nil;
         NSDictionary *matchDetails = nil;
         NSUInteger matches = 0;
+        NSMutableArray *titles = [NSMutableArray arrayWithCapacity:[items count]];
         for (id item in items) {
             NSDictionary *details = readDetails(traversal, item);
             if (details == nil)
                 return nil;
+            if ([details objectForKey:MGMenuDetailTitle] != nil)
+                [titles addObject:[details objectForKey:MGMenuDetailTitle]];
             if (titleMatches(details, [components objectAtIndex:index])) {
                 match = item;
                 matchDetails = details;
@@ -129,6 +186,8 @@ static id findPathLeaf(MGMenuTraversal *traversal, NSArray *items, NSArray *comp
             }
         }
         if (matches == 0) {
+            for (NSString *title in titles)
+                considerSuggestion(traversal, title, [components objectAtIndex:index]);
             fail(traversal, MGMenuResultComponentMissing, index + 1);
             return nil;
         }
@@ -136,6 +195,7 @@ static id findPathLeaf(MGMenuTraversal *traversal, NSArray *items, NSArray *comp
             fail(traversal, MGMenuResultComponentAmbiguous, index + 1);
             return nil;
         }
+        [traversal->location addObject:[matchDetails objectForKey:MGMenuDetailTitle]];
         if (index + 1 == [components count]) {
             *outDetails = matchDetails;
             return match;
@@ -163,18 +223,27 @@ static id searchItems(MGMenuTraversal *traversal, NSArray *items, NSString *titl
             *outFailed = YES;
             return nil;
         }
+        NSString *itemTitle = [details objectForKey:MGMenuDetailTitle] ?: @"";
         if ([submenu count] > 0) {
+            [traversal->location addObject:itemTitle];
             id found = searchItems(traversal, submenu, title, outFailed);
             if (found != nil || *outFailed)
                 return found;
+            [traversal->location removeLastObject];
             continue;
         }
-        if (!titleMatches(details, title) ||
-            ![traversal->environment elementSupportsPress:item until:traversal->deadline])
+        if (!titleMatches(details, title)) {
+            considerSuggestion(traversal, [details objectForKey:MGMenuDetailTitle], title);
             continue;
-        if (isEnabled(details))
+        }
+        if (![traversal->environment elementSupportsPress:item until:traversal->deadline])
+            continue;
+        if (isEnabled(details)) {
+            [traversal->location addObject:itemTitle];
             return item;
-        traversal->sawDisabledMatch = YES;
+        }
+        if (traversal->disabledPath == nil)
+            traversal->disabledPath = [traversal->location arrayByAddingObject:itemTitle];
     }
     return nil;
 }
@@ -186,25 +255,34 @@ static id findTitledItem(MGMenuTraversal *traversal, NSArray *roots, NSString *t
         NSArray *menu = details == nil ? nil : submenuItems(traversal, details);
         if (menu == nil)
             return nil;
+        [traversal->location addObject:[details objectForKey:MGMenuDetailTitle] ?: @""];
         BOOL failed = NO;
         id found = searchItems(traversal, menu, title, &failed);
         if (found != nil || failed)
             return found;
+        [traversal->location removeLastObject];
     }
-    fail(traversal, traversal->sawDisabledMatch ? MGMenuResultLeafDisabled
-                                                : MGMenuResultComponentMissing, 1);
+    if (traversal->disabledPath != nil) {
+        [traversal->location setArray:traversal->disabledPath];
+        fail(traversal, MGMenuResultLeafDisabled, 0);
+    } else {
+        fail(traversal, MGMenuResultComponentMissing, 1);
+    }
     return nil;
 }
 
 static MGMenuOutcome outcome(MGMenuResult result, NSUInteger component, NSUInteger examined) {
-    MGMenuOutcome value = { result, component, examined, 0 };
+    MGMenuOutcome value = { result, component, examined, 0, nil, nil };
     return value;
 }
 
 static MGMenuOutcome traversalOutcome(MGMenuTraversal *traversal, MGMenuResult result,
                                       NSUInteger component) {
+    // A suggestion only explains a missing item.
     MGMenuOutcome value = { result, component, traversal->examined,
-                            traversal->activationWaitSeconds };
+                            traversal->activationWaitSeconds,
+                            [[traversal->location copy] autorelease],
+                            result == MGMenuResultComponentMissing ? traversal->suggestion : nil };
     return value;
 }
 
@@ -218,7 +296,8 @@ MGMenuOutcome MGRunMenuStep(NSArray<NSString *> *components, pid_t target,
 
     NSTimeInterval started = [environment now];
     MGMenuTraversal traversal = { environment, started + MGMenuStepDeadlineSeconds,
-                                  0, MGMenuResultPressed, 0, NO, 0 };
+                                  0, MGMenuResultPressed, 0, 0, [NSMutableArray array],
+                                  nil, nil, 0 };
     if (![environment processIsRunning:target])
         return outcome(MGMenuResultTargetTerminated, 0, 0);
     if ([environment frontmostProcess] != target) {
@@ -296,6 +375,97 @@ BOOL MGMenuResultPlaysAlert(MGMenuResult result) {
     return result == MGMenuResultComponentMissing || result == MGMenuResultComponentAmbiguous ||
         result == MGMenuResultLeafDisabled || result == MGMenuResultLeafNotActionable ||
         result == MGMenuResultDeadlineExceeded;
+}
+
+BOOL MGMenuFailureIsInSettings(MGMenuResult result) {
+    return result == MGMenuResultComponentMissing || result == MGMenuResultComponentAmbiguous ||
+        result == MGMenuResultLeafNotActionable || result == MGMenuResultWorkLimitExceeded;
+}
+
+static BOOL showsMessage(MGMenuResult result) {
+    return result != MGMenuResultPressed && result != MGMenuResultCancelled;
+}
+
+// Quotes follow their source: text from the user's settings keeps the user's
+// spelling, and names from the menu bar keep the application's.
+NSString *MGMenuFailureMessage(MGMenuOutcome outcome, NSArray<NSString *> *components,
+                               NSString *applicationName) {
+    if (!showsMessage(outcome.result))
+        return nil;
+    NSString *app = [applicationName length] > 0 ? applicationName : @"application";
+    NSString *theApp = [applicationName length] > 0 ? applicationName : @"The application";
+    NSString *menuBar = [NSString stringWithFormat:@"the %@ menu bar", app];
+    NSString *MenuBar = [NSString stringWithFormat:@"The %@ menu bar", app];
+    NSArray *located = outcome.applicationPath;
+    BOOL singleTitle = [components count] == 1;
+    BOOL itemLocated = [located count] > 0 && (singleTitle || [located count] == [components count]);
+    // The command as the menu bar shows it once located, else as configured.
+    NSString *command = [NSString stringWithFormat:@"“%@”",
+                         MGMenuPathDisplay(itemLocated ? located : components)];
+    NSUInteger component = outcome.component;
+    NSString *missing = component > 0 && component <= [components count]
+        ? [components objectAtIndex:component - 1] : nil;
+    // The menus leading to a missing or ambiguous component, as the menu bar
+    // shows them.
+    NSString *parent = component > 1 && [located count] >= component - 1
+        ? MGMenuPathDisplay([located subarrayWithRange:NSMakeRange(0, component - 1)]) : nil;
+
+    switch (outcome.result) {
+        case MGMenuResultPressed:
+        case MGMenuResultCancelled:
+            return nil;
+        case MGMenuResultComponentMissing:
+            if ([outcome.suggestedPath count] > 0) {
+                NSUInteger written = singleTitle ? 1 : MIN(component, [components count]);
+                return [NSString stringWithFormat:@"Your settings say “%@”, but %@ has “%@”.",
+                        MGMenuPathDisplay([components subarrayWithRange:NSMakeRange(0, written)]),
+                        menuBar, MGMenuPathDisplay(outcome.suggestedPath)];
+            }
+            if (singleTitle)
+                return [NSString stringWithFormat:@"%@ has no command named %@.", MenuBar, command];
+            if (parent == nil)
+                return [NSString stringWithFormat:@"%@ has no “%@” menu.", MenuBar, missing];
+            return [NSString stringWithFormat:@"%@ has no “%@” under %@.", MenuBar, missing, parent];
+        case MGMenuResultComponentAmbiguous:
+            if (parent == nil)
+                return [NSString stringWithFormat:
+                        @"%@ has more than one “%@” menu, so Trickpad can’t tell which to use.",
+                        MenuBar, missing];
+            return [NSString stringWithFormat:
+                    @"%@ has more than one “%@” under %@, so Trickpad can’t tell which to choose.",
+                    MenuBar, missing, parent];
+        case MGMenuResultLeafDisabled:
+            return [NSString stringWithFormat:@"%@ is dimmed in %@ right now.", command, menuBar];
+        case MGMenuResultLeafNotActionable:
+            return [NSString stringWithFormat:
+                    @"%@ opens a submenu in %@. Add the command inside it to the binding.",
+                    command, menuBar];
+        case MGMenuResultDeadlineExceeded:
+            return [NSString stringWithFormat:@"%@ didn’t respond in time to choose %@.", theApp, command];
+        case MGMenuResultTargetChanged:
+            return [NSString stringWithFormat:
+                    @"Another app came forward before Trickpad could choose %@ from the menu bar.",
+                    command];
+        case MGMenuResultTargetTerminated:
+            return [NSString stringWithFormat:@"%@ quit before Trickpad could choose %@.", theApp, command];
+        case MGMenuResultNoTargetApplication:
+            return [NSString stringWithFormat:
+                    @"Trickpad found no window under the pointer to send %@ to.", command];
+        case MGMenuResultAccessibilityDenied:
+            return @"Trickpad needs Accessibility access to choose menu bar commands. Turn it on in "
+                   @"System Settings > Privacy & Security > Accessibility.";
+        case MGMenuResultTraversalError:
+            return [NSString stringWithFormat:@"Trickpad couldn’t read %@.", menuBar];
+        case MGMenuResultWorkLimitExceeded:
+            return [NSString stringWithFormat:
+                    @"%@ is too large to search. Write the full menu path in the binding.", MenuBar];
+        case MGMenuResultQueueFull:
+            return @"Too many menu gestures arrived at once, so Trickpad skipped this one.";
+        case MGMenuResultPressOutcomeUncertain:
+            return [NSString stringWithFormat:@"macOS didn’t confirm that %@ ran in %@.",
+                    command, menuBar];
+    }
+    return nil;
 }
 
 #pragma mark - System environment

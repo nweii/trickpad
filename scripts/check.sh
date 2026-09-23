@@ -117,6 +117,7 @@ run_compiled_check trace-replay run_trace_replay_check "${OBJC_FLAGS[@]}" -frame
 run_compiled_check trace-analyzer run_trace_analyzer_check -fblocks -fobjc-exceptions -fno-objc-arc -isysroot "$SDKROOT" -framework Foundation "$ROOT/src/TraceAnalyzer.m"
 run_compiled_check trackpad-interaction run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/ContactOnsetTracker.m" "$ROOT/src/GestureSequence.m" "$ROOT/src/TrackpadInteraction.m" "$ROOT/src/TrackpadInteractionCheck.m"
 run_compiled_check system-gesture run_system_gesture_check -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/SystemGestureClaims.m" "$ROOT/src/SystemGestureClaimsCheck.m"
+run_compiled_check binding-feedback run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/BindingFeedback.m" "$ROOT/src/BindingFeedbackCheck.m"
 run_compiled_check menu-path run_without_arguments "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/MenuPath.m" "$ROOT/src/MenuPathCheck.m"
 run_compiled_check menu-command-runner run_without_arguments -fblocks "${OBJC_FLAGS[@]}" -framework Foundation -framework AppKit -framework ApplicationServices "$ROOT/src/MenuPath.m" "$ROOT/src/MenuCommandRunner.m" "$ROOT/src/MenuCommandRunnerCheck.m"
 run_compiled_check script-runner run_without_arguments -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/ScriptRunner.m" "$ROOT/src/ScriptRunnerCheck.m"
@@ -341,10 +342,20 @@ source_has 'dispatchSequence:sequence' "$GESTURE_SRC" ||
   gesture_fail "sequence bindings do not dispatch through SequenceDispatcher"
 source_has 'Run sequence (%lu action%@)' "$APP_SRC" ||
   gesture_fail "Current Gestures does not summarize sequence bindings"
-source_has 'return runMenuStep(step);' "$GESTURE_SRC" ||
+source_has 'return runMenuStep(step, gesture);' "$GESTURE_SRC" ||
   gesture_fail "menu steps do not run through the sequence step handler"
 source_has 'sequence = @\[commandDict\];' "$GESTURE_SRC" ||
   gesture_fail "a standalone menu binding does not run as a one-step sequence"
+source_has 'MGMenuFailureMessage(outcome, components' "$GESTURE_SRC" ||
+  gesture_fail "a failed menu step does not explain itself below the menu bar icon"
+source_has 'MGURLFailureMessage(configuredURL, nil)' "$GESTURE_SRC" ||
+  gesture_fail "a URL no application opens does not explain itself"
+source_has 'MGScriptExitMessage(scriptPath, status)' "$GESTURE_SRC" ||
+  gesture_fail "a script that exits with an error does not explain itself"
+source_has 'MGKeystrokesBlockedBySecureInputMessage()' "$GESTURE_SRC" ||
+  gesture_fail "keystrokes blocked by Secure Input do not explain themselves"
+source_has 'MGGestureFeedbackSetAnchor(theItem);' "$APP_SRC" ||
+  gesture_fail "gesture feedback is not anchored to the menu bar icon"
 source_has '@"Menu: "' "$APP_SRC" ||
   gesture_fail "Current Gestures does not summarize menu bindings"
 source_section_has 'MGCancelRunningMenuSteps();' "$GESTURE_SRC" '/^void cancelPendingGestureSequences(void)/,/^}/' ||

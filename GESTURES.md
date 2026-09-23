@@ -358,7 +358,7 @@ Prefix a menu path with `menu:` to choose that command from an application's men
 
 The command goes to the application under the pointer, the same application a keystroke binding reaches. Trickpad brings that window forward first when it is not already in front.
 
-Write each menu title exactly as the application shows it, in the language it displays, from the menu bar down to the command. Titles are case-sensitive. Spacing around `>` does not matter, and `›` also separates titles. A slash is part of a title, as in `View > Show/Hide Sidebar`, so it never separates them. Three periods match a title that ends in `…`. To write a literal `>`, `›`, or backslash inside a title, put a backslash before it. In a double-quoted TOML string that backslash must itself be doubled, so a single-quoted string is easier:
+Write each menu title exactly as the application shows it, in the language it displays, from the menu bar down to the command. Capitalization and accents do not matter, but spelling does. Spacing around `>` does not matter, and `›` also separates titles. A slash is part of a title, as in `View > Show/Hide Sidebar`, so it never separates them. Three periods match a title that ends in `…`. To write a literal `>`, `›`, or backslash inside a title, put a backslash before it. In a double-quoted TOML string that backslash must itself be doubled, so a single-quoted string is easier:
 
     three-finger-tap = 'menu:Tools > A \> B'
 
@@ -373,7 +373,7 @@ Put a menu binding for one application's command in that application's table:
     [TRACKPAD."Safari"]
     three-finger-swipe-left = "menu:History > Back"
 
-A binding in the device table applies wherever the pointer is. When the application under the pointer has no such command, the command is disabled, or the application does not respond within two seconds, Trickpad plays the macOS alert sound and does nothing. Trickpad never opens a menu to look for a command, so a command in a menu that an application fills only when it opens cannot be found.
+A binding in the device table applies wherever the pointer is. When the application under the pointer has no such command, the command is disabled, or the application does not respond within two seconds, Trickpad plays the macOS alert sound, does nothing, and explains why in a bubble below its menu bar icon. When a title in the binding is close to one the application shows, the bubble names it. When the fix belongs in the settings, clicking the bubble opens them. Trickpad never opens a menu to look for a command, so a command in a menu that an application fills only when it opens cannot be found.
 
 In a sequence, a menu command that cannot run stops the rest of that sequence, because later steps usually depend on it.
 

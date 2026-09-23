@@ -28,6 +28,13 @@ typedef struct {
     NSUInteger examinedChildren;
     // Time spent waiting for the target to come forward, for logs.
     NSTimeInterval activationWaitSeconds;
+    // The application's own titles, so messages can quote the menu bar as it
+    // appears: the whole path when the item was located, or the menus leading
+    // to a missing or ambiguous path component. Shown to the user, never logged.
+    NSArray<NSString *> *applicationPath;
+    // For a missing item, the application's path to its closest title within a
+    // small spelling distance, or nil. Shown to the user, never logged.
+    NSArray<NSString *> *suggestedPath;
 } MGMenuOutcome;
 
 extern NSString *const MGMenuDetailChildren;
@@ -82,6 +89,16 @@ NSString *MGMenuResultName(MGMenuResult result);
 // application lacks a usable item, or did not answer in time. Failures that
 // describe Trickpad's own state stay silent and appear only in the log.
 BOOL MGMenuResultPlaysAlert(MGMenuResult result);
+
+// Whether the fix for a failed step belongs in the user's settings, so the
+// feedback can offer to open them.
+BOOL MGMenuFailureIsInSettings(MGMenuResult result);
+
+// One sentence saying why a step failed, framed around the application's menu
+// bar and naming the configured command. Returns nil for a press and for a
+// cancellation, which follows the user's own reload.
+NSString *MGMenuFailureMessage(MGMenuOutcome outcome, NSArray<NSString *> *components,
+                               NSString *applicationName);
 
 // The Accessibility and NSWorkspace environment used by the app.
 id<MGMenuEnvironment> MGSystemMenuEnvironment(void);
