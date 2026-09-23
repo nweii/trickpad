@@ -50,9 +50,10 @@ static NSDictionary *menuBar(NSArray *roots) {
 @property (nonatomic) NSInteger frontmostReads;
 @property (nonatomic) BOOL cancelDuringTraversal;
 @property (nonatomic, retain) NSDictionary *pressed;
-// The number of detail reads that go unanswered before the application answers.
-@property (nonatomic) NSInteger unansweredReads;
-@property (nonatomic) NSInteger unansweredMenuBarReads;
+// How long the application takes to answer its first request, as one that has
+// just come forward does, and whether it ever answers.
+@property (nonatomic) NSTimeInterval firstAnswerDelay;
+@property (nonatomic) BOOL neverAnswers;
 @end
 
 @implementation FakeMenuEnvironment
@@ -86,15 +87,22 @@ static NSDictionary *menuBar(NSArray *roots) {
     return _frontmost == pid;
 }
 - (NSTimeInterval)now { return _clock; }
-- (void)pauseBeforeRetry { _clock += 0.02; }
-- (id)menuBarForProcess:(pid_t)pid {
-    if (_unansweredMenuBarReads-- > 0)
-        return nil;
-    return _bar;
+// Advances the clock by one request and reports whether it was answered.
+- (BOOL)answerUntil:(NSTimeInterval)deadline {
+    _clock += _firstAnswerDelay;
+    _firstAnswerDelay = 0;
+    if (_neverAnswers || _clock > deadline) {
+        _clock = MAX(_clock, deadline + 0.001);
+        return NO;
+    }
+    return YES;
 }
-- (NSDictionary *)detailsOfElement:(id)element {
+- (id)menuBarForProcess:(pid_t)pid until:(NSTimeInterval)deadline {
+    return [self answerUntil:deadline] ? _bar : nil;
+}
+- (NSDictionary *)detailsOfElement:(id)element until:(NSTimeInterval)deadline {
     _clock += _secondsPerChildrenRead;
-    if (_unansweredReads-- > 0)
+    if (![self answerUntil:deadline])
         return nil;
     if (_cancelDuringTraversal)
         MGCancelRunningMenuSteps();
@@ -108,10 +116,10 @@ static NSDictionary *menuBar(NSArray *roots) {
         [details setObject:[element objectForKey:@"enabled"] ?: @YES forKey:MGMenuDetailEnabled];
     return details;
 }
-- (BOOL)elementSupportsPress:(id)element {
+- (BOOL)elementSupportsPress:(id)element until:(NSTimeInterval)deadline {
     return [element objectForKey:@"press"] == nil || [[element objectForKey:@"press"] boolValue];
 }
-- (BOOL)pressElement:(id)element {
+- (BOOL)pressElement:(id)element until:(NSTimeInterval)deadline {
     self.pressed = element;
     return _pressAccepted;
 }
@@ -277,26 +285,25 @@ int main(void) {
         require(outcome.result == MGMenuResultPressed,
                 "cancellation before a step starts does not affect that step");
 
-        // An application that is briefly unresponsive after coming forward is
-        // read again; one that never answers ends at the deadline unpressed.
+        // An application that is slow to answer after coming forward is waited
+        // for; one that never answers ends at the deadline unpressed.
         environment = environmentWithBar(bar);
-        environment.unansweredReads = 3;
-        environment.unansweredMenuBarReads = 2;
+        environment.firstAnswerDelay = 1.5;
         outcome = run(environment, @[@"Clear Menu"]);
         require(outcome.result == MGMenuResultPressed && environment.pressed == clear,
-                "unanswered reads are retried before the press");
+                "a slow first answer is waited for within the deadline");
 
         environment = environmentWithBar(bar);
-        environment.unansweredReads = 1000;
+        environment.neverAnswers = YES;
         outcome = run(environment, @[@"File", @"Save"]);
         require(outcome.result == MGMenuResultDeadlineExceeded && environment.pressed == nil,
                 "an application that never answers ends at the deadline");
 
         environment = environmentWithBar(bar);
-        environment.unansweredMenuBarReads = 1000;
+        environment.firstAnswerDelay = 2.5;
         outcome = run(environment, @[@"Save"]);
         require(outcome.result == MGMenuResultDeadlineExceeded && environment.pressed == nil,
-                "a menu bar that never answers ends at the deadline");
+                "an answer after the deadline is not waited for"); 
 
         // Bounds.
         environment = environmentWithBar(bar);
@@ -327,11 +334,13 @@ int main(void) {
 
         require([MGMenuResultName(MGMenuResultPressOutcomeUncertain)
                  isEqualToString:@"press-outcome-uncertain"], "result names are stable");
-        require(MGMenuResultIsUnavailableItem(MGMenuResultComponentMissing) &&
-                MGMenuResultIsUnavailableItem(MGMenuResultLeafDisabled) &&
-                !MGMenuResultIsUnavailableItem(MGMenuResultTargetChanged) &&
-                !MGMenuResultIsUnavailableItem(MGMenuResultPressed),
-                "only a missing or unusable item is an unavailable item");
+        require(MGMenuResultPlaysAlert(MGMenuResultComponentMissing) &&
+                MGMenuResultPlaysAlert(MGMenuResultLeafDisabled) &&
+                MGMenuResultPlaysAlert(MGMenuResultDeadlineExceeded) &&
+                !MGMenuResultPlaysAlert(MGMenuResultTargetChanged) &&
+                !MGMenuResultPlaysAlert(MGMenuResultCancelled) &&
+                !MGMenuResultPlaysAlert(MGMenuResultPressed),
+                "a missing, unusable, or unanswered item plays the alert and nothing else does");
     }
     if (failures > 0)
         return 1;

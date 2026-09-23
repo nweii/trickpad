@@ -373,7 +373,7 @@ Put a menu binding for one application's command in that application's table:
     [TRACKPAD."Safari"]
     three-finger-swipe-left = "menu:History > Back"
 
-A binding in the device table applies wherever the pointer is. When the application under the pointer has no such command, or the command is disabled, Trickpad plays the macOS alert sound and does nothing. Trickpad never opens a menu to look for a command, so a command in a menu that an application fills only when it opens cannot be found.
+A binding in the device table applies wherever the pointer is. When the application under the pointer has no such command, the command is disabled, or the application does not respond within two seconds, Trickpad plays the macOS alert sound and does nothing. Trickpad never opens a menu to look for a command, so a command in a menu that an application fills only when it opens cannot be found.
 
 In a sequence, a menu command that cannot run stops the rest of that sequence, because later steps usually depend on it.
 

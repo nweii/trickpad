@@ -1684,16 +1684,16 @@ static BOOL runMenuStep(NSDictionary *step) {
         ? [NSString stringWithFormat:@" at component %lu", (unsigned long)outcome.component] : @"";
     if (outcome.result != MGMenuResultPressed || logLevel >= LOG_LEVEL_DEBUG)
         NSLog(@"Menu command %@%@ in %@ (depth %lu, %.1f ms, waited %.0f ms for the application, "
-              @"%lu unanswered reads, %lu items examined)%@",
+              @"%lu items examined)%@",
               MGMenuResultName(outcome.result), where, bundle ?: @"no application",
               (unsigned long)[components count], milliseconds,
-              outcome.activationWaitSeconds * 1000.0, (unsigned long)outcome.unansweredReads,
-              (unsigned long)outcome.examinedChildren,
+              outcome.activationWaitSeconds * 1000.0, (unsigned long)outcome.examinedChildren,
               logLevel >= LOG_LEVEL_DEBUG
                   ? [NSString stringWithFormat:@": %@", [step objectForKey:@"Command"]] : @"");
 
-    // An item the application lacks sounds like an unavailable shortcut.
-    if (MGMenuResultIsUnavailableItem(outcome.result))
+    // A command the application lacks or could not reach in time sounds like
+    // an unavailable shortcut, so a gesture never fails silently.
+    if (MGMenuResultPlaysAlert(outcome.result))
         dispatch_async(dispatch_get_main_queue(), ^{ NSBeep(); });
     return outcome.result == MGMenuResultPressed;
 }

@@ -16,9 +16,11 @@ NSString *const MGMenuDetailTitle = @"title";
 NSString *const MGMenuDetailRole = @"role";
 NSString *const MGMenuDetailEnabled = @"enabled";
 
-// An application that has just come forward can leave Accessibility requests
-// unanswered for most of a second while it rebuilds its menus, and a full
-// title search of a large menu bar then takes several hundred milliseconds.
+// The only time limit in a menu step. It bounds a step when an application
+// stops answering; a responsive application finishes far sooner. One that has
+// just come forward was measured leaving requests unanswered for most of a
+// second, after which a full title search can take several hundred
+// milliseconds.
 const NSTimeInterval MGMenuStepDeadlineSeconds = 2.0;
 // A browser's full menu bar, with its history and bookmarks menus, measured
 // 1,400 to 3,000 elements. The deadline is the bound a real application
@@ -40,7 +42,6 @@ typedef struct {
     // Whether a title search passed over a matching item that was disabled.
     BOOL sawDisabledMatch;
     NSTimeInterval activationWaitSeconds;
-    NSUInteger unansweredReads;
 } MGMenuTraversal;
 
 static BOOL fail(MGMenuTraversal *traversal, MGMenuResult result, NSUInteger component) {
@@ -55,17 +56,15 @@ static BOOL pastDeadline(MGMenuTraversal *traversal) {
     return !fail(traversal, MGMenuResultDeadlineExceeded, 0);
 }
 
-// Reads an element's details. Nothing has been pressed yet, so an unanswered
-// read is repeated until the deadline.
+// Reads an element's details, waiting for the application until the deadline.
 static NSDictionary *readDetails(MGMenuTraversal *traversal, id element) {
-    while (!pastDeadline(traversal)) {
-        NSDictionary *details = [traversal->environment detailsOfElement:element];
-        if (details != nil)
-            return details;
-        traversal->unansweredReads++;
-        [traversal->environment pauseBeforeRetry];
-    }
-    return nil;
+    if (pastDeadline(traversal))
+        return nil;
+    NSDictionary *details = [traversal->environment detailsOfElement:element
+                                                               until:traversal->deadline];
+    if (details == nil && !pastDeadline(traversal))
+        fail(traversal, MGMenuResultTraversalError, 0);
+    return details;
 }
 
 // Returns the children in an element's details and charges them to the work
@@ -170,7 +169,8 @@ static id searchItems(MGMenuTraversal *traversal, NSArray *items, NSString *titl
                 return found;
             continue;
         }
-        if (!titleMatches(details, title) || ![traversal->environment elementSupportsPress:item])
+        if (!titleMatches(details, title) ||
+            ![traversal->environment elementSupportsPress:item until:traversal->deadline])
             continue;
         if (isEnabled(details))
             return item;
@@ -197,14 +197,14 @@ static id findTitledItem(MGMenuTraversal *traversal, NSArray *roots, NSString *t
 }
 
 static MGMenuOutcome outcome(MGMenuResult result, NSUInteger component, NSUInteger examined) {
-    MGMenuOutcome value = { result, component, examined, 0, 0 };
+    MGMenuOutcome value = { result, component, examined, 0 };
     return value;
 }
 
 static MGMenuOutcome traversalOutcome(MGMenuTraversal *traversal, MGMenuResult result,
                                       NSUInteger component) {
     MGMenuOutcome value = { result, component, traversal->examined,
-                            traversal->activationWaitSeconds, traversal->unansweredReads };
+                            traversal->activationWaitSeconds };
     return value;
 }
 
@@ -218,7 +218,7 @@ MGMenuOutcome MGRunMenuStep(NSArray<NSString *> *components, pid_t target,
 
     NSTimeInterval started = [environment now];
     MGMenuTraversal traversal = { environment, started + MGMenuStepDeadlineSeconds,
-                                  0, MGMenuResultPressed, 0, NO, 0, 0 };
+                                  0, MGMenuResultPressed, 0, NO, 0 };
     if (![environment processIsRunning:target])
         return outcome(MGMenuResultTargetTerminated, 0, 0);
     if ([environment frontmostProcess] != target) {
@@ -229,13 +229,10 @@ MGMenuOutcome MGRunMenuStep(NSArray<NSString *> *components, pid_t target,
                                     ? MGMenuResultTargetChanged : MGMenuResultTargetTerminated, 0);
     }
 
-    id menuBar = nil;
-    while ((menuBar = [environment menuBarForProcess:target]) == nil) {
-        if ([environment now] > traversal.deadline)
-            return traversalOutcome(&traversal, MGMenuResultDeadlineExceeded, 0);
-        traversal.unansweredReads++;
-        [environment pauseBeforeRetry];
-    }
+    id menuBar = [environment menuBarForProcess:target until:traversal.deadline];
+    if (menuBar == nil)
+        return traversalOutcome(&traversal, [environment now] > traversal.deadline
+                                ? MGMenuResultDeadlineExceeded : MGMenuResultTraversalError, 0);
     NSDictionary *barDetails = readDetails(&traversal, menuBar);
     NSArray *roots = barDetails == nil ? nil : examineChildren(&traversal, barDetails);
     if (roots == nil)
@@ -252,7 +249,7 @@ MGMenuOutcome MGRunMenuStep(NSArray<NSString *> *components, pid_t target,
         NSArray *submenu = submenuItems(&traversal, leafDetails);
         if (submenu == nil)
             return traversalOutcome(&traversal, traversal.failure, 0);
-        if ([submenu count] > 0 || ![environment elementSupportsPress:item])
+        if ([submenu count] > 0 || ![environment elementSupportsPress:item until:traversal.deadline])
             return traversalOutcome(&traversal, MGMenuResultLeafNotActionable, 0);
         if (!isEnabled(leafDetails))
             return traversalOutcome(&traversal, MGMenuResultLeafDisabled, 0);
@@ -270,7 +267,7 @@ MGMenuOutcome MGRunMenuStep(NSArray<NSString *> *components, pid_t target,
 
     // Once the press call begins, a failure cannot prove the application did
     // not act, so it is never classified as a pre-press failure.
-    return traversalOutcome(&traversal, [environment pressElement:item]
+    return traversalOutcome(&traversal, [environment pressElement:item until:traversal.deadline]
                             ? MGMenuResultPressed : MGMenuResultPressOutcomeUncertain, 0);
 }
 
@@ -295,16 +292,13 @@ NSString *MGMenuResultName(MGMenuResult result) {
     return @"unknown";
 }
 
-BOOL MGMenuResultIsUnavailableItem(MGMenuResult result) {
+BOOL MGMenuResultPlaysAlert(MGMenuResult result) {
     return result == MGMenuResultComponentMissing || result == MGMenuResultComponentAmbiguous ||
-        result == MGMenuResultLeafDisabled || result == MGMenuResultLeafNotActionable;
+        result == MGMenuResultLeafDisabled || result == MGMenuResultLeafNotActionable ||
+        result == MGMenuResultDeadlineExceeded;
 }
 
 #pragma mark - System environment
-
-// A hung application would otherwise hold each Accessibility call for the
-// system default of several seconds.
-static const float kMessagingTimeoutSeconds = 0.25f;
 
 // Whether an Accessibility error means the application did not answer, as
 // opposed to the attribute having no value.
@@ -312,11 +306,24 @@ static BOOL isUnanswered(AXError error) {
     return error == kAXErrorCannotComplete || error == kAXErrorFailure;
 }
 
-static const useconds_t kRetryPauseMicroseconds = 20000;
+static NSTimeInterval monotonicNow(void) {
+    return (NSTimeInterval)clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1e9;
+}
 
-static id copiedAttribute(id element, CFStringRef attribute) {
+// Lets one request wait only for the time left before the deadline, instead of
+// the system default of several seconds. Returns NO when no time is left.
+static BOOL limitRequestToDeadline(AXUIElementRef element, NSTimeInterval deadline) {
+    NSTimeInterval remaining = deadline - monotonicNow();
+    if (remaining <= 0)
+        return NO;
+    AXUIElementSetMessagingTimeout(element, (float)remaining);
+    return YES;
+}
+
+static id copiedAttribute(id element, CFStringRef attribute, NSTimeInterval deadline) {
     AXUIElementRef axElement = (AXUIElementRef)element;
-    AXUIElementSetMessagingTimeout(axElement, kMessagingTimeoutSeconds);
+    if (!limitRequestToDeadline(axElement, deadline))
+        return nil;
     CFTypeRef value = NULL;
     if (AXUIElementCopyAttributeValue(axElement, attribute, &value) != kAXErrorSuccess)
         return nil;
@@ -376,27 +383,22 @@ static pid_t frontmostProcessOnMain(void) {
 }
 
 - (NSTimeInterval)now {
-    return (NSTimeInterval)clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1e9;
+    return monotonicNow();
 }
 
-- (void)pauseBeforeRetry {
-    usleep(kRetryPauseMicroseconds);
-}
-
-- (id)menuBarForProcess:(pid_t)pid {
+- (id)menuBarForProcess:(pid_t)pid until:(NSTimeInterval)deadline {
     AXUIElementRef application = AXUIElementCreateApplication(pid);
     if (application == NULL)
         return nil;
-    // An application with no menu bar never answers usefully, so its missing
-    // value is treated like silence and ends at the deadline.
-    id menuBar = copiedAttribute((id)application, kAXMenuBarAttribute);
+    id menuBar = copiedAttribute((id)application, kAXMenuBarAttribute, deadline);
     CFRelease(application);
     return menuBar;
 }
 
-- (NSDictionary *)detailsOfElement:(id)element {
+- (NSDictionary *)detailsOfElement:(id)element until:(NSTimeInterval)deadline {
     AXUIElementRef axElement = (AXUIElementRef)element;
-    AXUIElementSetMessagingTimeout(axElement, kMessagingTimeoutSeconds);
+    if (!limitRequestToDeadline(axElement, deadline))
+        return nil;
     NSArray *keys = @[MGMenuDetailChildren, MGMenuDetailTitle, MGMenuDetailRole, MGMenuDetailEnabled];
     NSArray *attributes = @[(id)kAXChildrenAttribute, (id)kAXTitleAttribute,
                             (id)kAXRoleAttribute, (id)kAXEnabledAttribute];
@@ -431,9 +433,10 @@ static pid_t frontmostProcessOnMain(void) {
     return details;
 }
 
-- (BOOL)elementSupportsPress:(id)element {
+- (BOOL)elementSupportsPress:(id)element until:(NSTimeInterval)deadline {
     AXUIElementRef axElement = (AXUIElementRef)element;
-    AXUIElementSetMessagingTimeout(axElement, kMessagingTimeoutSeconds);
+    if (!limitRequestToDeadline(axElement, deadline))
+        return NO;
     CFArrayRef actions = NULL;
     if (AXUIElementCopyActionNames(axElement, &actions) != kAXErrorSuccess || actions == NULL)
         return NO;
@@ -443,9 +446,10 @@ static pid_t frontmostProcessOnMain(void) {
     return supported;
 }
 
-- (BOOL)pressElement:(id)element {
+- (BOOL)pressElement:(id)element until:(NSTimeInterval)deadline {
     AXUIElementRef axElement = (AXUIElementRef)element;
-    AXUIElementSetMessagingTimeout(axElement, kMessagingTimeoutSeconds);
+    if (!limitRequestToDeadline(axElement, deadline))
+        return NO;
     return AXUIElementPerformAction(axElement, kAXPressAction) == kAXErrorSuccess;
 }
 

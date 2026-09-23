@@ -26,10 +26,8 @@ typedef struct {
     // The 1-based component a missing or ambiguous result refers to, else 0.
     NSUInteger component;
     NSUInteger examinedChildren;
-    // Where the time went, for logs: waiting for the target to come forward,
-    // and reads the application left unanswered.
+    // Time spent waiting for the target to come forward, for logs.
     NSTimeInterval activationWaitSeconds;
-    NSUInteger unansweredReads;
 } MGMenuOutcome;
 
 extern NSString *const MGMenuDetailChildren;
@@ -50,20 +48,20 @@ extern const NSUInteger MGMenuExaminedChildrenLimit;
 - (BOOL)waitForFrontmostProcess:(pid_t)pid until:(NSTimeInterval)deadline;
 // A monotonic clock in seconds.
 - (NSTimeInterval)now;
-// Waits before a read is retried.
-- (void)pauseBeforeRetry;
-// Returns nil when the application did not answer, as while it rebuilds its
-// menus on becoming active.
-- (id)menuBarForProcess:(pid_t)pid;
+// Each request below waits for the application to answer until deadline, the
+// step's single time limit. An application that has just come forward can
+// take most of a second to answer while it rebuilds its menus.
+// Returns nil when the application did not answer.
+- (id)menuBarForProcess:(pid_t)pid until:(NSTimeInterval)deadline;
 // Reads an element's details in one request: MGMenuDetailChildren (always
 // present, empty for none), and MGMenuDetailTitle, MGMenuDetailRole, and
 // MGMenuDetailEnabled when readable. Returns nil when the application did not
 // answer.
-- (NSDictionary *)detailsOfElement:(id)element;
-- (BOOL)elementSupportsPress:(id)element;
+- (NSDictionary *)detailsOfElement:(id)element until:(NSTimeInterval)deadline;
+- (BOOL)elementSupportsPress:(id)element until:(NSTimeInterval)deadline;
 // Returns YES when Accessibility accepted the press. Acceptance does not show
 // that the application acted.
-- (BOOL)pressElement:(id)element;
+- (BOOL)pressElement:(id)element until:(NSTimeInterval)deadline;
 @end
 
 // Runs one menu step. Two or more components name a root-to-leaf path. One
@@ -80,9 +78,10 @@ void MGCancelRunningMenuSteps(void);
 // The stable result code used in logs.
 NSString *MGMenuResultName(MGMenuResult result);
 
-// Whether the result means the target application lacks a usable item, which
-// the user hears as the system alert sound.
-BOOL MGMenuResultIsUnavailableItem(MGMenuResult result);
+// Whether the user hears the system alert sound for the result: the target
+// application lacks a usable item, or did not answer in time. Failures that
+// describe Trickpad's own state stay silent and appear only in the log.
+BOOL MGMenuResultPlaysAlert(MGMenuResult result);
 
 // The Accessibility and NSWorkspace environment used by the app.
 id<MGMenuEnvironment> MGSystemMenuEnvironment(void);
