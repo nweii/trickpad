@@ -217,6 +217,8 @@ Triple taps are not available.
 
 A keystroke, a built-in action, a URL, an executable script, a sound, speech, a menu command, or a sequence of these values.
 
+When a binding cannot do what it names, a bubble below the Trickpad menu bar icon says which binding and why, without taking keyboard focus from the app in use. When the fix belongs in the settings or in System Settings, clicking the bubble opens it.
+
 ### Sequences
 
 Use a TOML array to run several binding values in order:
@@ -265,6 +267,8 @@ A modifier-only binding presses and releases the named modifier keys. For exampl
 Keys: any letter or digit, plus `return` `escape` `tab` `space` `delete` `forward-delete` `up` `down` `left` `right` `home` `end` `page-up` `page-down` and `f1` through `f12`. Punctuation keys: `[` `]` `-` `=` `;` `'` `,` `.` `/` `\` and backtick (`` ` ``).
 
 Aliases: `enter` is `return`, `esc` is `escape`, `backspace` and `del` are `delete`, `spacebar` is `space`, and `backslash` is `\`.
+
+macOS discards keystrokes from Trickpad when Trickpad lacks Accessibility access, and while Secure Input is on, which a focused password field usually turns on. A keystroke binding then shows a bubble below the menu bar icon naming the cause.
 
 ### Actions
 
@@ -326,7 +330,7 @@ For example:
 
 Use `urlencode` for clipboard text placed in a query parameter. It escapes characters such as spaces, `&`, `=`, `/`, and `?` so the clipboard cannot change the URL's structure. Use raw `{{clipboard}}` only when the copied text is already safe in that position.
 
-An empty clipboard resolves to an empty value. Reload Settings reports unknown substitutions and filters, unmatched braces, empty date formats, and unmatched quotes in date formats. The expanded URL is checked again when the gesture fires. If it is invalid, nothing opens and Console records the problem without the expanded clipboard contents.
+An empty clipboard resolves to an empty value. Reload Settings reports unknown substitutions and filters, unmatched braces, empty date formats, and unmatched quotes in date formats. The expanded URL is checked again when the gesture fires. If it is invalid, nothing opens, a bubble below the menu bar icon explains the problem, and Console records it, all without the expanded clipboard contents. When no installed app opens the link, the bubble says so and macOS shows no dialog of its own.
 
 ### Scripts
 
@@ -334,7 +338,7 @@ Prefix an executable path with `script:`:
 
     hold-right-tap-left = "script:~/bin/my-script"
 
-The path may begin with `~` or be absolute. It must exist and be executable when the settings reload. Trickpad launches it directly through its shebang, uses the script's folder as its working directory, and does not wait for it to finish. It does not interpret shell commands, arguments, substitutions, or an interactive shell profile. Console records launch failures and nonzero exits.
+The path may begin with `~` or be absolute. It must exist and be executable when the settings reload. Trickpad launches it directly through its shebang, uses the script's folder as its working directory, and does not wait for it to finish. It does not interpret shell commands, arguments, substitutions, or an interactive shell profile. A launch failure or nonzero exit appears in a bubble below the menu bar icon and in Console.
 
 ### Sounds and speech
 
