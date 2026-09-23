@@ -1683,9 +1683,12 @@ static BOOL runMenuStep(NSDictionary *step) {
     NSString *where = outcome.component > 0
         ? [NSString stringWithFormat:@" at component %lu", (unsigned long)outcome.component] : @"";
     if (outcome.result != MGMenuResultPressed || logLevel >= LOG_LEVEL_DEBUG)
-        NSLog(@"Menu command %@%@ in %@ (depth %lu, %.1f ms)%@",
+        NSLog(@"Menu command %@%@ in %@ (depth %lu, %.1f ms, waited %.0f ms for the application, "
+              @"%lu unanswered reads, %lu items examined)%@",
               MGMenuResultName(outcome.result), where, bundle ?: @"no application",
               (unsigned long)[components count], milliseconds,
+              outcome.activationWaitSeconds * 1000.0, (unsigned long)outcome.unansweredReads,
+              (unsigned long)outcome.examinedChildren,
               logLevel >= LOG_LEVEL_DEBUG
                   ? [NSString stringWithFormat:@": %@", [step objectForKey:@"Command"]] : @"");
 

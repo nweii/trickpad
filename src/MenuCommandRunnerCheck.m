@@ -50,6 +50,9 @@ static NSDictionary *menuBar(NSArray *roots) {
 @property (nonatomic) NSInteger frontmostReads;
 @property (nonatomic) BOOL cancelDuringTraversal;
 @property (nonatomic, retain) NSDictionary *pressed;
+// The number of detail reads that go unanswered before the application answers.
+@property (nonatomic) NSInteger unansweredReads;
+@property (nonatomic) NSInteger unansweredMenuBarReads;
 @end
 
 @implementation FakeMenuEnvironment
@@ -83,19 +86,27 @@ static NSDictionary *menuBar(NSArray *roots) {
     return _frontmost == pid;
 }
 - (NSTimeInterval)now { return _clock; }
-- (id)menuBarForProcess:(pid_t)pid { return _bar; }
-- (NSArray *)childrenOfElement:(id)element {
+- (void)pauseBeforeRetry { _clock += 0.02; }
+- (id)menuBarForProcess:(pid_t)pid {
+    if (_unansweredMenuBarReads-- > 0)
+        return nil;
+    return _bar;
+}
+- (NSDictionary *)detailsOfElement:(id)element {
     _clock += _secondsPerChildrenRead;
+    if (_unansweredReads-- > 0)
+        return nil;
     if (_cancelDuringTraversal)
         MGCancelRunningMenuSteps();
-    return [element objectForKey:@"children"] ?: @[];
-}
-- (NSString *)titleOfElement:(id)element { return [element objectForKey:@"title"]; }
-- (NSString *)roleOfElement:(id)element { return [element objectForKey:@"role"]; }
-- (NSNumber *)enabledStateOfElement:(id)element {
-    if ([element objectForKey:@"unreadable"] != nil)
-        return nil;
-    return [element objectForKey:@"enabled"] ?: @YES;
+    NSMutableDictionary *details = [NSMutableDictionary dictionary];
+    [details setObject:[element objectForKey:@"children"] ?: @[] forKey:MGMenuDetailChildren];
+    if ([element objectForKey:@"title"] != nil)
+        [details setObject:[element objectForKey:@"title"] forKey:MGMenuDetailTitle];
+    if ([element objectForKey:@"role"] != nil)
+        [details setObject:[element objectForKey:@"role"] forKey:MGMenuDetailRole];
+    if ([element objectForKey:@"unreadable"] == nil)
+        [details setObject:[element objectForKey:@"enabled"] ?: @YES forKey:MGMenuDetailEnabled];
+    return details;
 }
 - (BOOL)elementSupportsPress:(id)element {
     return [element objectForKey:@"press"] == nil || [[element objectForKey:@"press"] boolValue];
@@ -265,6 +276,27 @@ int main(void) {
         outcome = run(environment, @[@"File", @"Save"]);
         require(outcome.result == MGMenuResultPressed,
                 "cancellation before a step starts does not affect that step");
+
+        // An application that is briefly unresponsive after coming forward is
+        // read again; one that never answers ends at the deadline unpressed.
+        environment = environmentWithBar(bar);
+        environment.unansweredReads = 3;
+        environment.unansweredMenuBarReads = 2;
+        outcome = run(environment, @[@"Clear Menu"]);
+        require(outcome.result == MGMenuResultPressed && environment.pressed == clear,
+                "unanswered reads are retried before the press");
+
+        environment = environmentWithBar(bar);
+        environment.unansweredReads = 1000;
+        outcome = run(environment, @[@"File", @"Save"]);
+        require(outcome.result == MGMenuResultDeadlineExceeded && environment.pressed == nil,
+                "an application that never answers ends at the deadline");
+
+        environment = environmentWithBar(bar);
+        environment.unansweredMenuBarReads = 1000;
+        outcome = run(environment, @[@"Save"]);
+        require(outcome.result == MGMenuResultDeadlineExceeded && environment.pressed == nil,
+                "a menu bar that never answers ends at the deadline");
 
         // Bounds.
         environment = environmentWithBar(bar);

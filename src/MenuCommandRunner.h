@@ -26,7 +26,16 @@ typedef struct {
     // The 1-based component a missing or ambiguous result refers to, else 0.
     NSUInteger component;
     NSUInteger examinedChildren;
+    // Where the time went, for logs: waiting for the target to come forward,
+    // and reads the application left unanswered.
+    NSTimeInterval activationWaitSeconds;
+    NSUInteger unansweredReads;
 } MGMenuOutcome;
+
+extern NSString *const MGMenuDetailChildren;
+extern NSString *const MGMenuDetailTitle;
+extern NSString *const MGMenuDetailRole;
+extern NSString *const MGMenuDetailEnabled;
 
 extern const NSTimeInterval MGMenuStepDeadlineSeconds;
 extern const NSUInteger MGMenuExaminedChildrenLimit;
@@ -41,13 +50,16 @@ extern const NSUInteger MGMenuExaminedChildrenLimit;
 - (BOOL)waitForFrontmostProcess:(pid_t)pid until:(NSTimeInterval)deadline;
 // A monotonic clock in seconds.
 - (NSTimeInterval)now;
+// Waits before a read is retried.
+- (void)pauseBeforeRetry;
+// Returns nil when the application did not answer, as while it rebuilds its
+// menus on becoming active.
 - (id)menuBarForProcess:(pid_t)pid;
-// Returns nil when the children cannot be read.
-- (NSArray *)childrenOfElement:(id)element;
-- (NSString *)titleOfElement:(id)element;
-- (NSString *)roleOfElement:(id)element;
-// Returns nil when the enabled state cannot be read.
-- (NSNumber *)enabledStateOfElement:(id)element;
+// Reads an element's details in one request: MGMenuDetailChildren (always
+// present, empty for none), and MGMenuDetailTitle, MGMenuDetailRole, and
+// MGMenuDetailEnabled when readable. Returns nil when the application did not
+// answer.
+- (NSDictionary *)detailsOfElement:(id)element;
 - (BOOL)elementSupportsPress:(id)element;
 // Returns YES when Accessibility accepted the press. Acceptance does not show
 // that the application acted.
