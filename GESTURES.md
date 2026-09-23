@@ -217,7 +217,7 @@ Triple taps are not available.
 
 A keystroke, a built-in action, a URL, an executable script, a sound, speech, a menu command, or a sequence of these values.
 
-When a binding cannot do what it names, a bubble below the Trickpad menu bar icon says which binding and why, without taking keyboard focus from the app in use. When the fix belongs in the settings or in System Settings, clicking the bubble opens it.
+When a binding cannot do what it names, a popover below the Trickpad menu bar icon says which binding and why, without taking keyboard focus from the app in use. When the fix belongs in the settings or in System Settings, clicking the popover opens it.
 
 ### Sequences
 
@@ -268,7 +268,7 @@ Keys: any letter or digit, plus `return` `escape` `tab` `space` `delete` `forwar
 
 Aliases: `enter` is `return`, `esc` is `escape`, `backspace` and `del` are `delete`, `spacebar` is `space`, and `backslash` is `\`.
 
-macOS discards keystrokes from Trickpad when Trickpad lacks Accessibility access. A keystroke binding then shows a bubble below the menu bar icon that opens the Accessibility settings.
+macOS discards keystrokes from Trickpad when Trickpad lacks Accessibility access. A keystroke binding then shows a popover below the menu bar icon that opens the Accessibility settings.
 
 ### Actions
 
@@ -330,7 +330,7 @@ For example:
 
 Use `urlencode` for clipboard text placed in a query parameter. It escapes characters such as spaces, `&`, `=`, `/`, and `?` so the clipboard cannot change the URL's structure. Use raw `{{clipboard}}` only when the copied text is already safe in that position.
 
-An empty clipboard resolves to an empty value. Reload Settings reports unknown substitutions and filters, unmatched braces, empty date formats, and unmatched quotes in date formats. The expanded URL is checked again when the gesture fires. If it is invalid, nothing opens, a bubble below the menu bar icon explains the problem, and Console records it, all without the expanded clipboard contents. When no installed app opens the link, the bubble says so and macOS shows no dialog of its own.
+An empty clipboard resolves to an empty value. Reload Settings reports unknown substitutions and filters, unmatched braces, empty date formats, and unmatched quotes in date formats. The expanded URL is checked again when the gesture fires. If it is invalid, nothing opens, a popover below the menu bar icon explains the problem, and Console records it, all without the expanded clipboard contents. When no installed app opens the link, the popover says so and macOS shows no dialog of its own.
 
 ### Scripts
 
@@ -338,7 +338,7 @@ Prefix an executable path with `script:`:
 
     hold-right-tap-left = "script:~/bin/my-script"
 
-The path may begin with `~` or be absolute. It must exist and be executable when the settings reload. Trickpad launches it directly through its shebang, uses the script's folder as its working directory, and does not wait for it to finish. It does not interpret shell commands, arguments, substitutions, or an interactive shell profile. A launch failure or nonzero exit appears in a bubble below the menu bar icon and in Console.
+The path may begin with `~` or be absolute. It must exist and be executable when the settings reload. Trickpad launches it directly through its shebang, uses the script's folder as its working directory, and does not wait for it to finish. It does not interpret shell commands, arguments, substitutions, or an interactive shell profile. A launch failure or nonzero exit appears in a popover below the menu bar icon and in Console.
 
 ### Sounds and speech
 
@@ -377,7 +377,7 @@ Put a menu binding for one application's command in that application's table:
     [TRACKPAD."Safari"]
     three-finger-swipe-left = "menu:History > Back"
 
-A binding in the device table applies wherever the pointer is. When the application under the pointer has no such command, the command is disabled, or the application does not respond within two seconds, Trickpad plays the macOS alert sound, does nothing, and explains why in a bubble below its menu bar icon. When a title in the binding is close to one the application shows, the bubble names it. When the fix belongs in the settings, clicking the bubble opens them. Trickpad never opens a menu to look for a command, so a command in a menu that an application fills only when it opens cannot be found.
+A binding in the device table applies wherever the pointer is. When the application under the pointer has no such command, the command is disabled, or the application does not respond within two seconds, Trickpad plays the macOS alert sound, does nothing, and explains why in a popover below its menu bar icon. When a title in the binding is close to one the application shows, the popover names it. When the fix belongs in the settings, clicking the popover opens them. Trickpad never opens a menu to look for a command, so a command in a menu that an application fills only when it opens cannot be found.
 
 In a sequence, a menu command that cannot run stops the rest of that sequence, because later steps usually depend on it.
 
