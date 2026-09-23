@@ -352,8 +352,8 @@ source_has 'MGURLFailureMessage(configuredURL, nil)' "$GESTURE_SRC" ||
   gesture_fail "a URL no application opens does not explain itself"
 source_has 'MGScriptExitMessage(scriptPath, status)' "$GESTURE_SRC" ||
   gesture_fail "a script that exits with an error does not explain itself"
-source_has 'MGKeystrokesBlockedBySecureInputMessage()' "$GESTURE_SRC" ||
-  gesture_fail "keystrokes blocked by Secure Input do not explain themselves"
+source_has 'MGKeystrokesNeedAccessibilityMessage()' "$GESTURE_SRC" ||
+  gesture_fail "keystrokes dropped for missing Accessibility access do not explain themselves"
 source_has 'MGGestureFeedbackSetAnchor(theItem);' "$APP_SRC" ||
   gesture_fail "gesture feedback is not anchored to the menu bar icon"
 source_has '@"Menu: "' "$APP_SRC" ||

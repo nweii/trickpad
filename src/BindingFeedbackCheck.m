@@ -38,9 +38,8 @@ int main(void) {
         expect(MGScriptExitMessage(@"/Users/me/bin/sync-notes", 2),
                @"“sync-notes” stopped with exit code 2.",
                "a nonzero exit names the script and code");
-        if ([MGKeystrokesNeedAccessibilityMessage() rangeOfString:@"Accessibility"].location == NSNotFound ||
-            [MGKeystrokesBlockedBySecureInputMessage() rangeOfString:@"Secure Input"].location == NSNotFound) {
-            fprintf(stderr, "FAIL  keystroke messages name their cause\n");
+        if ([MGKeystrokesNeedAccessibilityMessage() rangeOfString:@"Accessibility"].location == NSNotFound) {
+            fprintf(stderr, "FAIL  the keystroke message names its cause\n");
             failures++;
         }
     }

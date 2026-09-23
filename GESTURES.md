@@ -268,7 +268,7 @@ Keys: any letter or digit, plus `return` `escape` `tab` `space` `delete` `forwar
 
 Aliases: `enter` is `return`, `esc` is `escape`, `backspace` and `del` are `delete`, `spacebar` is `space`, and `backslash` is `\`.
 
-macOS discards keystrokes from Trickpad when Trickpad lacks Accessibility access, and while Secure Input is on, which a focused password field usually turns on. A keystroke binding then shows a bubble below the menu bar icon naming the cause.
+macOS discards keystrokes from Trickpad when Trickpad lacks Accessibility access. A keystroke binding then shows a bubble below the menu bar icon that opens the Accessibility settings.
 
 ### Actions
 

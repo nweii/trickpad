@@ -2097,14 +2097,13 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
         } else {
             // shortcut
             // macOS drops synthesized keystrokes without Accessibility access
-            // or while Secure Input is on, and gives no sign that it did.
+            // and gives no sign that it did. Secure Input is deliberately not
+            // reported: it only suggests a keystroke may be blocked, and some
+            // applications leave it on, so a message would often be wrong.
             if (!AXIsProcessTrusted())
                 MGShowGestureFeedback(MGBindingFailureTitle([Config humanNameForGesture:gesture], @"keystroke", NO),
                                       MGKeystrokesNeedAccessibilityMessage(),
                                       MGFeedbackActionAccessibilitySettings);
-            else if (IsSecureEventInputEnabled())
-                MGShowGestureFeedback(MGBindingFailureTitle([Config humanNameForGesture:gesture], @"keystroke", NO),
-                                      MGKeystrokesBlockedBySecureInputMessage(), MGFeedbackActionNone);
             CFTypeRef tmpRef = nil;
             if (device != CHARRECOGNITION)
                 tmpRef = activateWindowAtPosition(x, y);

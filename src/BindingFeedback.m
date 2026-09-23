@@ -40,8 +40,3 @@ NSString *MGKeystrokesNeedAccessibilityMessage(void) {
     return @"Trickpad needs Accessibility access to send keystrokes. Turn it on in "
            @"System Settings > Privacy & Security > Accessibility.";
 }
-
-NSString *MGKeystrokesBlockedBySecureInputMessage(void) {
-    return @"Secure Input is on, so macOS is blocking keystrokes from Trickpad. A password "
-           @"field usually turns it on, and leaving that field turns it off.";
-}

@@ -21,6 +21,3 @@ NSString *MGScriptExitMessage(NSString *scriptPath, int status);
 
 // Keystrokes macOS blocks because Trickpad lacks Accessibility access.
 NSString *MGKeystrokesNeedAccessibilityMessage(void);
-
-// Keystrokes macOS blocks while Secure Input is on.
-NSString *MGKeystrokesBlockedBySecureInputMessage(void);
