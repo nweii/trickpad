@@ -935,9 +935,8 @@ static NSString *resolvedScriptPath(NSString *rawPath, NSString **outProblem) {
     return problem == nil ? path : nil;
 }
 
-// Resolves one macOS system sound by name. The name is case-sensitive and
-// carries no extension, so a binding names the sound the way System Settings
-// does rather than a file path.
+// Resolves one macOS system sound by name. Input is case-insensitive and carries
+// no extension; the returned name preserves the installed sound's spelling.
 static NSString *resolvedSoundName(NSString *rawName, NSString **outProblem) {
     NSString *name = [rawName stringByTrimmingCharactersInSet:
                       [NSCharacterSet whitespaceCharacterSet]];
@@ -948,18 +947,21 @@ static NSString *resolvedSoundName(NSString *rawName, NSString **outProblem) {
              [name rangeOfString:@":"].location != NSNotFound)
         problem = @"sound must be a name in /System/Library/Sounds, not a path";
     else {
-        BOOL found = NO;
+        NSString *resolvedName = nil;
         NSArray *files = [[NSFileManager defaultManager]
                           contentsOfDirectoryAtPath:@"/System/Library/Sounds" error:NULL];
         for (NSString *file in files) {
-            if ([[file stringByDeletingPathExtension] isEqualToString:name]) {
-                found = YES;
+            NSString *candidate = [file stringByDeletingPathExtension];
+            if ([candidate caseInsensitiveCompare:name] == NSOrderedSame) {
+                resolvedName = candidate;
                 break;
             }
         }
-        if (!found)
+        if (resolvedName == nil)
             problem = [NSString stringWithFormat:
                        @"no sound named \"%@\" in /System/Library/Sounds", name];
+        else
+            name = resolvedName;
     }
     if (outProblem != NULL)
         *outProblem = problem;

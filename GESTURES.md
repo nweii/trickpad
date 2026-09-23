@@ -347,7 +347,7 @@ The gesture plays that sound or speaks that text and does nothing else, which se
 
 Written this way the sound replaces the action, which is what makes it a test. To hear a gesture that still does its real work, use the `sound` or `say` binding option instead.
 
-A sound name is case-sensitive, carries no extension, and must match a file in `/System/Library/Sounds`. Reload Settings reports a name it cannot find, and a `say:` with nothing after it.
+A sound name is case-insensitive and carries no extension. Choose from `Basso`, `Blow`, `Bottle`, `Frog`, `Funk`, `Glass`, `Hero`, `Morse`, `Ping`, `Pop`, `Purr`, `Sosumi`, `Submarine`, or `Tink`. Trickpad checks the name against `/System/Library/Sounds` and reports a name it cannot find when settings reload. It also reports a `say:` with nothing after it.
 
 ## Turn a menu command into a shortcut
 

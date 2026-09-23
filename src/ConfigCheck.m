@@ -1251,6 +1251,12 @@ int main(void) {
         if (![[g objectForKey:@"IsAction"] boolValue])
             fail(@"sound binding is an action", @YES, [g objectForKey:@"IsAction"]);
 
+        s = parse(@"[trackpad]\nthree-finger-tap = sound:glass\n");
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Tap");
+        if (![[g objectForKey:@"PlaySound"] isEqualToString:@"Glass"])
+            fail(@"sound binding accepts a case-insensitive name", @"Glass",
+                 [g objectForKey:@"PlaySound"] ?: @"missing");
+
         NSArray *soundProblems = nil;
         s = parseWithProblems(@"[trackpad]\nthree-finger-tap = sound:NoSuchSound\n", &soundProblems);
         if (bindingFor(s, @"TrackpadCommands", @"Three-Finger Tap") != nil)
@@ -1279,6 +1285,12 @@ int main(void) {
             fail(@"sound option leaves the action alone", @"no PlaySound", @"PlaySound set");
         if ([[g objectForKey:@"KeyCode"] intValue] == 0)
             fail(@"sound option keeps its keystroke action", @"a key code", @"none");
+
+        s = parse(@"[trackpad]\nthree-finger-tap = { action = \"escape\", sound = \"glass\" }\n");
+        g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Tap");
+        if (![[g objectForKey:@"ConfirmSound"] isEqualToString:@"Glass"])
+            fail(@"sound option accepts a case-insensitive name", @"Glass",
+                 [g objectForKey:@"ConfirmSound"] ?: @"missing");
 
         s = parse(@"[trackpad]\nthree-finger-tap = { action = \"cmd+shift+4\", say = \"screenshot\" }\n");
         g = bindingFor(s, @"TrackpadCommands", @"Three-Finger Tap");
