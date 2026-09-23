@@ -5,7 +5,7 @@ set -euo pipefail
 # fixtures. These checks catch bindings that parse without producing an action.
 
 ROOT="${0:A:h:h}"
-SDKROOT="$(xcrun --show-sdk-path)"
+SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
 CHECK_FILTER="${CHECK_FILTER:-}"
 CHECK_COUNT=0
 SYSTEM_GESTURE_OUT=""

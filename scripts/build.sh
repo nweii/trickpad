@@ -155,7 +155,7 @@ $SPARKLE_KEYS
 PLIST
 
 
-SDKROOT="$(xcrun --show-sdk-path)"
+SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
 
 # The framework ships inside the bundle, so the executable finds it through an
 # rpath rather than an absolute path. Copied with ditto to preserve the version
