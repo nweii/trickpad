@@ -2079,10 +2079,17 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                         NSLog(@"Could not resolve configured URL \"%@\": %@", configuredURL, problem);
                         MGShowGestureFeedback(urlTitle, MGURLFailureMessage(configuredURL, problem),
                                               MGFeedbackActionEditSettings);
-                    } else if (![[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:urlString]]) {
-                        NSLog(@"Could not open configured URL \"%@\": no application accepted it", configuredURL);
-                        MGShowGestureFeedback(urlTitle, MGURLFailureMessage(configuredURL, nil),
-                                              MGFeedbackActionEditSettings);
+                    } else {
+                        // Asking first keeps macOS from showing its own dialog
+                        // for a link nothing opens, which would repeat this
+                        // message and point to the App Store.
+                        NSWorkspace *workspace = [NSWorkspace sharedWorkspace];
+                        NSURL *link = [NSURL URLWithString:urlString];
+                        if ([workspace URLForApplicationToOpenURL:link] == nil || ![workspace openURL:link]) {
+                            NSLog(@"Could not open configured URL \"%@\": no application accepted it", configuredURL);
+                            MGShowGestureFeedback(urlTitle, MGURLFailureMessage(configuredURL, nil),
+                                                  MGFeedbackActionEditSettings);
+                        }
                     }
                     [pool release];
                 }
