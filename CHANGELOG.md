@@ -12,6 +12,27 @@
 
 # Changelog
 
+## 0.14.0
+
+Released 2026-09-23.
+
+### Added
+
+- Add `menu:` bindings. They choose a command from the menu bar of the app under the pointer. Write the full path, such as `menu:File > Save`, or only the title, such as `menu:Save`. With only a title, Trickpad uses the first match. Capitalization and accents do not matter.
+- Show a popover below the Trickpad menu bar icon when a binding cannot run. The popover names the binding and the reason. When the fix is in the settings or System Settings, click the popover to open them.
+- Suggest the closest menu title when a menu binding has a typo.
+- Accept `backslash` as a key name.
+
+### Changed
+
+- Make sound names case-insensitive, like gesture and key names. For example, `sound:glass` plays Glass.
+- Play the alert sound when a menu command cannot run. If the command is part of a sequence, skip the steps after it.
+- Show a Trickpad popover instead of the macOS dialog when no app can open a URL binding's link.
+
+### Fixed
+
+- Fix three-finger swipe left and right bindings on the trackpad, which did nothing while the pointer was over a Safari or Firefox window.
+
 ## 0.13.0
 
 Released 2026-09-02.
