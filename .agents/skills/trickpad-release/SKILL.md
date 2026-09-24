@@ -38,7 +38,7 @@ Before cutting the release, require a clean release train with passing checks, t
 
 3. Determine the version from Trickpad's configuration-interface semantic versioning in `AGENTS.md`. Identify every renamed or removed configuration name since the previous release. Any rename or removal requires a migration note.
 
-4. Inspect all customer-visible changes since the latest tag. Draft the `CHANGELOG.md` entry in its existing structure:
+4. Inspect all customer-visible changes since the latest tag. Start from any entries staged under `## Unreleased`, which become this release's entry. Draft the `CHANGELOG.md` entry in its existing structure:
 
    - `## X.Y.Z`
    - `Released YYYY-MM-DD.`

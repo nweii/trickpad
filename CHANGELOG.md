@@ -12,6 +12,18 @@
 
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Show a popover explaining which binding needs the clipboard when macOS asks whether Trickpad can read it. Click the popover to open the clipboard permissions page in System Settings.
+- Show a popover when a URL binding that uses `{{clipboard}}` cannot run because Trickpad's clipboard access is set to Deny. Click the popover to open the clipboard permissions page in System Settings.
+
+### Fixed
+
+- Stop URL bindings that do not use `{{clipboard}}` from triggering a macOS clipboard permission request.
+- Fix a crash that could happen when macOS asks whether Trickpad can read the clipboard.
+
 ## 0.14.0
 
 Released 2026-09-23.
