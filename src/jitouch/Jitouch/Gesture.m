@@ -1647,6 +1647,30 @@ static void dispatchMagicMousePhysicalClickForContactCount(int contactCount) {
 }
 
 
+// Reads the clipboard's text on the main thread. When macOS asks the user for
+// clipboard access, it presents that request from the reading thread's run
+// loop and aborts the process if the read happened on a background queue, so
+// the gesture thread waits here until the read, and any request, completes.
+// Sets outDenied, without reading, when the user has denied Trickpad access.
+static NSString *readClipboardOnMainThread(BOOL *outDenied) {
+    __block NSString *text = nil;
+    __block BOOL denied = NO;
+    dispatch_block_t read = ^{
+        NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+        if (@available(macOS 15.4, *))
+            denied = [pasteboard accessBehavior] == NSPasteboardAccessBehaviorAlwaysDeny;
+        if (!denied)
+            text = [[pasteboard stringForType:NSPasteboardTypeString] copy];
+    };
+    if ([NSThread isMainThread])
+        read();
+    else
+        dispatch_sync(dispatch_get_main_queue(), read);
+    if (outDenied != NULL)
+        *outDenied = denied;
+    return [text autorelease];
+}
+
 // One menu-bearing invocation runs and at most eight wait behind it, so a
 // burst of repeated gestures cannot build an unbounded backlog of presses.
 static const NSUInteger kMenuInvocationLimit = 9;
@@ -2074,13 +2098,8 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                     // than open the link with an empty value.
                     NSString *clipboard = nil;
                     BOOL clipboardDenied = NO;
-                    if ([Config URLUsesClipboard:configuredURL]) {
-                        NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
-                        if (@available(macOS 15.4, *))
-                            clipboardDenied = [pasteboard accessBehavior] == NSPasteboardAccessBehaviorAlwaysDeny;
-                        if (!clipboardDenied)
-                            clipboard = [pasteboard stringForType:NSPasteboardTypeString];
-                    }
+                    if ([Config URLUsesClipboard:configuredURL])
+                        clipboard = readClipboardOnMainThread(&clipboardDenied);
                     NSString *problem = nil;
                     NSString *urlString = clipboardDenied ? nil
                         : [Config URLByResolvingSubstitutions:configuredURL

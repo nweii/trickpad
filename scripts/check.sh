@@ -350,6 +350,8 @@ source_has 'MGMenuFailureMessage(outcome, components' "$GESTURE_SRC" ||
   gesture_fail "a failed menu step does not explain itself below the menu bar icon"
 [[ "$(source_count 'generalPasteboard] stringForType' "$GESTURE_SRC")" -eq 0 && "$(source_count 'if (\[Config URLUsesClipboard:configuredURL\])' "$GESTURE_SRC")" -eq 1 ]] ||
   gesture_fail "a URL binding reads the clipboard without a clipboard substitution"
+source_section_has 'dispatch_sync(dispatch_get_main_queue(), read);' "$GESTURE_SRC" '/^static NSString \*readClipboardOnMainThread/,/^}/' ||
+  gesture_fail "the clipboard is read off the main thread, which macOS aborts when it asks for access"
 source_has 'MGURLFailureMessage(configuredURL, nil)' "$GESTURE_SRC" ||
   gesture_fail "a URL no application opens does not explain itself"
 source_has 'MGScriptExitMessage(scriptPath, status)' "$GESTURE_SRC" ||
