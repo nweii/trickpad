@@ -21,7 +21,7 @@
 
 ### Fixed
 
-- Read the clipboard only for URL bindings that use `{{clipboard}}`. Other URL bindings read it but never used it.
+- Read the clipboard only for URL bindings that use `{{clipboard}}`. Trickpad read it for other URL bindings too, but never used it.
 - Fix a crash that could happen when macOS asks whether Trickpad can read the clipboard.
 
 ## 0.14.0
