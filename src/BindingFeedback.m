@@ -36,6 +36,17 @@ NSString *MGScriptExitMessage(NSString *scriptPath, int status) {
             [scriptPath lastPathComponent], status];
 }
 
+NSString *MGClipboardRequestTitle(void) {
+    return @"Trickpad is reading the clipboard";
+}
+
+NSString *MGClipboardRequestMessage(NSString *gestureName) {
+    NSString *binding = [gestureName length] > 0
+        ? [NSString stringWithFormat:@"Your “%@” URL binding", gestureName] : @"A URL binding";
+    return [binding stringByAppendingString:@" uses the clipboard. To stop macOS asking each time, "
+            @"choose Allow in Paste from Other Apps."];
+}
+
 NSString *MGClipboardDeniedMessage(void) {
     return @"This binding uses the clipboard, and macOS is set to deny Trickpad clipboard access. "
            @"Allow it in System Settings > Privacy & Security > Paste from Other Apps.";

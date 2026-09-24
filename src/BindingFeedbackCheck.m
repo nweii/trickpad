@@ -38,6 +38,9 @@ int main(void) {
         expect(MGScriptExitMessage(@"/Users/me/bin/sync-notes", 2),
                @"“sync-notes” stopped with exit code 2.",
                "a nonzero exit names the script and code");
+        expect(MGClipboardRequestMessage(@"Tap with four fingers"),
+               @"Your “Tap with four fingers” URL binding uses the clipboard. To stop macOS asking each time, choose Allow in Paste from Other Apps.",
+               "the clipboard request names the binding and where to allow it");
         if ([MGClipboardDeniedMessage() rangeOfString:@"Paste from Other Apps"].location == NSNotFound) {
             fprintf(stderr, "FAIL  the clipboard message names the System Settings pane\n");
             failures++;

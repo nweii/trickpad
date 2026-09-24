@@ -1652,15 +1652,31 @@ static void dispatchMagicMousePhysicalClickForContactCount(int contactCount) {
 // loop and aborts the process if the read happened on a background queue, so
 // the gesture thread waits here until the read, and any request, completes.
 // Sets outDenied, without reading, when the user has denied Trickpad access.
-static NSString *readClipboardOnMainThread(BOOL *outDenied) {
+// macOS asks before the first read Trickpad ever makes, and, while the user's
+// choice is Ask, before the first read after each launch; an answer then lasts
+// until Trickpad quits. Those are the reads that get a popover naming the
+// binding that is asking, which the system request cannot say. Other reads
+// show nothing, since no request will appear.
+static BOOL clipboardReadSinceLaunch = NO;
+
+static NSString *readClipboardOnMainThread(NSString *gesture, BOOL *outDenied) {
     __block NSString *text = nil;
     __block BOOL denied = NO;
     dispatch_block_t read = ^{
         NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
-        if (@available(macOS 15.4, *))
-            denied = [pasteboard accessBehavior] == NSPasteboardAccessBehaviorAlwaysDeny;
-        if (!denied)
+        if (@available(macOS 15.4, *)) {
+            NSPasteboardAccessBehavior behavior = [pasteboard accessBehavior];
+            denied = behavior == NSPasteboardAccessBehaviorAlwaysDeny;
+            if (behavior == NSPasteboardAccessBehaviorDefault ||
+                (behavior == NSPasteboardAccessBehaviorAsk && !clipboardReadSinceLaunch))
+                MGShowGestureFeedback(MGClipboardRequestTitle(),
+                                      MGClipboardRequestMessage([Config humanNameForGesture:gesture]),
+                                      MGFeedbackActionClipboardSettings);
+        }
+        if (!denied) {
             text = [[pasteboard stringForType:NSPasteboardTypeString] copy];
+            clipboardReadSinceLaunch = YES;
+        }
     };
     if ([NSThread isMainThread])
         read();
@@ -2099,7 +2115,7 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                     NSString *clipboard = nil;
                     BOOL clipboardDenied = NO;
                     if ([Config URLUsesClipboard:configuredURL])
-                        clipboard = readClipboardOnMainThread(&clipboardDenied);
+                        clipboard = readClipboardOnMainThread(gesture, &clipboardDenied);
                     NSString *problem = nil;
                     NSString *urlString = clipboardDenied ? nil
                         : [Config URLByResolvingSubstitutions:configuredURL

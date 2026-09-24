@@ -72,9 +72,9 @@ static NSString *hintForAction(MGFeedbackAction action) {
     switch (action) {
         case MGFeedbackActionEditSettings: return editSettingsHandler ? @"Click to edit settings." : nil;
         case MGFeedbackActionAccessibilitySettings:
-            return accessibilityHandler ? @"Click to open Accessibility settings." : nil;
+            return accessibilityHandler ? @"Click to open System Settings." : nil;
         case MGFeedbackActionClipboardSettings:
-            return clipboardHandler ? @"Click to open Paste from Other Apps settings." : nil;
+            return clipboardHandler ? @"Click to open System Settings." : nil;
         case MGFeedbackActionNone: return nil;
     }
     return nil;
@@ -139,6 +139,12 @@ static void showOnMain(NSString *title, NSString *detail, MGFeedbackAction actio
 void MGShowGestureFeedback(NSString *title, NSString *detail, MGFeedbackAction action) {
     if ([title length] == 0 && [detail length] == 0)
         return;
+    // On the main thread the popover shows at once, so it can appear beside a
+    // system request that holds the main thread until the user answers.
+    if ([NSThread isMainThread]) {
+        showOnMain(title, detail, action);
+        return;
+    }
     NSString *copiedTitle = [[title copy] autorelease];
     NSString *copiedDetail = [[detail copy] autorelease];
     dispatch_async(dispatch_get_main_queue(), ^{

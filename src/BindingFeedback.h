@@ -19,6 +19,11 @@ NSString *MGScriptLaunchFailureMessage(NSString *scriptPath, NSString *reason);
 // A script that ran and exited with a nonzero status.
 NSString *MGScriptExitMessage(NSString *scriptPath, int status);
 
+// The title and detail shown beside the macOS clipboard request, so the user
+// knows which binding is asking and where a lasting choice is made.
+NSString *MGClipboardRequestTitle(void);
+NSString *MGClipboardRequestMessage(NSString *gestureName);
+
 // A clipboard substitution macOS will not let Trickpad read.
 NSString *MGClipboardDeniedMessage(void);
 
