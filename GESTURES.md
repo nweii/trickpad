@@ -372,12 +372,12 @@ A single title finds a command anywhere in the menu bar:
 
 Trickpad chooses the first enabled command with that title, reading the menus left to right and each menu top to bottom. A submenu's own title never matches, only a command inside it. A single title suits commands with a common name, such as `Save` or `Minimize`, across the applications that have them.
 
-Put a menu binding for one application's command in that application's table:
+Menu titles differ between applications, so most menu bindings belong in that application's table:
 
     [TRACKPAD."Safari"]
     three-finger-swipe-left = "menu:History > Back"
 
-A binding in the device table applies wherever the pointer is. When the application under the pointer has no such command, the command is disabled, or the application does not respond within two seconds, Trickpad plays the macOS alert sound, does nothing, and explains why in a popover below its menu bar icon. When a title in the binding is close to one the application shows, the popover names it. When the fix belongs in the settings, clicking the popover opens them. Trickpad never opens a menu to look for a command, so a command in a menu that an application fills only when it opens cannot be found.
+A binding in the device table applies wherever the pointer is, so keep global menu bindings for commands most applications share, such as `Window > Minimize` or `Edit > Copy`. An application's own binding for the same gesture takes precedence. When the application under the pointer has no such command, the command is disabled, or the application does not respond within two seconds, Trickpad plays the macOS alert sound, does nothing, and explains why in a popover below its menu bar icon. When a title in the binding is close to one the application shows, the popover names it. When the fix belongs in the settings, clicking the popover opens them. Trickpad never opens a menu to look for a command, so a command in a menu that an application fills only when it opens cannot be found.
 
 In a sequence, a menu command that cannot run stops the rest of that sequence, because later steps usually depend on it.
 
