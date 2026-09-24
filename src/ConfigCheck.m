@@ -1361,6 +1361,15 @@ int main(void) {
             fail(@"menu binding works as a sequence step", @"Edit, Copy",
                  [g objectForKey:@"Sequence"] ?: @"missing");
 
+        // Only a URL that substitutes the clipboard reads it, since macOS may
+        // report each read to the user.
+        if ([Config URLUsesClipboard:@"raycast://extensions/raycast/snippets"] ||
+            [Config URLUsesClipboard:@"things:///add?when={{datetime:yyyy-MM-dd}}"])
+            fail(@"a URL without a clipboard substitution does not read the clipboard", @NO, @YES);
+        if (![Config URLUsesClipboard:@"things:///add?title={{clipboard}}"] ||
+            ![Config URLUsesClipboard:@"things:///add?title={{clipboard|urlencode}}"])
+            fail(@"a URL with a clipboard substitution reads the clipboard", @YES, @NO);
+
         NSDictionary *badURLs = @{
             @"url:raycast//extensions": @"URL is missing a valid scheme followed by \":\"",
             @"url:1raycast://extensions": @"URL scheme must begin with a letter",

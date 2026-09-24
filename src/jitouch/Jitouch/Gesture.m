@@ -2065,15 +2065,33 @@ static void doCommand(NSString *gesture, int device, NSDictionary *commandDict,
                 } else if ([commandDict objectForKey:@"OpenURL"]) {
                     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
                     NSString *configuredURL = [commandDict objectForKey:@"OpenURL"];
-                    NSString *clipboard = [[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString];
-                    NSString *problem = nil;
-                    NSString *urlString = [Config URLByResolvingSubstitutions:configuredURL
-                                                                    clipboard:clipboard
-                                                                         date:[NSDate date]
-                                                                      problem:&problem];
                     NSString *urlTitle = MGBindingFailureTitle([Config humanNameForGesture:gesture],
                                                                @"URL", NO);
-                    if (urlString == nil) {
+                    // macOS may alert the user whenever an app reads the
+                    // clipboard outside a paste command, so only a binding that
+                    // substitutes the clipboard reads it. When the user has
+                    // denied access, the read returns nothing, so say so rather
+                    // than open the link with an empty value.
+                    NSString *clipboard = nil;
+                    BOOL clipboardDenied = NO;
+                    if ([Config URLUsesClipboard:configuredURL]) {
+                        NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+                        if (@available(macOS 15.4, *))
+                            clipboardDenied = [pasteboard accessBehavior] == NSPasteboardAccessBehaviorAlwaysDeny;
+                        if (!clipboardDenied)
+                            clipboard = [pasteboard stringForType:NSPasteboardTypeString];
+                    }
+                    NSString *problem = nil;
+                    NSString *urlString = clipboardDenied ? nil
+                        : [Config URLByResolvingSubstitutions:configuredURL
+                                                    clipboard:clipboard
+                                                         date:[NSDate date]
+                                                      problem:&problem];
+                    if (clipboardDenied) {
+                        NSLog(@"Could not resolve configured URL \"%@\": clipboard access is denied", configuredURL);
+                        MGShowGestureFeedback(urlTitle, MGClipboardDeniedMessage(),
+                                              MGFeedbackActionClipboardSettings);
+                    } else if (urlString == nil) {
                         // The expanded value may contain private clipboard text,
                         // so log only the configured URL binding and its problem.
                         NSLog(@"Could not resolve configured URL \"%@\": %@", configuredURL, problem);

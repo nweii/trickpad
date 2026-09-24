@@ -330,6 +330,8 @@ For example:
 
 Use `urlencode` for clipboard text placed in a query parameter. It escapes characters such as spaces, `&`, `=`, `/`, and `?` so the clipboard cannot change the URL's structure. Use raw `{{clipboard}}` only when the copied text is already safe in that position.
 
+Trickpad reads the clipboard only when a URL binding uses a clipboard substitution. The first time it does, macOS may ask whether Trickpad can paste from other apps. The choice is kept in System Settings > Privacy & Security > Paste from Other Apps. When access is denied there, the binding opens nothing, and clicking its popover opens that setting.
+
 An empty clipboard resolves to an empty value. Reload Settings reports unknown substitutions and filters, unmatched braces, empty date formats, and unmatched quotes in date formats. The expanded URL is checked again when the gesture fires. If it is invalid, nothing opens, a popover below the menu bar icon explains the problem, and Console records it, all without the expanded clipboard contents. When no installed app opens the link, the popover says so and macOS shows no dialog of its own.
 
 ### Scripts

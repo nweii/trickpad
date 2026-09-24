@@ -36,6 +36,11 @@ NSString *MGScriptExitMessage(NSString *scriptPath, int status) {
             [scriptPath lastPathComponent], status];
 }
 
+NSString *MGClipboardDeniedMessage(void) {
+    return @"This binding uses the clipboard, and macOS is set to deny Trickpad clipboard access. "
+           @"Allow it in System Settings > Privacy & Security > Paste from Other Apps.";
+}
+
 NSString *MGKeystrokesNeedAccessibilityMessage(void) {
     return @"Trickpad needs Accessibility access to send keystrokes. Turn it on in "
            @"System Settings > Privacy & Security > Accessibility.";

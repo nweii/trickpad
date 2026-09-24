@@ -55,6 +55,10 @@
 // returns nil; recognized schema errors are reported while valid bindings load.
 + (NSDictionary *)settingsFromFile:(NSString *)path problems:(NSArray **)outProblems;
 
+// Whether a URL binding uses a clipboard substitution. Only such a binding
+// reads the clipboard, which macOS may report to the user as a paste.
++ (BOOL)URLUsesClipboard:(NSString *)url;
+
 // Resolves the supported substitutions in a URL binding. Explicit clipboard
 // and date inputs keep resolution deterministic for parser checks.
 + (NSString *)URLByResolvingSubstitutions:(NSString *)url

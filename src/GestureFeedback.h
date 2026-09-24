@@ -13,6 +13,7 @@ typedef NS_ENUM(NSInteger, MGFeedbackAction) {
     MGFeedbackActionNone,
     MGFeedbackActionEditSettings,
     MGFeedbackActionAccessibilitySettings,
+    MGFeedbackActionClipboardSettings,
 };
 
 // Sets what a click does for action. Call on the main thread.

@@ -38,6 +38,10 @@ int main(void) {
         expect(MGScriptExitMessage(@"/Users/me/bin/sync-notes", 2),
                @"“sync-notes” stopped with exit code 2.",
                "a nonzero exit names the script and code");
+        if ([MGClipboardDeniedMessage() rangeOfString:@"Paste from Other Apps"].location == NSNotFound) {
+            fprintf(stderr, "FAIL  the clipboard message names the System Settings pane\n");
+            failures++;
+        }
         if ([MGKeystrokesNeedAccessibilityMessage() rangeOfString:@"Accessibility"].location == NSNotFound) {
             fprintf(stderr, "FAIL  the keystroke message names its cause\n");
             failures++;

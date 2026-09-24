@@ -19,5 +19,8 @@ NSString *MGScriptLaunchFailureMessage(NSString *scriptPath, NSString *reason);
 // A script that ran and exited with a nonzero status.
 NSString *MGScriptExitMessage(NSString *scriptPath, int status);
 
+// A clipboard substitution macOS will not let Trickpad read.
+NSString *MGClipboardDeniedMessage(void);
+
 // Keystrokes macOS blocks because Trickpad lacks Accessibility access.
 NSString *MGKeystrokesNeedAccessibilityMessage(void);

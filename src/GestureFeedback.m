@@ -17,6 +17,7 @@ static NSTextField *detailLabel = nil;
 static NSTextField *hintLabel = nil;
 static dispatch_block_t editSettingsHandler = nil;
 static dispatch_block_t accessibilityHandler = nil;
+static dispatch_block_t clipboardHandler = nil;
 static MGFeedbackAction currentAction = MGFeedbackActionNone;
 // Identifies the latest message, so an earlier message's close timer cannot
 // close a later one.
@@ -49,7 +50,8 @@ static NSUInteger messageGeneration = 0;
 - (void)dismiss:(id)sender {
     [popover performClose:nil];
     dispatch_block_t handler = currentAction == MGFeedbackActionEditSettings ? editSettingsHandler
-        : currentAction == MGFeedbackActionAccessibilitySettings ? accessibilityHandler : nil;
+        : currentAction == MGFeedbackActionAccessibilitySettings ? accessibilityHandler
+        : currentAction == MGFeedbackActionClipboardSettings ? clipboardHandler : nil;
     if (handler != nil)
         handler();
 }
@@ -58,7 +60,8 @@ static NSUInteger messageGeneration = 0;
 
 void MGGestureFeedbackSetActionHandler(MGFeedbackAction action, dispatch_block_t handler) {
     dispatch_block_t *slot = action == MGFeedbackActionEditSettings ? &editSettingsHandler
-        : action == MGFeedbackActionAccessibilitySettings ? &accessibilityHandler : NULL;
+        : action == MGFeedbackActionAccessibilitySettings ? &accessibilityHandler
+        : action == MGFeedbackActionClipboardSettings ? &clipboardHandler : NULL;
     if (slot == NULL)
         return;
     [*slot release];
@@ -70,6 +73,8 @@ static NSString *hintForAction(MGFeedbackAction action) {
         case MGFeedbackActionEditSettings: return editSettingsHandler ? @"Click to edit settings." : nil;
         case MGFeedbackActionAccessibilitySettings:
             return accessibilityHandler ? @"Click to open Accessibility settings." : nil;
+        case MGFeedbackActionClipboardSettings:
+            return clipboardHandler ? @"Click to open Paste from Other Apps settings." : nil;
         case MGFeedbackActionNone: return nil;
     }
     return nil;

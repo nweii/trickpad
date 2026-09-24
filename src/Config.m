@@ -832,6 +832,12 @@ static NSString *encodeURLComponent(NSString *value) {
     return [(value ?: @"") stringByAddingPercentEncodingWithAllowedCharacters:unreserved];
 }
 
+// Reload accepts only these two clipboard spellings, so a literal match is exact.
++ (BOOL)URLUsesClipboard:(NSString *)url {
+    return [url rangeOfString:@"{{clipboard}}"].location != NSNotFound ||
+        [url rangeOfString:@"{{clipboard|urlencode}}"].location != NSNotFound;
+}
+
 + (NSString *)URLByResolvingSubstitutions:(NSString *)url
                                 clipboard:(NSString *)clipboard
                                      date:(NSDate *)date

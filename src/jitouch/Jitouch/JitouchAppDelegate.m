@@ -1882,6 +1882,10 @@ static NSMenuItem *MGMenuSectionHeader(NSString *title) {
     MGGestureFeedbackSetActionHandler(MGFeedbackActionEditSettings, ^{ [self preferences:nil]; });
     MGGestureFeedbackSetActionHandler(MGFeedbackActionAccessibilitySettings,
                                       ^{ [self openAccessibilitySettings:nil]; });
+    MGGestureFeedbackSetActionHandler(MGFeedbackActionClipboardSettings, ^{
+        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:
+            @"x-apple.systempreferences:com.apple.preference.security?Privacy_Pasteboard"]];
+    });
     [self updateIconImage];
     [self refreshAccessibilityItem];
     [self refreshBindingsSubmenu];
