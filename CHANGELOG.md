@@ -21,7 +21,7 @@
 
 ### Fixed
 
-- Stop URL bindings that do not use `{{clipboard}}` from triggering a macOS clipboard permission request.
+- Read the clipboard only for URL bindings that use `{{clipboard}}`.
 - Fix a crash that could happen when macOS asks whether Trickpad can read the clipboard.
 
 ## 0.14.0
