@@ -1,12 +1,8 @@
 # Gesture reference
 
-Everything you can write in `config.toml`. The file uses TOML, with quoted strings and `#` comments. Each device has its own table, and a name from one table does nothing on the other.
+Every name and value form `config.toml` accepts, one line each. The [Trickpad guide](https://thirdwind.fyi/trickpad/docs/) explains how each one behaves and how to choose between them.
 
-The recognizers are compiled in. Reload Settings reports and skips a name that is not listed here.
-
-The words of a gesture name can come in any order, so `swipe-up-three-finger` loads as `three-finger-swipe-up`. The menu and reports show the canonical name.
-
-Gestures that hold one finger still are named by where the fingers sit, not by which finger does what. `hold-left-tap-right` means hold a finger and tap to its right, which on a right hand is the index finger holding and the middle finger tapping. Either hand works, and either finger can play either part.
+Reload Settings reports and skips a name that is not listed here. The words of a gesture name can come in any order, so `swipe-up-three-finger` loads as `three-finger-swipe-up`. Each device has its own table, and a name from one table does nothing on the other.
 
 ## Supported finger counts
 
@@ -18,6 +14,8 @@ Gestures that hold one finger still are named by where the fingers sit, not by w
 Magic Mouse gestures use up to three fingers. Trackpad taps use up to five fingers, while its multi-finger clicks and swipes use up to four. Trackpad area clicks use one finger.
 
 ## Magic Mouse
+
+Hold gestures are named by where the fingers sit: `hold-left-tap-right` holds one finger and taps to its right.
 
 | Write this | Hand motion |
 |---|---|
@@ -47,13 +45,9 @@ Magic Mouse gestures use up to three fingers. Trackpad taps use up to five finge
 | `three-finger-swipe-up` | Swipe up with three fingers |
 | `three-finger-swipe-down` | Swipe down with three fingers |
 
-A bare swipe name such as `three-finger-swipe` binds every direction of that finger count to one action. A directional name is more specific and wins for its own direction. An `"off"` on either name works the same way in an application table: it excludes one direction or the whole family there.
-
-Physical clicks ignore narrow contacts at either side and palm contacts at the rear. Counted fingertips must form one connected cluster; a recognized thumb does not count toward the gesture.
+A bare swipe name such as `three-finger-swipe` binds every direction of that finger count. A directional name wins for its own direction.
 
 ## Magic Trackpad
-
-The trackpad recognizes a hold-and-slide in one direction only, so it has one slide name where the mouse has two.
 
 | Write this | Hand motion |
 |---|---|
@@ -88,19 +82,9 @@ The trackpad recognizes a hold-and-slide in one direction only, so it has one sl
 | `index-to-pinky` | Brush your fingers across in sequence, index first |
 | `pinky-to-index` | Brush your fingers across in sequence, pinky first |
 
-Bare swipe names bind every direction of a finger count, and directional names win for their own direction, as in the Magic Mouse table above.
-
 ### Area clicks
 
-An area click is a physical click with one finger that lands in a named region of the trackpad surface. A click in a region with no binding stays a normal native click. When bound regions overlap, the most specific bound region wins: a bound named corner beats `corner-click`, either beats any edge region, a bound third beats a bound half, a bound half beats the whole edge, and `edge-click` comes last.
-
-`corner-click` binds all four corners to one action, and `edge-click` binds a click anywhere in any edge band. A named region overrides the bare name for its own spot, and an `"off"` on either form works in an application table.
-
-Slugs read edge first, then span, then action. Vertical edges divide top to bottom; horizontal edges divide left to right.
-
-Regions stay narrow by default so a click during ordinary pointing does not land in one by accident. `trackpad-edge-gesture-depth` under `[GENERAL]` sets how far an edge band reaches in from its edge, as a fraction of the surface. Corner squares span twice that depth, up to 0.20 of each axis. Edge bands stop at 0.25, so the middle half of each axis remains free for ordinary clicks. Apple trackpads are wider than they are tall, so the same fraction reaches physically deeper on the left and right edges than on the top and bottom.
-
-An area click fires only when the clicking finger is the only contact on the surface. Lift your palm and resting fingers for the click. This keeps a resting hand from triggering regions, at the cost of making each area click a deliberate motion. Binding many regions at once works, but neighboring regions sit close together, so a dense layout asks for conscious aim; most configurations are better served by a few well-separated regions.
+A one-finger physical click in a named region of the trackpad. `trackpad-edge-gesture-depth` sets how far the regions reach. When bound regions overlap, the most specific one wins.
 
 | Write this | Part |
 |---|---|
@@ -135,122 +119,21 @@ An area click fires only when the clicking finger is the only contact on the sur
 | `bottom-left-corner-click` | The bottom left corner |
 | `bottom-right-corner-click` | The bottom right corner |
 
-On both devices, a configured click replaces the native click when Trickpad can recognize it confidently. A keystroke bound to a physical click stays held until you release the click. Built-in actions, URLs, scripts, sounds, speech, and sequences run on release. A click bound to `middle-click` or `mouse-3` through `mouse-32` presses that button with the physical click, sends matching button drags during movement, and releases the button when the click ends. A tap still sends one press and release.
-
-An ambiguous click, such as one with a resting palm, stays native and does not run the binding. If a configured keystroke click becomes a drag, Trickpad releases the keystroke and restores the native click for the drag. The application can receive the short key hold that occurred before the movement established the drag.
-
-One continuous touch sequence can run one kind of configured gesture. A swipe or hold gesture may repeat while it owns the sequence, but a physical click, tap, or different gesture will not also run until every finger lifts.
-
-## Application-specific bindings
-
-Put an application name or exact bundle identifier in a device heading:
-
-    [TRACKPAD."Final Cut Pro"]
-
-    three-finger-click = "escape"
-    four-finger-tap = "off"
-
-The application section overrides global bindings for the same gesture. `off` excludes a global binding in that application. TOML tables cannot repeat, so keep an application's bindings together under its one device table.
-
-Set `inherit = false` to stop an application table from using any device-global bindings. Bindings in the application table still apply, and the other device keeps its global bindings unless its application table also sets `inherit = false`:
-
-    [MOUSE."Final Cut Pro"]
-
-    inherit = false
-    three-finger-click = "escape"
-
-## Binding options
-
-Use braces when a binding needs options. Separate properties with commas; line breaks are optional:
-
-    three-finger-tap = {
-      action = "ctrl+cmd+a",
-      defer = true,
-      haptic = false
-    }
-
-An application-specific block may omit `action` to inherit the global action:
-
-    [TRACKPAD."Final Cut Pro"]
-
-    three-finger-tap = { haptic = false }
-
-`haptic` is valid only for trackpad bindings. It overrides the global `haptic-feedback` setting for that binding.
-
-### Hearing a gesture fire
-
-`sound` plays a macOS system sound and `say` speaks any words when the gesture fires, alongside whatever the binding already does. A binding carrying both plays the sound first and speaks after it:
-
-    three-finger-tap = { action = "cmd+shift+4", sound = "Glass" }
-    three-finger-click = { action = "right-ctrl+space", say = "dictation" }
-
-Both work on either device. A Magic Mouse has no haptic feedback, so this is the only way to confirm one of its gestures by ear. Either starts the moment the gesture fires and never delays the action or the next gesture, and a gesture fired while one is still sounding interrupts it and starts again.
-
-### Deferring a tap
-
-Set `defer = true` when the first tap also begins a double-tap gesture in macOS or another application:
-
-    two-finger-tap = { action = "ctrl+cmd+a", defer = true }
-
-Trickpad waits through the Mac's double-click interval before sending the single-tap action. A second matching tap on the same device cancels it. This preserves the double-tap gesture at the cost of latency on the single tap.
-
-`defer` works only with single-tap gestures. A swipe, slide, hold, or double tap using it is reported and skipped.
-
-### Double taps
-
-A `<count>-finger-double-tap` name runs when you tap twice with that finger count inside the Mac's double-click interval:
-
-    three-finger-double-tap = "cmd+shift+5"
-
-Bind the double tap alone and the single tap of that finger count keeps doing whatever it did before, with no added wait.
-
-To bind both the single tap and its own double tap, set `defer = true` on the single tap:
-
-    three-finger-tap = { action = "escape", defer = true }
-    three-finger-double-tap = "cmd+shift+5"
-
-The single tap then waits through the double-click interval, and a second tap inside that interval sends the double-tap action instead. Without `defer`, the single tap sends its action on each of the two taps and the double tap sends its own action as well.
-
-Triple taps are not available.
-
 ## What a gesture can send
 
-A keystroke, a built-in action, a URL, an executable script, a sound, speech, a menu command, or a sequence of these values.
-
-When a binding cannot do what it names, a popover below the Trickpad menu bar icon says which binding and why, without taking keyboard focus from the app in use. When the fix belongs in the settings or in System Settings, clicking the popover opens it.
-
-### Sequences
-
-Use a TOML array to run several binding values in order:
-
-    three-finger-tap = ["ctrl+space", "p"]
-    four-finger-tap = ["cmd+shift+p", "wait:150", "escape"]
-
-Each element uses the same validation as a standalone keystroke, action, URL, script, sound, speech, or menu binding. Trickpad reports the element number and skips the binding when one element is invalid.
-
-Use `wait:MS` to pause before the next element. `MS` is a positive whole number of milliseconds. The waits in one sequence can total up to 3000 ms. Use a `script:` binding for longer work. A standalone `wait:` value is invalid.
-
-Trickpad adds a short gap between consecutive keystrokes so an application can process a prefix before the next key. If another sequence starts while one runs, Trickpad queues it. Each sequence finishes before the next begins. Reloading settings or turning Trickpad off drops queued sequences and steps that have not started.
-
-URL substitutions resolve when their element runs. Script paths are checked when settings reload, as they are for standalone bindings.
-
-An expanded binding accepts an array for `action`, so the normal `defer`, `haptic`, `sound`, and `say` options still apply once to the gesture:
-
-    three-finger-tap = {
-      action = ["cmd+shift+p", "wait:150", "escape"],
-      haptic = false
-    }
+| Write this | Sends |
+|---|---|
+| `"cmd+shift+a"` | A keystroke: one key with optional modifiers, or modifiers alone, such as `left-cmd+right-cmd` |
+| `"mission-control"` | A built-in action from the list below |
+| `"url:obsidian://daily"` | Opens a URL or app deep link, with optional substitutions |
+| `"script:~/bin/my-script"` | Runs an executable file through its shebang |
+| `"sound:Glass"` | Plays a macOS system sound and does nothing else |
+| `"say:three fingers"` | Speaks the words and does nothing else |
+| `"menu:History > Back"` | Chooses that command from the menu bar of the app under the pointer |
+| `["cmd+shift+p", "wait:150", "escape"]` | Runs each value in order; `wait:MS` pauses, up to 3000 ms per sequence |
+| `"off"` | In an application table, turns off the global binding for that gesture |
 
 ### Keystrokes
-
-Write a key alone, modifiers plus one key, or modifier keys without a regular key. These four are the same binding:
-
-    "cmd+shift+a"
-    "command-shift-a"
-    "⌘⇧A"
-    "Cmd Shift A"
-
-Modifier names are case-insensitive. For example, `cmd`, `CMD`, `command`, and `Command` all mean the Command modifier.
 
 | Modifier | Write any of |
 |---|---|
@@ -260,15 +143,11 @@ Modifier names are case-insensitive. For example, `cmd`, `CMD`, `command`, and `
 | Shift | `shift` `⇧` |
 | Fn | `fn` `function` `globe` |
 
-Modifiers default to the left-side key. Prefix a written name with `left-` or `right-` when an application distinguishes the two sides, such as `right-control+space`. The prefix works with every written alias, including `right-ctrl`, `right-cmd`, and `right-alt`. Modifier symbols use the default left side.
+Modifiers default to the left-side key. Prefix a written name with `left-` or `right-`, such as `right-ctrl`. Separators may be `+`, `-`, or a space, and symbols may run together, as in `⌘⇧A`.
 
-A modifier-only binding presses and releases the named modifier keys. For example, `left-cmd+right-cmd` sends the two Command keys together.
-
-Keys: any letter or digit, plus `return` `escape` `tab` `space` `delete` `forward-delete` `up` `down` `left` `right` `home` `end` `page-up` `page-down` and `f1` through `f12`. Punctuation keys: `[` `]` `-` `=` `;` `'` `,` `.` `/` `\` and backtick (`` ` ``).
+Keys: any letter or digit, `return` `escape` `tab` `space` `delete` `forward-delete` `up` `down` `left` `right` `home` `end` `page-up` `page-down` `f1` through `f12`, and `[` `]` `-` `=` `;` `'` `,` `.` `/` `\` and backtick (`` ` ``).
 
 Aliases: `enter` is `return`, `esc` is `escape`, `backspace` and `del` are `delete`, `spacebar` is `space`, and `backslash` is `\`.
-
-macOS discards keystrokes from Trickpad when Trickpad lacks Accessibility access. A keystroke binding then shows a popover below the menu bar icon that opens the Accessibility settings.
 
 ### Actions
 
@@ -276,46 +155,7 @@ macOS discards keystrokes from Trickpad when Trickpad lacks Accessibility access
 
 `play-pause` `next-track` `previous-track` `mute` `volume-up` `volume-down` `brightness-up` `brightness-down` `keyboard-backlight-up` `keyboard-backlight-down`
 
-`mission-control`, `app-expose`, `show-desktop`, and `app-switcher` ask macOS for those views directly rather than sending their keyboard shortcuts. An application cannot intercept them, and they work whether or not the matching shortcut is enabled in System Settings.
-
-`mouse-3` through `mouse-32` post real mouse-button events, giving a Magic Mouse or Magic Trackpad buttons the hardware does not have. A physical click bound to one holds that button until the click ends, including matching drag events. A tap sends one press and release. `middle-click` remains an alias for `mouse-3`.
-
-The media, volume, display brightness, and keyboard backlight actions send the matching system function key. They do not change the meaning of `f1` through `f12`, which remain literal function keys.
-
-## Fn as a gesture modifier
-
-Add `fn_` before a gesture name to make that binding run only while the physical Fn key is held:
-
-    [TRACKPAD]
-
-    three-finger-tap = "mission-control"
-    fn_three-finger-tap = "show-desktop"
-
-If the same gesture also has an ordinary binding, the Fn binding takes precedence while Fn is held. Without an ordinary binding, the gesture runs only with Fn; without Fn, it stays native.
-
-`function_` is an alias for `fn_`. The quoted chord-like forms `"fn+three-finger-tap"` and `"function+three-finger-tap"` are equivalent.
-
-Fn must remain held through a physical click or every repetition of a repeated tap. Releasing and pressing Fn again between two taps starts a separate sequence. A deferred Fn-qualified single tap that has already completed still runs after its waiting window.
-
-Application-specific Fn bindings follow the same override and inheritance rules as ordinary bindings. The menu displays every accepted spelling as `Fn +` followed by the gesture name.
-
-### URL bindings and app deep links
-
-Prefix an absolute URL with `url:`. macOS opens it in the application registered for its scheme. A URL binding can open a web URL or an app deep link that targets a specific place or action in Raycast, Obsidian, Things, or another app:
-
-    hold-right-tap-left = "url:raycast://extensions/raycast/raycast-ai/ai-chat"
-    three-finger-tap = "url:obsidian://daily"
-    four-finger-tap = "url:https://example.com/page#section"
-
-The URL must include a scheme followed by `:`. Reload Settings reports malformed URLs, unencoded spaces, and malformed percent escapes. It does not require an application for the scheme to be installed; macOS resolves the handler when the gesture fires.
-
-TOML treats `#` outside a quoted string as a comment. URL fragments stay inside the quoted value. A trailing comment follows the closing quote:
-
-    three-finger-tap = "url:obsidian://daily" # Open today's daily note
-
-#### Substitutions
-
-A URL binding can contain substitutions that resolve when its gesture fires:
+### URL substitutions
 
 | Substitution | Resolved value |
 |---|---|
@@ -323,77 +163,39 @@ A URL binding can contain substitutions that resolve when its gesture fires:
 | `{{clipboard\|urlencode}}` | Clipboard text encoded as one URL component |
 | `{{datetime:FORMAT}}` | Current local date and time in the given Apple date format |
 
-For example:
+### Sounds
 
-    four-finger-tap = "url:things:///add?title={{clipboard|urlencode}}"
-    four-finger-tap = "url:things:///add?title={{clipboard|urlencode}}&when={{datetime:yyyy-MM-dd}}"
+`Basso` `Blow` `Bottle` `Frog` `Funk` `Glass` `Hero` `Morse` `Ping` `Pop` `Purr` `Sosumi` `Submarine` `Tink`, in any capitalization.
 
-Use `urlencode` for clipboard text placed in a query parameter. It escapes characters such as spaces, `&`, `=`, `/`, and `?` so the clipboard cannot change the URL's structure. Use raw `{{clipboard}}` only when the copied text is already safe in that position.
+## Binding options
 
-Trickpad reads the clipboard only when a URL binding uses a clipboard substitution. The first time it does, macOS may ask whether Trickpad can paste from other apps. The choice is kept in System Settings > Privacy & Security > Paste from Other Apps. When access is denied there, the binding opens nothing, and clicking its popover opens that setting.
+Write a binding as an inline table when it needs options, such as `three-finger-tap = { action = "escape", defer = true }`.
 
-An empty clipboard resolves to an empty value. Reload Settings reports unknown substitutions and filters, unmatched braces, empty date formats, and unmatched quotes in date formats. The expanded URL is checked again when the gesture fires. If it is invalid, nothing opens, a popover below the menu bar icon explains the problem, and Console records it, all without the expanded clipboard contents. When no installed app opens the link, the popover says so and macOS shows no dialog of its own.
+| Option | Meaning |
+|---|---|
+| `action` | The value to send. An application table may omit it to inherit the global action |
+| `defer = true` | A single tap waits through the double-click interval so a double tap can replace it |
+| `haptic` | `true` or `false`; overrides `haptic-feedback` for one trackpad binding |
+| `sound` | Plays a system sound when the gesture fires, alongside the action |
+| `say` | Speaks words when the gesture fires, alongside the action |
 
-### Scripts
+## Application tables
 
-Prefix an executable path with `script:`:
+| Write this | Meaning |
+|---|---|
+| `[MOUSE."Safari"]` or `[TRACKPAD."com.apple.Safari"]` | Bindings below apply only in that app, named by display name or bundle identifier |
+| `inherit = false` | In an application table, ignores every global binding for that device |
 
-    hold-right-tap-left = "script:~/bin/my-script"
+## Fn layer
 
-The path may begin with `~` or be absolute. It must exist and be executable when the settings reload. Trickpad launches it directly through its shebang, uses the script's folder as its working directory, and does not wait for it to finish. It does not interpret shell commands, arguments, substitutions, or an interactive shell profile. A launch failure or nonzero exit appears in a popover below the menu bar icon and in Console.
-
-### Sounds and speech
-
-Prefix a macOS system sound name with `sound:`, or the words to speak with `say:`:
-
-    three-finger-tap = "sound:Glass"
-    three-finger-tap = "say:three fingers"
-
-The gesture plays that sound or speaks that text and does nothing else, which separates a recognition problem from a binding problem: if you hear it, the gesture fired. Speech can carry any words, so several test bindings can each announce which gesture fired. A fire during the previous sound or sentence interrupts it and starts over, so silence always means the gesture did not fire.
-
-Written this way the sound replaces the action, which is what makes it a test. To hear a gesture that still does its real work, use the `sound` or `say` binding option instead.
-
-A sound name is case-insensitive and carries no extension. Choose from `Basso`, `Blow`, `Bottle`, `Frog`, `Funk`, `Glass`, `Hero`, `Morse`, `Ping`, `Pop`, `Purr`, `Sosumi`, `Submarine`, or `Tink`. Trickpad checks the name against `/System/Library/Sounds` and reports a name it cannot find when settings reload. It also reports a `say:` with nothing after it.
-
-### Menu commands
-
-Prefix a menu path with `menu:` to choose that command from an application's menu bar:
-
-    three-finger-swipe-left = "menu:History > Back"
-    four-finger-tap = "menu:File > Open Recent > Clear Menu"
-
-The command goes to the application under the pointer, the same application a keystroke binding reaches. Trickpad brings that window forward first when it is not already in front.
-
-Write each menu title exactly as the application shows it, in the language it displays, from the menu bar down to the command. Capitalization and accents do not matter, but spelling does. Spacing around `>` does not matter, and `›` also separates titles. A slash is part of a title, as in `View > Show/Hide Sidebar`, so it never separates them. Three periods match a title that ends in `…`. To write a literal `>`, `›`, or backslash inside a title, put a backslash before it. In a double-quoted TOML string that backslash must itself be doubled, so a single-quoted string is easier:
-
-    three-finger-tap = 'menu:Tools > A \> B'
-
-A single title finds a command anywhere in the menu bar:
-
-    three-finger-tap = "menu:Save"
-
-Trickpad chooses the first enabled command with that title, reading the menus left to right and each menu top to bottom. A submenu's own title never matches, only a command inside it. A single title suits commands with a common name, such as `Save` or `Minimize`, across the applications that have them.
-
-Menu titles differ between applications, so most menu bindings belong in that application's table:
-
-    [TRACKPAD."Safari"]
-    three-finger-swipe-left = "menu:History > Back"
-
-A binding in the device table applies wherever the pointer is, so keep global menu bindings for commands most applications share, such as `Window > Minimize` or `Edit > Copy`. An application's own binding for the same gesture takes precedence. When the application under the pointer has no such command, the command is disabled, or the application does not respond within two seconds, Trickpad plays the macOS alert sound, does nothing, and explains why in a popover below its menu bar icon. When a title in the binding is close to one the application shows, the popover names it. When the fix belongs in the settings, clicking the popover opens them. Trickpad never opens a menu to look for a command, so a command in a menu that an application fills only when it opens cannot be found.
-
-In a sequence, a menu command that cannot run stops the rest of that sequence, because later steps usually depend on it.
-
-## Turn a menu command into a shortcut
-
-A `menu:` binding chooses a menu command directly. To send a menu command as a keyboard shortcut instead, for example so it also works from the keyboard, give it an App Shortcut.
-
-An app may offer a useful menu command without its own keyboard shortcut. macOS can assign one: open **System Settings > Keyboard > Keyboard Shortcuts > App Shortcuts**, choose the app, and add the command.
-
-Write the full menu path exactly as it appears in the app, using `->` without spaces between path components. Titles are case-sensitive, and an ellipsis is three periods (`...`), not `…`. An App Shortcut targets an existing menu command only. Test it in the target app before binding a Trickpad gesture to the chord.
-
-App updates and localizations can change menu titles. Update the App Shortcut if the assigned shortcut stops working.
+| Write this | Meaning |
+|---|---|
+| `fn_three-finger-tap` | Runs only while the physical Fn key is held, ahead of the ordinary binding |
+| `function_`, `"fn+…"`, `"function+…"` | Other spellings of `fn_` |
 
 ## Settings
+
+These go under `[GENERAL]`.
 
 | Setting | Value |
 |---|---|
@@ -402,41 +204,9 @@ App updates and localizations can change menu titles. Update the App Shortcut if
 | `enable-trackpad` | `true` or `false` |
 | `dominant-hand` | `left` or `right`; mirrors positional recognition for left-handed use, default `right` |
 | `tap-speed` | Seconds a tap may last, default `0.25` |
-| `trackpad-edge-gesture-depth` | How far an edge band reaches inward, as a fraction of the trackpad. Use a positive value. If you enter a value above 0.25, Trickpad uses 0.25 instead. Corners span twice this depth, up to 0.20. Default `0.06` |
+| `trackpad-edge-gesture-depth` | Fraction of the trackpad an edge region reaches inward, up to 0.25; corners span twice this, up to 0.20. Default `0.06` |
 | `haptic-feedback` | `true` requests confirmation for configured trackpad gestures, default `true` |
 | `menu-bar-icon` | `trickpad`, or `sf:` followed by a name from [SF Symbols](https://developer.apple.com/sf-symbols/); default `trickpad` |
 | `verbose-logging` | `true` logs every gesture and keystroke to Console |
 
 Booleans are `true` or `false`, following TOML.
-
-Hiding the menu bar icon is not a setting here either. Use System Settings > Menu Bar; gestures keep working without it.
-
-Starting at login is not a setting here. Tick **Open at Login** in the menu bar item. From a source checkout, `scripts/install-login-agent.sh` does the same thing from the shell.
-
-## Conflicts with built-in macOS gestures
-
-macOS assigns its own gestures in System Settings under Trackpad and Mouse. Binding a trigger macOS already acts on adds your action without removing the built-in one. Which triggers are taken depends on your settings, since the finger counts and the individual gestures are adjustable, so no list here can tell you what is free on your Mac.
-
-Trickpad reads those settings when it loads a configuration and reports any binding whose trigger a built-in gesture already uses. The menu bar item shows the count, and the row opens the details.
-
-To see the same thing from the shell:
-
-```bash
-/Applications/Trickpad.app/Contents/Resources/system-gestures.sh
-```
-
-Each line names one gesture from this reference and whether macOS has claimed the trigger it overlaps. A line reading `claimed=default` means macOS has never written that preference, so the built-in default decides it and System Settings is the only place to confirm.
-
-macOS can assign its own secondary click to a click in the bottom left or bottom right trackpad corner, under System Settings > Trackpad. When that option is on, macOS claims those corners, so a `bottom-left-corner-click` or `bottom-right-corner-click` binding competes with the built-in secondary click there.
-
-One kind of overlap is easy to miss. A built-in gesture that uses a *double* tap, such as the Magic Mouse two-finger double tap, contains two single taps, so a single-tap binding on the same finger count fires while you perform it.
-
-## Choosing one
-
-The `hold-` gestures keep one or more fingers still while another taps or slides. A resting hand does not produce that shape and macOS binds nothing to it, so they stay clear on both counts. Bind those for anything you would regret firing by accident.
-
-A tap fires while your hand rests on the surface. A swipe competes with scrolling. Both are fine for something harmless.
-
-## Where these come from
-
-The recognizers are [Jitouch](https://github.com/JitouchApp/Jitouch), vendored under `src/jitouch/`. `src/Config.m` maps the names above to the engine's internal names, which are longer and encode detail a hand does not distinguish, such as how far apart two fingers land.

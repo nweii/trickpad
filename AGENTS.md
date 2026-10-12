@@ -156,7 +156,7 @@ Write entries according to the [Google developer documentation style guide](http
 
 ### After a release
 
-1. The product website's reference pages, which carry their own copy of the configuration syntax and are updated by hand, so a change to `GESTURES.md` reaches them only when someone ports it.
+1. The product website's guide, which explains the configuration in its own words and is updated by hand, so a name added to `GESTURES.md` or a behavior change reaches it only when someone writes it there.
 2. Any surface that derives from `CHANGELOG.md`, which needs a rebuild to pick up the new entry.
 3. The storefront listing, where any copy naming a feature the release changed is maintained by hand. The listing's downloadable DMG is not hand-maintained: `scripts/storefront.sh` uploads the packaged image to Polar and points the benefit at it, with the same preview, `--publish`, and read-back discipline as `publish.sh`, reading `POLAR_ACCESS_TOKEN` from the same Infisical folder.
 
@@ -165,7 +165,8 @@ Write entries according to the [Google developer documentation style guide](http
 Buyer-facing facts appear in this repository, in the packaged disk image, on the product website, and in the storefront listing. Keep one owner for each fact:
 
 - `scripts/build.sh` owns the version, build number, minimum macOS version, and supported architectures.
-- `GESTURES.md` owns configuration syntax, gesture names, actions, and settings.
+- `GESTURES.md` owns the configuration vocabulary: every gesture name, value form, action, option, and setting, one line each.
+- The website guide owns how each name behaves and how to choose between them. It lives in the website repository, so no check here sees it.
 - `scripts/package.sh` owns the paid artifact's contents and exact-source link.
 - `packaging/dmg-background.svg` owns the short install and Gatekeeper guidance shown beside the app.
 - `CHANGELOG.md` owns what each release changed, in the structure above.
@@ -233,7 +234,7 @@ Physical Fn can qualify a gesture input. Prefix a gesture key with `fn_`; `funct
 
 The `appID` CFPreferences domain in `Settings.h` is vestigial — only the removed preference pane wrote to it.
 
-`GESTURES.md` is the user-facing reference for every slug, key, action, and setting.
+`GESTURES.md` is the catalog of every slug, key, action, option, and setting, one line each. Explanations of behavior belong in the website guide, which customers read; the catalog stays short so the checks can hold it to the code.
 
 ## Checks
 
@@ -288,7 +289,7 @@ Synthetic fixtures under `fixtures/trace/` exercise click correlation, contact f
 ## Standing constraints
 
 - **Add, never replace.** A binding extends what the hardware does. Anything System Settings owns — tap-to-click, secondary click, the built-in swipes — keeps behaving as the user configured it. Physical multi-finger click gestures are the one explicit exception on both devices, per `docs/adr/0001-configured-physical-clicks-replace-the-native-click.md`: a confidently recognized configured click replaces the native click. Ambiguous clicks and drags remain native and do not dispatch the binding.
-- **Check both conflict surfaces before binding.** macOS claims some motions, listed in `GESTURES.md`. The user's own hotkeys claim some chords, and a Caps Lock remapped to Cmd+Alt+Ctrl is a common one worth asking about.
+- **Check both conflict surfaces before binding.** macOS claims some motions, which `scripts/system-gestures.sh` reports for the current Mac. The user's own hotkeys claim some chords, and a Caps Lock remapped to Cmd+Alt+Ctrl is a common one worth asking about.
 - **Hold gestures carry anything consequential.** macOS does not claim the hold-one-tap-one shape. On a Magic Mouse, its discrete tap contacts still use fingertip-quality filtering because a narrow resting edge contact can imitate the held finger.
 
 ## Hotkey compatibility
