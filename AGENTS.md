@@ -132,7 +132,8 @@ Sparkle, vendored at a pinned version under `third_party/sparkle/` with its own 
 Buyer-facing facts appear in this repository, in the packaged disk image, on the product website, and in the storefront listing. Keep one owner for each fact:
 
 - `scripts/build.sh` owns the version, build number, minimum macOS version, and supported architectures.
-- `GESTURES.md` owns configuration syntax, gesture names, actions, and settings.
+- `GESTURES.md` owns the configuration vocabulary: every gesture name, value form, action, option, and setting, one line each.
+- The website guide owns how each name behaves and how to choose between them. It lives in the website repository, so no check here sees it.
 - `scripts/package.sh` owns the paid artifact's contents and exact-source link.
 - `packaging/dmg-background.svg` owns the short install and Gatekeeper guidance shown beside the app.
 - `CHANGELOG.md` owns what each release changed, in the structure above.
@@ -194,7 +195,7 @@ Physical Fn can qualify a gesture input. Prefix a gesture key with `fn_`; `funct
 
 The `appID` CFPreferences domain in `Settings.h` is vestigial — only the removed preference pane wrote to it.
 
-`GESTURES.md` is the user-facing reference for every slug, key, action, and setting.
+`GESTURES.md` is the catalog of every slug, key, action, option, and setting, one line each. Explanations of behavior belong in the website guide, which customers read; the catalog stays short so the checks can hold it to the code.
 
 ## Checks
 
@@ -249,7 +250,7 @@ Synthetic fixtures under `fixtures/trace/` exercise click correlation, contact f
 ## Standing constraints
 
 - **Add, never replace.** A binding extends what the hardware does. Anything System Settings owns — tap-to-click, secondary click, the built-in swipes — keeps behaving as the user configured it. Physical multi-finger click gestures are the one explicit exception on both devices, per `docs/adr/0001-configured-physical-clicks-replace-the-native-click.md`: a confidently recognized configured click replaces the native click. Ambiguous clicks and drags remain native and do not dispatch the binding.
-- **Check both conflict surfaces before binding.** macOS claims some motions, listed in `GESTURES.md`. The user's own hotkeys claim some chords, and a Caps Lock remapped to Cmd+Alt+Ctrl is a common one worth asking about.
+- **Check both conflict surfaces before binding.** macOS claims some motions, which `scripts/system-gestures.sh` reports for the current Mac. The user's own hotkeys claim some chords, and a Caps Lock remapped to Cmd+Alt+Ctrl is a common one worth asking about.
 - **Hold gestures carry anything consequential.** macOS does not claim the hold-one-tap-one shape. On a Magic Mouse, its discrete tap contacts still use fingertip-quality filtering because a narrow resting edge contact can imitate the held finger.
 
 ## Hotkey compatibility
