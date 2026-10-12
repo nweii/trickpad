@@ -98,7 +98,7 @@ Pick **Reload Settings** from the menu bar to apply a change. No rebuild is need
 
 Under **Manage with Agent**, choose an installed coding agent to edit the file directly or choose **Copy Prompt** for help from a general chat assistant. The copied prompt links to the configuration reference and asks for a ready-to-paste block without copying private settings.
 
-See `GESTURES.md` for the gesture names available on each device, supported keys and modifiers, built-in actions, custom URLs, URL substitutions, executable scripts, behavior settings, and motions already used by macOS.
+The [Trickpad guide](https://thirdwind.fyi/trickpad/docs/) explains every gesture, action, and setting, including motions macOS already uses. `GESTURES.md` lists the same names one line each, matching the source it ships with.
 
 ## Uninstall
 
