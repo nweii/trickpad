@@ -1,6 +1,6 @@
 # Trickpad agent guide
 
-Trickpad maps Magic Mouse and Magic Trackpad gestures to shortcuts, built-in actions, URLs, and executable scripts. It refreshes this file whenever it launches. The file describes the version of Trickpad that supplied it.
+Trickpad maps gestures on a Magic Mouse, a Magic Trackpad, or a MacBook's built-in trackpad to shortcuts, built-in actions, URLs, and executable scripts. It refreshes this file whenever it launches. The file describes the version of Trickpad that supplied it.
 
 ## Get oriented
 
