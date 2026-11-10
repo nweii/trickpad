@@ -1,10 +1,45 @@
 #import <Cocoa/Cocoa.h>
+#import <errno.h>
+#import <limits.h>
+#import <mach-o/dyld.h>
 #import <signal.h>
+#import <stdio.h>
+#import <stdlib.h>
+#import <string.h>
+#import <unistd.h>
 
 #import "JitouchAppDelegate.h"
 #import "SingleInstance.h"
 
+// dyld searches DYLD_LIBRARY_PATH and DYLD_FRAMEWORK_PATH by leaf name before
+// a library's install path. ImageIO loads its private libPng.dylib on the first
+// PNG decode, so a shell that points these at Homebrew's lib folder hands
+// ImageIO a foreign libpng, and decoding the app icon in Sparkle's update
+// windows crashes with EXC_ARM_DA_ALIGN in PNGReadPlugin. dyld reads the
+// variables only at launch, so the process restarts itself without them.
+static void MGRelaunchWithoutLibraryPathOverrides(const char *argv[]) {
+    static const char *const overrides[] = {"DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH"};
+    BOOL overridden = NO;
+    for (size_t i = 0; i < sizeof overrides / sizeof overrides[0]; i++) {
+        if (getenv(overrides[i]) == NULL)
+            continue;
+        unsetenv(overrides[i]);
+        overridden = YES;
+    }
+    if (!overridden)
+        return;
+
+    char path[PATH_MAX];
+    uint32_t size = sizeof path;
+    if (_NSGetExecutablePath(path, &size) != 0)
+        return;
+    execv(path, (char *const *)argv);
+    fprintf(stderr, "Trickpad: relaunch without DYLD library path overrides failed: %s\n", strerror(errno));
+}
+
 int main(int argc, const char *argv[]) {
+    MGRelaunchWithoutLibraryPathOverrides(argv);
+
     @autoreleasepool {
         // An update has two things starting the app: the updater relaunches it,
         // and the login agent's KeepAlive restarts what it saw exit. Two copies
