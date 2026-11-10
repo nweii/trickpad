@@ -42,7 +42,7 @@ Describe what changed and why, in a sentence or two of your own. Then report wha
 - For a bug fix, whether you saw the bug before your change and saw it stop after.
 - Anything you could not test.
 
-If a coding agent wrote the change, say which one, and whether a person tested it on hardware.
+If a coding agent wrote the change, say whether a person tested it on hardware. Keep the visible description short. If the agent wrote a longer description, fold it into a `<details>` block whose summary names the agent and model. The pull request template lays this out; an agent that opens the pull request through `gh pr create --body` or the GitHub API skips the template, so it should follow this section instead.
 
 ## Report a bug
 
