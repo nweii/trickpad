@@ -1502,26 +1502,81 @@ static NSTextField *traceText(NSRect frame, CGFloat size, BOOL bold) {
     return [[about submenu] itemWithTag:kMenuTagDiagnostics];
 }
 
-// Starts the selected coding agent in the settings folder with the running app
-// path, which distinguishes a source build from a copied release app.
-- (void)manageWithAgent:(id)sender {
-    NSString *agentPath = [sender representedObject];
-    if (agentPath == nil)
-        return;
-
-    NSString *dir = [Config configDirectory];
-    NSError *error = [self seedConfigDirectory];
-    if (error != nil) {
-        [self reportFailure:@"Can't set up the Trickpad settings folder."
-                     detail:[error localizedDescription]];
-        return;
-    }
-
+// The opening prompt for an agent working in the settings folder. The running
+// app path distinguishes a source build from a copied release app.
+static NSString *manageWithAgentPrompt(void) {
     NSString *appPath = [[NSBundle mainBundle] bundlePath] ?: @"unknown";
-    NSString *prompt = [NSString stringWithFormat:
+    return [NSString stringWithFormat:
         @"Read AGENTS.md in this folder first. Help me manage Trickpad. "
         @"Ask what I want to do before changing settings or the application. "
         @"The running app is at %@.", appPath];
+}
+
+// Desktop agent apps that open a new session through a URL carrying a working
+// folder and a prefilled prompt, which the user reviews and sends. Each entry
+// is the scheme macOS resolves to the installed app, the new-session URL, and
+// that URL's prompt and folder query names.
+static NSArray *desktopAgentLinks(void) {
+    return @[@[@"claude", @"claude://cowork/new", @"q", @"folder"],
+             @[@"codex", @"codex://new", @"prompt", @"path"]];
+}
+
+// Each installed desktop agent as a title and link entry. LaunchServices
+// answers from its registry, so this runs on the submenu-open path.
+static NSArray *installedDesktopAgents(void) {
+    NSMutableArray *found = [NSMutableArray array];
+    for (NSArray *link in desktopAgentLinks()) {
+        NSURL *probe = [NSURL URLWithString:[link[0] stringByAppendingString:@"://"]];
+        NSURL *app = [[NSWorkspace sharedWorkspace] URLForApplicationToOpenURL:probe];
+        if (app == nil)
+            continue;
+        NSString *name = [[[NSFileManager defaultManager] displayNameAtPath:[app path]]
+                          stringByDeletingPathExtension];
+        [found addObject:@[name, link]];
+    }
+    return found;
+}
+
+// Percent-encodes everything outside RFC 3986's unreserved set, so a prompt or
+// path cannot end its query value early.
+static NSString *queryValue(NSString *s) {
+    NSCharacterSet *unreserved = [NSCharacterSet characterSetWithCharactersInString:
+        @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"];
+    return [s stringByAddingPercentEncodingWithAllowedCharacters:unreserved];
+}
+
+- (BOOL)prepareConfigDirectoryForAgent {
+    NSError *error = [self seedConfigDirectory];
+    if (error != nil)
+        [self reportFailure:@"Can't set up the Trickpad settings folder."
+                     detail:[error localizedDescription]];
+    return error == nil;
+}
+
+// Opens a new session in the selected desktop app with the settings folder
+// attached and the prompt typed but not sent.
+- (void)manageWithDesktopAgent:(id)sender {
+    NSArray *link = [sender representedObject];
+    if (link == nil || ![self prepareConfigDirectoryForAgent])
+        return;
+
+    NSString *url = [NSString stringWithFormat:@"%@?%@=%@&%@=%@",
+        link[1], link[2], queryValue(manageWithAgentPrompt()),
+        link[3], queryValue([Config configDirectory])];
+    if (![[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]])
+        [self reportFailure:@"Can't open the agent app."
+                     detail:[NSString stringWithFormat:@"Nothing opened %@.", link[1]]];
+}
+
+// Starts the selected terminal coding agent in the settings folder.
+- (void)manageWithAgent:(id)sender {
+    NSString *agentPath = [sender representedObject];
+    if (agentPath == nil || ![self prepareConfigDirectoryForAgent])
+        return;
+
+    NSString *dir = [Config configDirectory];
+    NSError *error = nil;
+    NSString *prompt = manageWithAgentPrompt();
     NSString *scriptPath = [dir stringByAppendingPathComponent:@"manage-with-agent.command"];
     NSString *script = [NSString stringWithFormat:
         @"#!/bin/zsh\ncd %@\nexec %@ %@\n",
@@ -1719,18 +1774,37 @@ static NSArray *agentCandidates(void) {
 
     [menu removeAllItems];
 
-    BOOL any = NO;
-    for (NSArray *pair in cachedAgentEntries) {
-        any = YES;
-        NSMenuItem *item = [menu addItemWithTitle:pair[0]
-                                           action:@selector(manageWithAgent:)
+    NSArray *desktop = installedDesktopAgents();
+    for (NSArray *entry in desktop) {
+        NSMenuItem *item = [menu addItemWithTitle:entry[0]
+                                           action:@selector(manageWithDesktopAgent:)
                                     keyEquivalent:@""];
-        [item setRepresentedObject:pair[1]];
+        [item setRepresentedObject:entry[1]];
         [item setTarget:self];
-        [item setToolTip:pair[1]];
+    }
+    if ([desktop count] > 0)
+        [menu addItem:[NSMenuItem separatorItem]];
+
+    // Terminal agents sit under their own header so the desktop apps lead for
+    // people who never open a terminal.
+    if (cachedAgentEntries == nil || [cachedAgentEntries count] > 0) {
+        [menu addItem:MGMenuSectionHeader(@"Terminal")];
+        if (cachedAgentEntries == nil) {
+            NSMenuItem *pending = [menu addItemWithTitle:@"Looking for installed agents…"
+                                                  action:NULL keyEquivalent:@""];
+            [pending setEnabled:NO];
+        }
+        for (NSArray *pair in cachedAgentEntries) {
+            NSMenuItem *item = [menu addItemWithTitle:pair[0]
+                                               action:@selector(manageWithAgent:)
+                                        keyEquivalent:@""];
+            [item setRepresentedObject:pair[1]];
+            [item setTarget:self];
+            [item setToolTip:pair[1]];
+        }
+        [menu addItem:[NSMenuItem separatorItem]];
     }
 
-    if (any) [menu addItem:[NSMenuItem separatorItem]];
     NSMenuItem *copyPrompt = [menu addItemWithTitle:@"Copy Prompt"
                                              action:@selector(copyAgentPrompt:)
                                       keyEquivalent:@"c"];
@@ -1742,11 +1816,7 @@ static NSArray *agentCandidates(void) {
         NSEventModifierFlagCommand | NSEventModifierFlagOption];
     [copyPromptSettings setTarget:self];
 
-    if (!any && cachedAgentEntries == nil) {
-        NSMenuItem *pending = [menu addItemWithTitle:@"Looking for installed agents…"
-                                              action:NULL keyEquivalent:@""];
-        [pending setEnabled:NO];
-    } else if (!any) {
+    if ([desktop count] == 0 && cachedAgentEntries != nil && [cachedAgentEntries count] == 0) {
         NSMenuItem *empty = [menu addItemWithTitle:@"No coding agent installed" action:NULL keyEquivalent:@""];
         [empty setEnabled:NO];
 

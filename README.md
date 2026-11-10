@@ -96,7 +96,7 @@ four-finger-tap = "off"
 
 Pick **Reload Settings** from the menu bar to apply a change. No rebuild is needed. The status row reports how many bindings loaded and whether any lines were skipped. **Current Gestures** shows global and application-specific bindings. **Diagnostics** opens recent logs or copies a concise state summary.
 
-Under **Manage with Agent**, choose an installed coding agent to edit the file directly or choose **Copy Prompt** for help from a general chat assistant. The copied prompt links to the configuration reference and asks for a ready-to-paste block without copying private settings.
+Under **Manage with Agent**, choose Claude or ChatGPT when the desktop app is installed, or a coding agent under **Terminal**, to edit the file directly or choose **Copy Prompt** for help from a general chat assistant. The copied prompt links to the configuration reference and asks for a ready-to-paste block without copying private settings.
 
 See `GESTURES.md` for the gesture names available on each device, supported keys and modifiers, built-in actions, custom URLs, URL substitutions, executable scripts, behavior settings, and motions already used by macOS.
 
@@ -126,7 +126,7 @@ It does not read your keystrokes. The event tap it installs watches mouse and sc
 
 Touch data stays in memory during ordinary use.
 
-Outside its own folder, Trickpad writes to two places. It creates `~/.config/trickpad/` on first run and puts your `config.toml` and an `AGENTS.md` describing the installed version there. The app refreshes that file when it starts and preserves `config.toml`. Picking a coding agent under **Manage with Agent** adds a `manage-with-agent.command` script to that same folder and runs it. Turning on Open at Login writes one launchd plist to `~/Library/LaunchAgents`.
+Outside its own folder, Trickpad writes to two places. It creates `~/.config/trickpad/` on first run and puts your `config.toml` and an `AGENTS.md` describing the installed version there. The app refreshes that file when it starts and preserves `config.toml`. Picking a terminal agent under **Manage with Agent** adds a `manage-with-agent.command` script to that same folder and runs it. Turning on Open at Login writes one launchd plist to `~/Library/LaunchAgents`.
 
 ## Limits
 
