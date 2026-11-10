@@ -92,73 +92,31 @@ About opens a submenu carrying the version, read from the running bundle, plus a
 - About Trickpad, whose submenu shows the running version and opens the product-owned documentation, latest-version retrieval, and website pages, then offers Diagnostics. Diagnostics is user-facing support tooling for copying a state summary, opening the last 15 minutes of logs, and enabling verbose logging for the current session; an internal preference can also reveal the guided Magic Mouse trace session described below. Rare-use troubleshooting rows are tucked under About, where version and debug info already travel together in support requests; Accessibility stays top-level because it is the first thing a broken install needs. Menu rows that only open a page carry no ellipsis; the mark is reserved for commands needing further input, so Edit Settings keeps it and the outbound links do not.
 - Quit Trickpad stays last and alone.
 
-## Releasing
+## Versions and releases
 
-The version lives in one place: `APP_VERSION` in `scripts/build.sh`, which becomes `CFBundleShortVersionString`. The menu bar header reads it from the running bundle, so it cannot drift from what is installed.
+Releases are cut and published only on the maintainer's Mac. `docs/releasing.md` holds the release sequence, update publication, and delivery checklist, and the `trickpad-release` skill follows it. A change does not set `APP_VERSION` or `APP_BUILD_NUMBER` in `scripts/build.sh`, create tags, or run `package.sh`, `publish.sh`, or `storefront.sh`.
 
-Between releases, `APP_VERSION` carries the next patch number with a `-dev` suffix, set as the last step of each release. The suffix names the release train, not a promise: no `-dev` version is ever tagged, packaging refuses it because its tag cannot exist, and the release that ends the cycle sets its real number then, which the semantic-versioning read below may raise past the `-dev` guess.
+The version lives in one place: `APP_VERSION` in `scripts/build.sh`, which becomes `CFBundleShortVersionString`. The menu bar header reads it from the running bundle, so it cannot drift from what is installed. Between releases it carries the next patch number with a `-dev` suffix, and no `-dev` version is ever tagged.
 
 A build made anywhere other than the clean commit tagged `v$APP_VERSION` also carries a `TrickpadBuildStamp` naming its short commit hash, with a trailing `+` for uncommitted changes. About and Copy Debug Info show both, as "Version 0.9.2-dev (abc1234+)", so an unreleased build names its train and its exact source. Release builds at the tag carry no stamp.
 
-Semantic versioning, read against the configuration file rather than the code, because the config is the only interface anyone depends on. Before 1.0, a minor release may intentionally change that alpha interface and must carry a migration note. After 1.0:
+Versions follow semantic versioning read against `config.toml`, the only interface anyone depends on, rather than against the code. A rename or removal of a configuration name is the one change that needs a migration note in the release, because an existing file will silently stop matching. `scripts/check.sh` catches a name that exists in code but not the docs; it cannot catch a name that used to exist.
 
-- **Patch** — a fix that leaves every existing `config.toml` working.
-- **Minor** — new gestures, keys, actions, or settings. An existing config keeps working, since unknown names are reported and skipped rather than failing.
-- **Major** — a rename or removal that makes an existing `config.toml` behave differently. The positional gesture rename would have been one.
+### Changelog
 
-To cut a release:
+**`CHANGELOG.md` is an interface, not only prose.** A downstream surface parses it to render a customer-facing changelog and the version it advertises. The shape it relies on: `## X.Y.Z` per release, a `Released YYYY-MM-DD.` line, a `### Section` heading per group, `- ` bullets that may wrap, and any trailing paragraph as closing notes. Entries are written in the imperative, so the section heading supplies the tense. Changing that structure degrades a page outside this repository, which no check here will catch. Unreleased entries may be staged under `## Unreleased` above the newest release. The website ignores everything above the first version heading, so the section stays private until the release renames it to `## X.Y.Z` and adds its `Released` line.
 
-```bash
-# set APP_VERSION to the release number (drop -dev) and bump APP_BUILD_NUMBER in scripts/build.sh
-./scripts/build.sh && ./scripts/check.sh
-git commit -am "Release X.Y.Z"
-git tag -a vX.Y.Z -m "X.Y.Z"  # local until the package and preview verify
-./scripts/package.sh          # requires the tag at HEAD; prints every file the update feed names
-./scripts/publish.sh          # read-only preview of R2 and the public feed
-./scripts/publish.sh --publish X.Y.Z  # after approving that preview
-./scripts/storefront.sh       # preview, then --publish X.Y.Z: replace the Polar benefit DMG
-git push origin main --tags
-gh release create vX.Y.Z --title "X.Y.Z" --notes "..."
-# start the next train: set APP_VERSION to the next patch number plus -dev, commit
-```
-
-GitHub releases carry the tag, changelog, and automatic source archives without a packaged binary. The DMG that `scripts/package.sh` produces is delivered through Polar and must not be attached to GitHub. Packaging requires the version's tag to exist at the packaged commit — a missing tag or one pointing elsewhere refuses — and verifies the styled drag-to-Applications layout, app signature, license, notices, trademark notice, and exact-source link. The tag stays local until the package and publish preview verify, so a bad package means deleting an unpushed tag rather than moving a published one.
-
-The release title is the bare version. The repository name sits above it on every page that shows a release, so repeating it adds nothing.
+Write entries according to the [Google developer documentation style guide](https://developers.google.com/style), starting with its highlights. Use clear, concise US English for a global audience. Prefer active voice, familiar words, and unambiguous sentences. Keep Trickpad's project-specific imperative and neutral-voice rules even where the general guide uses second person. Customers decide from this file whether an update affects them, and many do not read English as a first language. Describe customer effects rather than the implementation that caused them.
 
 ### Updates
 
-Sparkle, vendored at a pinned version under `third_party/sparkle/` with its own README recording the release and checksum. Its settings are documented at <https://sparkle-project.org/documentation/customization/>. Four things are not, and each fails quietly.
+Sparkle, vendored at a pinned version under `third_party/sparkle/` with its own README recording the release and checksum. Its settings are documented at <https://sparkle-project.org/documentation/customization/>. Three build-time facts are not, and each fails quietly. `docs/releasing.md` covers publication.
 
 **The feed URL can never change.** Every copy in the wild asks for it forever, and one that cannot reach its feed has no path to an update but a manual reinstall. Archives can move, since the feed names their URLs on every check.
 
 **`codesign --deep` does not sign Sparkle correctly.** It re-signs nested code in its own order and leaves the framework reported as modified. Nested components are signed innermost first and the bundle last without `--deep`. Restoring `--deep` fails verification with an error naming the framework rather than the signing order.
 
 **An empty `SPARKLE_PUBLIC_KEY` builds an app with no updater**, and the build refuses when that would produce a release. The private half lives in the Keychain with a recovery copy in 1Password, and no agent needs it. Losing both strands every installed copy: a replacement key produces a public key those copies reject. Sparkle's key rotation is the documented escape and requires Developer ID signing, which this app does not have. For the same reason `SURequireSignedFeed` and `SUVerifyUpdateBeforeExtraction` stay off until it does.
-
-**Publishing is not uploading the archive.** The feed also names deltas, and Sparkle prefers a delta when one applies, so an unpublished delta breaks the update for exactly the people it was built for. `package.sh` prints every file the feed names and refuses when one is missing. Upload those before the appcast, so the feed never names something absent, and set the cache header each wants: archives never change, the appcast changes every release. Inheriting the host default caches both for four hours, which hides a release and lets the feed and its archives disagree. After publishing, compare each archive's served length against the length the appcast names. They must match before the release is announced. An archive published under a name already used caches to the edge for a year, so replacing one needs a cache purge and not another upload, which reports success either way.
-
-The edge also caches a 404 for a URL that does not exist yet, and any probe of an unpublished URL plants one — including the publish preview's own occupancy check, which runs seconds before upload and verification. The zone must carry an edge-TTL rule that stores no 404 from the updates host; without it, first publication of every new archive fails verification against its own cached miss, and the recovery is a per-URL cache purge.
-
-`scripts/publish.sh` automates that publication without joining it to packaging. Its default mode authenticates through the repository's non-secret Infisical pointer, reads `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` from `workstation/prod/trickpad-publish`, and previews both R2 and the public URLs without writing. Those credentials are an R2 account token restricted to Object Read & Write on `thirdwind-updates`; the publisher needs no zone permission. Live mode requires `--publish VERSION`, repeats the preview, and asks for the exact version unless `--yes` follows Nathan's approval. It uploads every archive and delta before `appcast.xml`, then reads each public URL back and compares its bytes and cache header. A different file at an immutable archive URL stops publication; replacement and cache purge remain a separate recovery operation.
-
-### What a release commits this repository to
-
-Two of these fail quietly, and one is already guarded.
-
-**The corresponding-source link is generated, not written.** GPLv3 requires the buyer of a binary to be able to obtain its exact source, and `scripts/package.sh` satisfies that without anyone typing a URL: it derives the link from the app version, refuses to package unless that version's tag points at the packaged commit, and greps the mounted image to confirm the link before finishing. Leave it generated. A hand-maintained copy of that link anywhere else would have no such guard, so proposing one is a decision to take deliberately rather than a gap to fill.
-
-**`CHANGELOG.md` is an interface, not only prose.** A downstream surface parses it to render a customer-facing changelog and the version it advertises. The shape it relies on: `## X.Y.Z` per release, a `Released YYYY-MM-DD.` line, a `### Section` heading per group, `- ` bullets that may wrap, and any trailing paragraph as closing notes. Entries are written in the imperative, so the section heading supplies the tense. Changing that structure degrades a page outside this repository, which no check here will catch. Unreleased entries may be staged under `## Unreleased` above the newest release. The website ignores everything above the first version heading, so the section stays private until the release renames it to `## X.Y.Z` and adds its `Released` line.
-
-Write entries according to the [Google developer documentation style guide](https://developers.google.com/style), starting with its highlights. Use clear, concise US English for a global audience. Prefer active voice, familiar words, and unambiguous sentences. Keep Trickpad's project-specific imperative and neutral-voice rules even where the general guide uses second person. Customers decide from this file whether an update affects them, and many do not read English as a first language. Describe customer effects rather than the implementation that caused them.
-
-**Publishing the tag does not publish the release.** Surfaces that read this repository do so when they build, not when it changes, so each needs a rebuild of its own before a customer sees the new version. Treat a release as delivered only once every surface below has been refreshed.
-
-### After a release
-
-1. The product website's reference pages, which carry their own copy of the configuration syntax and are updated by hand, so a change to `GESTURES.md` reaches them only when someone ports it.
-2. Any surface that derives from `CHANGELOG.md`, which needs a rebuild to pick up the new entry.
-3. The storefront listing, where any copy naming a feature the release changed is maintained by hand. The listing's downloadable DMG is not hand-maintained: `scripts/storefront.sh` uploads the packaged image to Polar and points the benefit at it, with the same preview, `--publish`, and read-back discipline as `publish.sh`, reading `POLAR_ACCESS_TOKEN` from the same Infisical folder.
 
 ## Cross-surface product facts
 
@@ -172,13 +130,7 @@ Buyer-facing facts appear in this repository, in the packaged disk image, on the
 
 README, `config.default.toml`, `config-notes.default.md`, the website, and the storefront description mirror the facts their readers need. When an owned fact changes, search every mirror before completing the work. Completion requires every relevant mirror to agree in substance, the repository checks to pass, and a fresh package verification when delivery contents or DMG guidance changed. Preserve each surface's level of detail instead of forcing identical prose everywhere.
 
-`gh release create` has been seen to report a missing `workflow` scope that the token already holds. Creating it through `gh api repos/OWNER/REPO/releases` works.
-
-Moving a published tag turns its GitHub release back into a draft. Republishing it is a separate step, and a release left drafted is invisible.
-
 The app is ad-hoc signed rather than notarized, so anyone installing the official packaged build clears Gatekeeper by hand. That warning returns for every new download, because approving one copy does not teach macOS to trust later ones. The Accessibility grant does persist across builds, since `scripts/build.sh` pins a designated requirement naming the bundle identifier without a code hash. Notarizing would need a paid Apple Developer account. Building from source stays supported and skips the Gatekeeper step.
-
-A rename or removal of a configuration name is the one change that needs a migration note in the release, because an existing file will silently stop matching. `scripts/check.sh` catches a name that exists in code but not the docs; it cannot catch a name that used to exist.
 
 ## Configuration model
 
