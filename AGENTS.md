@@ -4,6 +4,8 @@ Maps Magic Mouse and Magic Trackpad multi-touch gestures to keystrokes, built-in
 
 `CLAUDE.md` is a symlink to this file. Edit this one.
 
+A change proposed from outside the project follows `CONTRIBUTING.md`, which names what a pull request must report about how it was verified.
+
 Shell scripts live in `scripts/` and resolve paths from the project root, two levels up from themselves.
 
 ## Where things live
