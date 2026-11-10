@@ -1,0 +1,44 @@
+# Builds the app and runs the repository checks on macOS for every pull
+# request and every push to main. Contributors working from Linux, including
+# cloud coding agents, cannot run either script locally, so this job is their
+# confirmation that a change compiles and passes the checks. It cannot test
+# gestures, which need real hardware.
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-check:
+    # The Icon Composer documents under icons/ need Xcode 26's asset compiler.
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # build.sh compares HEAD against the version tag to decide whether
+          # the build carries a commit stamp.
+          fetch-depth: 0
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+
+      - name: Build the release bundle
+        run: ./scripts/build.sh
+
+      - name: Build the development bundle
+        run: ./scripts/build.sh --dev
+
+      - name: Run the checks
+        run: ./scripts/check.sh
