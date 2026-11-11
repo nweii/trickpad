@@ -20,7 +20,7 @@
 
 ### Changed
 
-- List terminal coding agents under a **Terminal** heading in **Manage with Agent**.
+- Group **Manage with Agent** into **Apps** and **Terminal** sections.
 
 ## 0.14.1
 

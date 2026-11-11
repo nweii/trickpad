@@ -1774,7 +1774,11 @@ static NSArray *agentCandidates(void) {
 
     [menu removeAllItems];
 
+    // Matching headers keep the two groups equal in weight, with the desktop
+    // apps first for people who never open a terminal.
     NSArray *desktop = installedDesktopAgents();
+    if ([desktop count] > 0)
+        [menu addItem:MGMenuSectionHeader(@"Apps")];
     for (NSArray *entry in desktop) {
         NSMenuItem *item = [menu addItemWithTitle:entry[0]
                                            action:@selector(manageWithDesktopAgent:)
@@ -1785,8 +1789,6 @@ static NSArray *agentCandidates(void) {
     if ([desktop count] > 0)
         [menu addItem:[NSMenuItem separatorItem]];
 
-    // Terminal agents sit under their own header so the desktop apps lead for
-    // people who never open a terminal.
     if (cachedAgentEntries == nil || [cachedAgentEntries count] > 0) {
         [menu addItem:MGMenuSectionHeader(@"Terminal")];
         if (cachedAgentEntries == nil) {
