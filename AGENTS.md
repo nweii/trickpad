@@ -4,6 +4,8 @@ Maps Magic Mouse and Magic Trackpad multi-touch gestures to keystrokes, built-in
 
 `CLAUDE.md` is a symlink to this file. Edit this one.
 
+A change proposed from outside the project follows `CONTRIBUTING.md`, which names what a pull request must report about how it was verified.
+
 Shell scripts live in `scripts/` and resolve paths from the project root, two levels up from themselves.
 
 ## Where things live
@@ -169,7 +171,7 @@ A `<count>-finger-double-tap` slug has no recognizer. The single tap's recognize
 
 `mouseGestureSlugs` and `trackpadGestureSlugs` hold the gesture vocabulary. One slug may bind several engine names that differ only by how far apart two fingers land. The two devices keep separate tables, enable flags, and vocabularies, so a binding on one does not reach the other.
 
-Every engine name a slug reaches needs a phrase in `humanNameForGesture:`, or Current Gestures falls back to the engine's internal name.
+Every engine name a slug reaches needs a phrase in `humanNameForGesture:`, or the menu's binding list falls back to the engine's internal name.
 
 `haptic-feedback = true` is the default and requests the public AppKit generic haptic pattern for configured trackpad gestures. The request is best effort: AppKit chooses the actuator and may suppress feedback after the fingers lift. Magic Mouse gestures never request haptics. Deferred taps request feedback only if their delayed action survives cancellation. Set it to `false` to opt out globally, or set `haptic` in an expanded trackpad binding for one override.
 
