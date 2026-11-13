@@ -12,6 +12,16 @@
 
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add Claude and ChatGPT to **Manage with Agent** when their desktop apps are installed. Each opens a new session with the Trickpad settings folder attached and a starting prompt ready to send.
+
+### Changed
+
+- Group **Manage with Agent** into **Apps** and **Terminal** sections.
+
 ## 0.14.1
 
 Released 2026-10-10.
