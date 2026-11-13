@@ -6,7 +6,7 @@ compatibility: "Advisory use has no special requirements. Release execution requ
 
 # Trickpad release
 
-Use the repository's release conventions while preserving their approval gates and consumer-boundary checks. Treat `AGENTS.md` and the repository scripts as the sources of truth. Read the full `## Releasing` section through `## Configuration model` because the release contract includes update publication, downstream surfaces, and recovery constraints.
+Use the repository's release conventions while preserving their approval gates and consumer-boundary checks. Treat `docs/releasing.md`, `AGENTS.md`, and the repository scripts as the sources of truth. Read all of `docs/releasing.md`, plus the `## Versions and releases` and `## Cross-surface product facts` sections of `AGENTS.md`, because the release contract includes update publication, downstream surfaces, and recovery constraints.
 
 ## Choose the mode
 
@@ -36,7 +36,7 @@ Before cutting the release, require a clean release train with passing checks, t
 
 2. Accept `main` or the exact `releases/X.Y.Z` branch during preparation. Stop if the branch is anything else, the checkout contains unrelated work, or the release contents are not committed. List the exact condition the user must settle. Do not absorb unrelated changes into the release. Do not begin the build-and-stage sequence until the approved train has been integrated into local `main`.
 
-3. Determine the version from Trickpad's configuration-interface semantic versioning in `AGENTS.md`. Identify every renamed or removed configuration name since the previous release. Any rename or removal requires a migration note.
+3. Determine the version from Trickpad's configuration-interface semantic versioning in `docs/releasing.md`. Identify every renamed or removed configuration name since the previous release. Any rename or removal requires a migration note.
 
 4. Inspect all customer-visible changes since the latest tag. Start from any entries staged under `## Unreleased`, which become this release's entry. Draft the `CHANGELOG.md` entry in its existing structure:
 
@@ -119,9 +119,9 @@ Each numbered action below changes an external consumer. Show the current previe
 
    Fetch or query the remote and confirm that `origin/main` and `vX.Y.Z` point at the release commit.
 
-4. Create the GitHub release with the bare version as its title and the approved changelog as its notes. Attach no DMG. If `gh release create` reports the known false `workflow`-scope error, use the GitHub releases API route documented in `AGENTS.md`. Read the release back and confirm it is published rather than drafted.
+4. Create the GitHub release with the bare version as its title and the approved changelog as its notes. Attach no DMG. If `gh release create` reports the known false `workflow`-scope error, use the GitHub releases API route documented in `docs/releasing.md`. Read the release back and confirm it is published rather than drafted.
 
-5. Refresh each affected downstream surface listed under `### After a release` in `AGENTS.md`. Treat repository edits, deployed pages, rebuilt changelog consumers, and storefront copy as separate states. Verify the live consumer for each surface you can reach; identify anything only the user can verify.
+5. Refresh each affected downstream surface listed under `## After a release` in `docs/releasing.md`. Treat repository edits, deployed pages, rebuilt changelog consumers, and storefront copy as separate states. Verify the live consumer for each surface you can reach; identify anything only the user can verify.
 
 The publication stage is complete when the update feed and every named archive are served correctly, Polar delivers the intended DMG, the commit and tag are remote, the GitHub release is public, and every affected downstream surface is refreshed or explicitly assigned to the user.
 

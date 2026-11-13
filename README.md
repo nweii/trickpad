@@ -2,9 +2,9 @@
 
 Trigger an action without taking your hand off the mouse.
 
-Trickpad turns finger gestures on a Magic Mouse or Magic Trackpad into keyboard shortcuts, built-in actions, custom URLs, or executable scripts. Its gestures include taps, swipes, physical multi-finger clicks, and motions where you hold one finger still while another taps or slides.
+Trickpad turns finger gestures on a Magic Mouse, a Magic Trackpad, or a MacBook's built-in trackpad into keyboard shortcuts, built-in actions, custom URLs, or executable scripts. Its gestures include taps, swipes, physical multi-finger clicks, and motions where you hold one finger still while another taps or slides.
 
-The default configuration gives a Magic Mouse a middle click and maps a hold-and-tap gesture on either device to Return. The app runs in the background with a menu bar item and leaves normal clicks and existing gestures alone. A configured physical multi-finger click is the exception: it replaces that click with its bound action, and on the Magic Mouse it must be explicitly enabled.
+The default configuration gives a Magic Mouse a middle click and maps a hold-and-tap gesture on either device to Return. The app runs in the background with a menu bar item and leaves normal clicks and existing gestures alone. A configured physical multi-finger click is the exception: it replaces that click with its bound action.
 
 ## Features
 
@@ -94,7 +94,7 @@ three-finger-tap = { haptic = false }
 four-finger-tap = "off"
 ```
 
-Pick **Reload Settings** from the menu bar to apply a change. No rebuild is needed. The status row reports how many bindings loaded and whether any lines were skipped. **Current Gestures** shows global and application-specific bindings. **Diagnostics** opens recent logs or copies a concise state summary.
+Pick **Reload Settings** from the menu bar to apply a change. No rebuild is needed. The menu's binding row reports how many bindings loaded and whether any lines were skipped, and its submenu lists every global and application-specific binding. **About Trickpad** > **Diagnostics** opens recent logs or copies a concise state summary.
 
 Under **Manage with Agent**, choose Claude or ChatGPT when the desktop app is installed, or a coding agent under **Terminal**, to edit the file directly or choose **Copy Prompt** for help from a general chat assistant. The copied prompt links to the configuration reference and asks for a ready-to-paste block without copying private settings.
 

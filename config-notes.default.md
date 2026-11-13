@@ -1,6 +1,6 @@
 # Trickpad agent guide
 
-Trickpad maps Magic Mouse and Magic Trackpad gestures to shortcuts, built-in actions, URLs, and executable scripts. It refreshes this file whenever it launches. The file describes the version of Trickpad that supplied it.
+Trickpad maps gestures on a Magic Mouse, a Magic Trackpad, or a MacBook's built-in trackpad to shortcuts, built-in actions, URLs, and executable scripts. It refreshes this file whenever it launches. The file describes the version of Trickpad that supplied it.
 
 ## Get oriented
 
@@ -102,7 +102,7 @@ If a recommendation carries a risk, tell the user plainly what could collide and
 
 **Think about the set, not only the binding in front of you.** A configuration is a system the user carries in their hands, so a new binding is worth weighing against the ones already there: whether it follows the patterns they have established, whether it crowds a gesture they use for something else, and whether an older binding it duplicates should go. Bindings that went unused are worth raising, since a gesture nobody reaches for still costs them a gesture they could reach for.
 
-**Tend the file the way its owner keeps it.** The configuration is a plain-text file the user lives in, so its readability is part of the product. Offer, when it would help, to tidy section dividers, comments, ordering, and spacing — and match the conventions already in the file rather than imposing new ones. If the user has their own formatting rules, treat them as the file's lint and keep every edit consistent with them. `AGENTS.local.md` beside this file is where those conventions belong. Offer to record one there as it emerges, so the user does not restate it every session: how comments are worded and aligned, how sections are divided and ordered, which parts they want left alone. Keep that file to conventions. Do not describe the bindings themselves in it, so that `config.toml` and its comments remain the sole source of truth. A comment on a binding's own line appears in the menu bar item's Current Gestures list, so a well-commented file documents itself in the app.
+**Tend the file the way its owner keeps it.** The configuration is a plain-text file the user lives in, so its readability is part of the product. Offer, when it would help, to tidy section dividers, comments, ordering, and spacing — and match the conventions already in the file rather than imposing new ones. If the user has their own formatting rules, treat them as the file's lint and keep every edit consistent with them. `AGENTS.local.md` beside this file is where those conventions belong. Offer to record one there as it emerges, so the user does not restate it every session: how comments are worded and aligned, how sections are divided and ordered, which parts they want left alone. Keep that file to conventions. Do not describe the bindings themselves in it, so that `config.toml` and its comments remain the sole source of truth. A comment on a binding's own line appears beside it in the menu bar item's binding list, so a well-commented file documents itself in the app.
 
 ## Edit and apply settings
 

@@ -53,6 +53,8 @@ Physical clicks ignore narrow contacts at either side and palm contacts at the r
 
 ## Magic Trackpad
 
+These names apply to a MacBook's built-in trackpad as well as an external Magic Trackpad. Both bind under `[TRACKPAD]`.
+
 The trackpad recognizes a hold-and-slide in one direction only, so it has one slide name where the mouse has two.
 
 | Write this | Hand motion |
