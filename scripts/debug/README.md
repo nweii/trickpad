@@ -8,7 +8,7 @@ Small single-file programs for diagnosing keyboard and input problems by hand. N
 - `release-right-control.m` — releases a right-Control modifier left held down.
 - `dock-notification-probe.m` — reports which `CoreDockSendNotification` call form macOS honors, so a Mission Control or App Expose action that does nothing can be told apart from a gesture that never fired.
 - `watch-middle-button.m` — prints every middle-button down, drag, and up, so a `middle-click` binding can be watched without an application that uses the middle button. A press that never prints its up left the button down.
-- `stress-middle-button.m` — measures Trickpad DEV's CPU use during a sustained Mouse3 drag and reports duplicate, missing, or out-of-order button events.
+- `stress-middle-button.m` — measures Trickpad Dev's CPU use during a sustained Mouse3 drag and reports duplicate, missing, or out-of-order button events.
 - `menu-ax-probe.m` — passively tests bounded, literal Accessibility traversal of the frontmost application's menu bar; an explicit `--press` mode is reserved for a chosen harmless command.
 
 Compile one with clang, naming the frameworks it imports:
@@ -43,7 +43,7 @@ To check a trackpad middle-click lifecycle:
 
 To check the reposted Mouse3 path for performance and lifecycle regressions:
 
-1. Launch `/Applications/Trickpad DEV.app` and compile `stress-middle-button.m` with the command above.
+1. Launch `/Applications/Trickpad Dev.app` and compile `stress-middle-button.m` with the command above.
 2. Run `/tmp/stress-middle-button` and wait for its ready message.
 3. Hold the physical gesture bound to `middle-click`, move continuously for 10 seconds, then release.
 4. Confirm the pointer stayed smooth. The monitor must report one down, one up, no lifecycle failures, at least 40 drag events, and the measured drag and idle CPU percentages.

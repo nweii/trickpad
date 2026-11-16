@@ -200,4 +200,43 @@ if grep -q '^PUT .*appcast.xml$' "$REQUEST_LOG"; then
   exit 1
 fi
 
+# Trickpad Dev publishes to its own feed directory, and names builds by number
+# because every Dev build in a train shares one version string.
+DEV_UPDATES_DIR="$WORK_ROOT/updates-dev"
+mkdir -p "$DEV_UPDATES_DIR"
+printf 'dev-archive\n' > "$DEV_UPDATES_DIR/Trickpad-Dev-202611161700.zip"
+DEV_ARCHIVE_LENGTH="$(stat -f %z "$DEV_UPDATES_DIR/Trickpad-Dev-202611161700.zip")"
+cat > "$DEV_UPDATES_DIR/appcast.xml" <<XML
+<?xml version="1.0"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <item>
+      <sparkle:version>202611161700</sparkle:version>
+      <sparkle:shortVersionString>1.0.1-dev</sparkle:shortVersionString>
+      <enclosure url="https://updates.thirdwind.fyi/trickpad/9zvff4/dev/Trickpad-Dev-202611161700.zip" length="$DEV_ARCHIVE_LENGTH" />
+    </item>
+  </channel>
+</rss>
+XML
+
+if UPDATES_DIR="$DEV_UPDATES_DIR" run_publisher > "$WORK_ROOT/dev-as-release.out" 2>&1; then
+  echo "publish check: the release feed accepted an appcast naming Dev archives" >&2
+  exit 1
+fi
+
+: > "$REQUEST_LOG"
+output="$(UPDATES_DIR="$DEV_UPDATES_DIR" run_publisher --dev --publish 202611161700 --yes)"
+grep -q 'Published and publicly verified Trickpad Dev 202611161700' <<< "$output" || {
+  echo "publish check: Dev publication did not report verified completion by build number" >&2
+  exit 1
+}
+grep -q '^PUT .*/trickpad/9zvff4/dev/appcast.xml$' "$REQUEST_LOG" || {
+  echo "publish check: Dev publication did not write the Dev feed" >&2
+  exit 1
+}
+if grep -q '^PUT .*/trickpad/9zvff4/appcast.xml$' "$REQUEST_LOG"; then
+  echo "publish check: Dev publication wrote the release feed" >&2
+  exit 1
+fi
+
 echo "publish check passed"
