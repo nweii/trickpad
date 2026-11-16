@@ -18,8 +18,9 @@ LEGACY="$INSTALL_DIR/Trickpad DEV.app"
 
 # Quit through the application rather than its menu, so the running Dev copy
 # does not hand back to the released copy only to take over again below.
+# Case-insensitive, so it also finds a copy still running under the old name.
 running_dev() {
-  pgrep -f "/Trickpad De[vV]\.app/Contents/MacOS/" >/dev/null 2>&1
+  pgrep -if "/Trickpad Dev\.app/Contents/MacOS/" >/dev/null 2>&1
 }
 if running_dev; then
   osascript -e "tell application id \"$BUNDLE_ID\" to quit" >/dev/null 2>&1 || true
