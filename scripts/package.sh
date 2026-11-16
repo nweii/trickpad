@@ -1,22 +1,50 @@
 #!/bin/zsh
 # Builds a styled Trickpad disk image containing the app, Applications link,
-# license notices, and exact corresponding-source link.
+# license notices, and exact corresponding-source link, plus the signed update
+# set its feed names.
+#
+# --dev packages a Trickpad Dev build instead: only the update set, for the Dev
+# feed, with no disk image, tag, or version change. A Dev build reaches people
+# through the updater of a Dev copy they already installed.
 set -euo pipefail
 export COPYFILE_DISABLE=1
 
 ROOT="${0:A:h:h}"
+DEV_CHANNEL=0
+case "${1:-}" in
+  "") ;;
+  --dev) DEV_CHANNEL=1 ;;
+  *) echo "Usage: $0 [--dev]" >&2; exit 2 ;;
+esac
 APP_NAME="Trickpad"
+(( DEV_CHANNEL )) && APP_NAME="Trickpad Dev"
 BUILD_ROOT="$ROOT/build"
 APP_BUNDLE="$BUILD_ROOT/$APP_NAME.app"
 BACKGROUND="$ROOT/packaging/dmg-background.png"
 BACKGROUND_RETINA="$ROOT/packaging/dmg-background@2x.png"
 
-command -v appdmg >/dev/null || {
-  echo "Packaging requires appdmg. Install it with: npm install -g appdmg" >&2
-  exit 1
-}
+if (( ! DEV_CHANNEL )); then
+  command -v appdmg >/dev/null || {
+    echo "Packaging requires appdmg. Install it with: npm install -g appdmg" >&2
+    exit 1
+  }
+fi
 
-"$ROOT/scripts/build.sh" >/dev/null
+if (( DEV_CHANNEL )); then
+  # The build stamp is the only pointer from a Dev build to its source, so it
+  # must name a commit anyone can fetch: committed, and present on the remote.
+  git -C "$ROOT" diff --quiet HEAD || {
+    echo "Commit or stash changes before packaging a Dev build." >&2
+    exit 1
+  }
+  [[ -n "$(git -C "$ROOT" branch -r --contains HEAD 2>/dev/null)" ]] || {
+    echo "Push $(git -C "$ROOT" rev-parse --short HEAD) before packaging a Dev build." >&2
+    exit 1
+  }
+  "$ROOT/scripts/build.sh" --dev >/dev/null
+else
+  "$ROOT/scripts/build.sh" >/dev/null
+fi
 
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_BUNDLE/Contents/Info.plist")"
 DMG_PATH="$BUILD_ROOT/$APP_NAME-$VERSION.dmg"
@@ -34,127 +62,129 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# The disk image carries a corresponding-source link derived from v$VERSION, so
-# the tag must exist at the packaged commit before packaging. A tag pointing
-# elsewhere means this version already shipped from different source; a missing
-# tag means the link would name a page that does not exist yet.
-TAG_COMMIT="$(git -C "$ROOT" rev-list -n 1 "v$VERSION" 2>/dev/null || true)"
-if [[ -z "$TAG_COMMIT" ]]; then
-  echo "No tag v$VERSION exists. Tag this commit before packaging:" >&2
-  echo "  git tag -a v$VERSION -m \"$VERSION\"" >&2
-  echo "Keep the tag local until the package and publish preview verify." >&2
-  exit 1
-elif [[ "$TAG_COMMIT" != "$(git -C "$ROOT" rev-parse HEAD)" ]]; then
-  echo "Version $VERSION already belongs to a different source commit." >&2
-  echo "Bump the app version before packaging this build." >&2
-  exit 1
-fi
-
-# An updater decides whether a release is newer by comparing build numbers, so a
-# number that repeats or goes backwards leaves everyone already installed with
-# no way to be offered this release. The failure is silent at the customer's
-# end, which is why it is caught here rather than noticed later.
-BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_BUNDLE/Contents/Info.plist")"
-[[ "$BUILD_NUMBER" == <-> ]] || {
-  echo "CFBundleVersion must be a plain integer, found \"$BUILD_NUMBER\"." >&2
-  exit 1
-}
-
-# Compared against the highest build number any earlier release carries, not
-# just the previous tag's. Tags predating APP_BUILD_NUMBER declare none, and
-# skipping those is correct rather than an error. Read from tagged source, which
-# the working tree cannot edit.
-HIGHEST_RELEASED_BUILD_NUMBER=0
-HIGHEST_RELEASED_TAG=""
-for tag in $(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | grep -v "^v$VERSION\$"); do
-  # Braced because zsh reads an unbraced $tag:s… as a substitution modifier.
-  # The trailing fallback matters under pipefail: a tag with no build number
-  # makes grep exit non-zero, which would otherwise abort packaging outright.
-  tagged_number="$(git -C "$ROOT" show "${tag}:scripts/build.sh" 2>/dev/null |
-    grep -m 1 '^APP_BUILD_NUMBER=' | tr -dc '0-9' || true)"
-  [[ -n "$tagged_number" ]] || continue
-  if (( tagged_number > HIGHEST_RELEASED_BUILD_NUMBER )); then
-    HIGHEST_RELEASED_BUILD_NUMBER=$tagged_number
-    HIGHEST_RELEASED_TAG="$tag"
+if (( ! DEV_CHANNEL )); then
+  # The disk image carries a corresponding-source link derived from v$VERSION, so
+  # the tag must exist at the packaged commit before packaging. A tag pointing
+  # elsewhere means this version already shipped from different source; a missing
+  # tag means the link would name a page that does not exist yet.
+  TAG_COMMIT="$(git -C "$ROOT" rev-list -n 1 "v$VERSION" 2>/dev/null || true)"
+  if [[ -z "$TAG_COMMIT" ]]; then
+    echo "No tag v$VERSION exists. Tag this commit before packaging:" >&2
+    echo "  git tag -a v$VERSION -m \"$VERSION\"" >&2
+    echo "Keep the tag local until the package and publish preview verify." >&2
+    exit 1
+  elif [[ "$TAG_COMMIT" != "$(git -C "$ROOT" rev-parse HEAD)" ]]; then
+    echo "Version $VERSION already belongs to a different source commit." >&2
+    echo "Bump the app version before packaging this build." >&2
+    exit 1
   fi
-done
 
-if [[ -n "$HIGHEST_RELEASED_TAG" ]] &&
-   (( BUILD_NUMBER <= HIGHEST_RELEASED_BUILD_NUMBER )); then
-  echo "Build number $BUILD_NUMBER does not exceed $HIGHEST_RELEASED_BUILD_NUMBER from $HIGHEST_RELEASED_TAG." >&2
-  echo "Raise APP_BUILD_NUMBER in scripts/build.sh before packaging." >&2
-  exit 1
+  # An updater decides whether a release is newer by comparing build numbers, so a
+  # number that repeats or goes backwards leaves everyone already installed with
+  # no way to be offered this release. The failure is silent at the customer's
+  # end, which is why it is caught here rather than noticed later.
+  BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_BUNDLE/Contents/Info.plist")"
+  [[ "$BUILD_NUMBER" == <-> ]] || {
+    echo "CFBundleVersion must be a plain integer, found \"$BUILD_NUMBER\"." >&2
+    exit 1
+  }
+
+  # Compared against the highest build number any earlier release carries, not
+  # just the previous tag's. Tags predating APP_BUILD_NUMBER declare none, and
+  # skipping those is correct rather than an error. Read from tagged source, which
+  # the working tree cannot edit.
+  HIGHEST_RELEASED_BUILD_NUMBER=0
+  HIGHEST_RELEASED_TAG=""
+  for tag in $(git -C "$ROOT" tag --list 'v*' --sort=-v:refname | grep -v "^v$VERSION\$"); do
+    # Braced because zsh reads an unbraced $tag:s… as a substitution modifier.
+    # The trailing fallback matters under pipefail: a tag with no build number
+    # makes grep exit non-zero, which would otherwise abort packaging outright.
+    tagged_number="$(git -C "$ROOT" show "${tag}:scripts/build.sh" 2>/dev/null |
+      grep -m 1 '^APP_BUILD_NUMBER=' | tr -dc '0-9' || true)"
+    [[ -n "$tagged_number" ]] || continue
+    if (( tagged_number > HIGHEST_RELEASED_BUILD_NUMBER )); then
+      HIGHEST_RELEASED_BUILD_NUMBER=$tagged_number
+      HIGHEST_RELEASED_TAG="$tag"
+    fi
+  done
+
+  if [[ -n "$HIGHEST_RELEASED_TAG" ]] &&
+     (( BUILD_NUMBER <= HIGHEST_RELEASED_BUILD_NUMBER )); then
+    echo "Build number $BUILD_NUMBER does not exceed $HIGHEST_RELEASED_BUILD_NUMBER from $HIGHEST_RELEASED_TAG." >&2
+    echo "Raise APP_BUILD_NUMBER in scripts/build.sh before packaging." >&2
+    exit 1
+  fi
+
+  [[ -f "$BACKGROUND" ]] || {
+    echo "Missing DMG background: $BACKGROUND" >&2
+    exit 1
+  }
+  [[ -f "$BACKGROUND_RETINA" ]] || {
+    echo "Missing Retina DMG background: $BACKGROUND_RETINA" >&2
+    exit 1
+  }
+
+  mkdir -p "$STAGE/Legal"
+  cp "$ROOT/LICENSE.txt" "$ROOT/NOTICE.txt" "$ROOT/TRADEMARKS.md" "$STAGE/Legal/"
+  printf '%s\n' \
+    "The exact corresponding source for this build is available at:" \
+    "https://github.com/nweii/trickpad/tree/v$VERSION" \
+    > "$STAGE/Legal/SOURCE.txt"
+
+  cat > "$SPEC" <<JSON
+  {
+    "title": "$VOLUME_NAME",
+    "background": "$BACKGROUND",
+    "icon-size": 104,
+    "window": {
+      "position": { "x": 120, "y": 120 },
+      "size": { "width": 660, "height": 540 }
+    },
+    "format": "UDZO",
+    "filesystem": "HFS+",
+    "contents": [
+      { "x": 175, "y": 150, "type": "file", "path": "$APP_BUNDLE" },
+      { "x": 485, "y": 150, "type": "link", "path": "/Applications" },
+      { "x": 330, "y": 445, "type": "file", "path": "$STAGE/Legal" }
+    ]
+  }
+  JSON
+
+  [[ ! -e "$DMG_PATH" ]] || mv "$DMG_PATH" "$WORK_ROOT/previous.dmg"
+  appdmg "$SPEC" "$DMG_PATH"
+
+  hdiutil verify "$DMG_PATH" -quiet
+  mkdir -p "$VERIFY_DIR"
+  DEVICE="$(hdiutil attach -readonly -noverify -noautoopen -mountpoint "$VERIFY_DIR" "$DMG_PATH" |
+    awk '/Apple_HFS/ { print $1; exit }')"
+  [[ -n "$DEVICE" ]] || {
+    echo "Could not mount the finished disk image." >&2
+    exit 1
+  }
+
+  for required in \
+    "$APP_NAME.app/Contents/Info.plist" \
+    "Applications" \
+    "Legal/LICENSE.txt" \
+    "Legal/NOTICE.txt" \
+    "Legal/TRADEMARKS.md" \
+    "Legal/SOURCE.txt"; do
+    [[ -e "$VERIFY_DIR/$required" ]] || {
+      echo "Disk image is missing $required" >&2
+      exit 1
+    }
+  done
+
+  grep -Fxq "https://github.com/nweii/trickpad/tree/v$VERSION" \
+    "$VERIFY_DIR/Legal/SOURCE.txt" || {
+      echo "Disk image has the wrong corresponding-source link." >&2
+      exit 1
+    }
+  codesign --verify --deep --strict "$VERIFY_DIR/$APP_NAME.app"
+
+  hdiutil detach "$DEVICE" -quiet
+  DEVICE=""
 fi
-
-[[ -f "$BACKGROUND" ]] || {
-  echo "Missing DMG background: $BACKGROUND" >&2
-  exit 1
-}
-[[ -f "$BACKGROUND_RETINA" ]] || {
-  echo "Missing Retina DMG background: $BACKGROUND_RETINA" >&2
-  exit 1
-}
-
-mkdir -p "$STAGE/Legal"
-cp "$ROOT/LICENSE.txt" "$ROOT/NOTICE.txt" "$ROOT/TRADEMARKS.md" "$STAGE/Legal/"
-printf '%s\n' \
-  "The exact corresponding source for this build is available at:" \
-  "https://github.com/nweii/trickpad/tree/v$VERSION" \
-  > "$STAGE/Legal/SOURCE.txt"
-
-cat > "$SPEC" <<JSON
-{
-  "title": "$VOLUME_NAME",
-  "background": "$BACKGROUND",
-  "icon-size": 104,
-  "window": {
-    "position": { "x": 120, "y": 120 },
-    "size": { "width": 660, "height": 540 }
-  },
-  "format": "UDZO",
-  "filesystem": "HFS+",
-  "contents": [
-    { "x": 175, "y": 150, "type": "file", "path": "$APP_BUNDLE" },
-    { "x": 485, "y": 150, "type": "link", "path": "/Applications" },
-    { "x": 330, "y": 445, "type": "file", "path": "$STAGE/Legal" }
-  ]
-}
-JSON
-
-[[ ! -e "$DMG_PATH" ]] || mv "$DMG_PATH" "$WORK_ROOT/previous.dmg"
-appdmg "$SPEC" "$DMG_PATH"
-
-hdiutil verify "$DMG_PATH" -quiet
-mkdir -p "$VERIFY_DIR"
-DEVICE="$(hdiutil attach -readonly -noverify -noautoopen -mountpoint "$VERIFY_DIR" "$DMG_PATH" |
-  awk '/Apple_HFS/ { print $1; exit }')"
-[[ -n "$DEVICE" ]] || {
-  echo "Could not mount the finished disk image." >&2
-  exit 1
-}
-
-for required in \
-  "$APP_NAME.app/Contents/Info.plist" \
-  "Applications" \
-  "Legal/LICENSE.txt" \
-  "Legal/NOTICE.txt" \
-  "Legal/TRADEMARKS.md" \
-  "Legal/SOURCE.txt"; do
-  [[ -e "$VERIFY_DIR/$required" ]] || {
-    echo "Disk image is missing $required" >&2
-    exit 1
-  }
-done
-
-grep -Fxq "https://github.com/nweii/trickpad/tree/v$VERSION" \
-  "$VERIFY_DIR/Legal/SOURCE.txt" || {
-    echo "Disk image has the wrong corresponding-source link." >&2
-    exit 1
-  }
-codesign --verify --deep --strict "$VERIFY_DIR/$APP_NAME.app"
-
-hdiutil detach "$DEVICE" -quiet
-DEVICE=""
 
 # The styled image is for purchase and first install, where it carries the
 # Gatekeeper instructions. An update replaces a bundle that is already in place,
@@ -163,8 +193,20 @@ DEVICE=""
 # Skipped entirely when the app carries no updater, which is the same condition
 # that leaves SUPublicEDKey unset in scripts/build.sh.
 if /usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP_BUNDLE/Contents/Info.plist" >/dev/null 2>&1; then
-  UPDATES_DIR="$BUILD_ROOT/updates"
-  UPDATE_ARCHIVE="$UPDATES_DIR/$APP_NAME-$VERSION.zip"
+  if (( DEV_CHANNEL )); then
+    # Every Dev build shares the train's version, so the build number names
+    # the archive. Kept apart from the release set, since generate_appcast
+    # writes one feed for everything in its folder.
+    BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_BUNDLE/Contents/Info.plist")"
+    UPDATES_DIR="$BUILD_ROOT/updates-dev"
+    ARCHIVE_STEM="Trickpad-Dev-$BUILD_NUMBER"
+    FEED_ENTRY="$BUILD_NUMBER"
+  else
+    UPDATES_DIR="$BUILD_ROOT/updates"
+    ARCHIVE_STEM="$APP_NAME-$VERSION"
+    FEED_ENTRY="$VERSION"
+  fi
+  UPDATE_ARCHIVE="$UPDATES_DIR/$ARCHIVE_STEM.zip"
   mkdir -p "$UPDATES_DIR"
 
   # ditto keeps the bundle's symlinks and signature intact, which a plain zip
@@ -175,9 +217,13 @@ if /usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP_BUNDLE/Contents/Info.plis
   # generate_appcast reads release notes from a file named after the archive,
   # so the entry a customer sees comes from the changelog rather than being
   # written twice.
-  RELEASE_NOTES="$UPDATES_DIR/$APP_NAME-$VERSION.html"
+  RELEASE_NOTES="$UPDATES_DIR/$ARCHIVE_STEM.html"
+  # A Dev build has no release section yet, so it shows what is staged under
+  # Unreleased and names the commit it was built from.
+  NOTES_HEADING="$VERSION"
+  (( DEV_CHANNEL )) && NOTES_HEADING="Unreleased"
   if [[ -f "$ROOT/CHANGELOG.md" ]]; then
-    awk -v version="$VERSION" '
+    awk -v version="$NOTES_HEADING" '
       $0 == "## " version { collecting = 1; next }
       collecting && /^## / { exit }
       collecting { print }
@@ -203,6 +249,10 @@ if /usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP_BUNDLE/Contents/Info.plis
         END { if (inList) print "</ul>" }
       ' "$WORK_ROOT/notes-escaped.md" > "$RELEASE_NOTES"
     fi
+  fi
+  if (( DEV_CHANNEL )); then
+    stamp="$(/usr/libexec/PlistBuddy -c 'Print :TrickpadBuildStamp' "$APP_BUNDLE/Contents/Info.plist")"
+    print -r -- "<p>Built from <code>$stamp</code>.</p>" >> "$RELEASE_NOTES"
   fi
   [[ -s "$RELEASE_NOTES" ]] || {
     echo "No changelog section found for $VERSION, so the update would ship with no notes." >&2
@@ -233,8 +283,8 @@ if /usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP_BUNDLE/Contents/Info.plis
     echo "The appcast carries no signature, so no installed copy would accept it." >&2
     exit 1
   }
-  grep -Fq "$VERSION" "$APPCAST" || {
-    echo "The appcast has no entry for $VERSION." >&2
+  grep -Fq "$FEED_ENTRY" "$APPCAST" || {
+    echo "The appcast has no entry for $FEED_ENTRY." >&2
     exit 1
   }
 
@@ -266,12 +316,14 @@ if /usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP_BUNDLE/Contents/Info.plis
   # Cache headers are named here because inheriting the host's default caches
   # the feed for hours, which leaves a published release invisible and, worse,
   # lets the feed and its archives disagree about what an archive contains.
-  echo "To preview publication, run scripts/publish.sh." >&2
+  PUBLISH_FLAG=""
+  (( DEV_CHANNEL )) && PUBLISH_FLAG=" --dev"
+  echo "To preview publication, run scripts/publish.sh$PUBLISH_FLAG." >&2
   echo "It uploads every file listed above before appcast.xml and verifies the public URLs." >&2
   echo "The publisher applies these cache headers:" >&2
   echo "  archives and deltas: --cache-control 'public, max-age=31536000, immutable'" >&2
   echo "  appcast.xml:         --cache-control 'public, max-age=60'" >&2
-  echo "After approving the preview, run scripts/publish.sh --publish $VERSION." >&2
+  echo "After approving the preview, run scripts/publish.sh$PUBLISH_FLAG --publish $FEED_ENTRY." >&2
 fi
 
-echo "$DMG_PATH"
+(( DEV_CHANNEL )) || echo "$DMG_PATH"

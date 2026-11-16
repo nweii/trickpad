@@ -18,15 +18,15 @@ Open an issue or a draft pull request before finishing a new gesture, a change t
 
 Most changes belong in `src/Config.m`. Change the recognizers in `src/jitouch/` if you can show the engine is wrong, and describe the evidence in the pull request.
 
-Test through the development bundle, which leaves your installed copy alone:
+Test through Trickpad Dev, a separate development app that leaves your installed copy alone:
 
 ```bash
 ./scripts/build.sh --dev
-open "build/Trickpad DEV.app"
+open "build/Trickpad Dev.app"
 ./scripts/check.sh
 ```
 
-The development bundle needs its own Accessibility permission the first time it runs. Quit it when you finish, and the installed copy resumes on its own.
+Opening Trickpad Dev takes over from the installed copy. It needs its own Accessibility permission the first time it runs. Quit it from its menu when you finish, and the installed copy starts again.
 
 Add a line for each new gesture, key, action, or setting to `GESTURES.md`, or `check.sh` fails. Say so in the pull request if a change renames or removes a configuration name, because existing configuration files stop matching it.
 

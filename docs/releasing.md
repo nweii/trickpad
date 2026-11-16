@@ -48,6 +48,20 @@ The edge also caches a 404 for a URL that does not exist yet, and any probe of a
 
 `scripts/publish.sh` automates that publication without joining it to packaging. Its default mode authenticates through the repository's non-secret Infisical pointer, reads `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` from `workstation/prod/trickpad-publish`, and previews both R2 and the public URLs without writing. Those credentials are an R2 account token restricted to Object Read & Write on `thirdwind-updates`; the publisher needs no zone permission. Live mode requires `--publish VERSION`, repeats the preview, and asks for the exact version unless `--yes` follows Nathan's approval. It uploads every archive and delta before `appcast.xml`, then reads each public URL back and compares its bytes and cache header. A different file at an immutable archive URL stops publication; replacement and cache purge remain a separate recovery operation.
 
+## Publishing a Dev build
+
+Trickpad Dev, described in `AGENTS.md`, updates through its own feed at `https://updates.thirdwind.fyi/trickpad/9zvff4/dev/appcast.xml`, signed with the same key as releases. Publishing a Dev build changes no version, tag, changelog, or storefront, and nothing reaches the release feed.
+
+```bash
+./scripts/package.sh --dev               # clean, pushed commit; writes build/updates-dev
+./scripts/publish.sh --dev               # read-only preview of the Dev feed
+./scripts/publish.sh --dev --publish N   # N is the Dev build number the preview names
+```
+
+`package.sh --dev` refuses uncommitted changes and a commit absent from the remote, because the build stamp in About is the only pointer from a Dev build to its source. The archive is named by build number, and the update notes are the changelog's `## Unreleased` section plus the commit the build came from. Publishing follows the release rules above: archives and deltas first, the appcast last, each read back.
+
+Deltas need the earlier archive on disk, and `build/` is safe to delete, so a Dev feed whose earlier archives are gone simply offers the full archive.
+
 ## What a release commits this repository to
 
 Both of these fail quietly unless guarded.

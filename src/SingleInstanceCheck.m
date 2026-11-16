@@ -1,5 +1,5 @@
-// Asserts that only one process at a time holds the instance lock, and that a
-// holder that dies releases it.
+// Asserts that only one process at a time holds the instance lock, that a
+// holder that dies releases it, and that each channel names the other.
 
 #import <Foundation/Foundation.h>
 #import <sys/wait.h>
@@ -134,6 +134,23 @@ int main(void) {
 
         unlink(path);
         rmdir(folder);
+
+        // Each channel names the other, so either copy can find and take over
+        // from the one running. A bare ".dev" names no release channel.
+        require([MGOtherChannelBundleIdentifier(@"fyi.thirdwind.trickpad")
+                     isEqualToString:@"fyi.thirdwind.trickpad.dev"],
+                @"the release channel did not name Trickpad Dev");
+        require([MGOtherChannelBundleIdentifier(@"fyi.thirdwind.trickpad.dev")
+                     isEqualToString:@"fyi.thirdwind.trickpad"],
+                @"Trickpad Dev did not name the release channel");
+        require(MGIsDevelopmentBundleIdentifier(@"fyi.thirdwind.trickpad.dev"),
+                @"Trickpad Dev was not recognized as the development channel");
+        require(!MGIsDevelopmentBundleIdentifier(@"fyi.thirdwind.trickpad"),
+                @"the release channel was taken for the development channel");
+        require(!MGIsDevelopmentBundleIdentifier(@".dev"),
+                @"a bare suffix was taken for the development channel");
+        require(MGOtherChannelBundleIdentifier(@"") == nil,
+                @"an empty identifier named another channel");
 
         if (failures == 0)
             NSLog(@"single instance: all checks passed");

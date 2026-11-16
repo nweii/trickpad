@@ -1,4 +1,4 @@
-// Measures Trickpad DEV CPU use and validates the Mouse3 event lifecycle during
+// Measures Trickpad Dev CPU use and validates the Mouse3 event lifecycle during
 // one sustained physical press-drag-release test.
 
 #import <AppKit/AppKit.h>
@@ -42,7 +42,7 @@ static CGEventRef observe(CGEventTapProxy proxy, CGEventType type,
         state->downAt = CFAbsoluteTimeGetCurrent();
         if (!processCPUTime(state->trickpadPID, &state->cpuAtDown)) {
             state->failures++;
-            printf("FAIL  could not read Trickpad DEV CPU time\n");
+            printf("FAIL  could not read Trickpad Dev CPU time\n");
         }
         printf("DOWN  Hold the gesture and drag continuously for 10 seconds.\n");
     } else if (type == kCGEventOtherMouseDragged) {
@@ -73,7 +73,7 @@ static CGEventRef observe(CGEventTapProxy proxy, CGEventType type,
         if (!processCPUTime(state->trickpadPID, &cpuAtUp) ||
             cpuAtUp < state->cpuAtDown || duration <= 0) {
             state->failures++;
-            printf("FAIL  could not finish the Trickpad DEV CPU measurement\n");
+            printf("FAIL  could not finish the Trickpad Dev CPU measurement\n");
         } else {
             cpuPercent = ((double)(cpuAtUp - state->cpuAtDown) / 1e9) /
                 duration * 100.0;
@@ -105,7 +105,7 @@ int main(void) {
             runningApplicationsWithBundleIdentifier:@"fyi.thirdwind.trickpad.dev"];
         NSRunningApplication *trickpad = [apps firstObject];
         if (trickpad == nil) {
-            fprintf(stderr, "Trickpad DEV is not running from an application bundle.\n");
+            fprintf(stderr, "Trickpad Dev is not running from an application bundle.\n");
             return 1;
         }
 
@@ -113,10 +113,10 @@ int main(void) {
         state.trickpadPID = [trickpad processIdentifier];
         uint64_t idleStart = 0, idleEnd = 0;
         if (!processCPUTime(state.trickpadPID, &idleStart)) {
-            fprintf(stderr, "Could not read Trickpad DEV CPU time.\n");
+            fprintf(stderr, "Could not read Trickpad Dev CPU time.\n");
             return 1;
         }
-        printf("Measuring Trickpad DEV idle CPU for 2 seconds...\n");
+        printf("Measuring Trickpad Dev idle CPU for 2 seconds...\n");
         fflush(stdout);
         [NSThread sleepForTimeInterval:2.0];
         if (!processCPUTime(state.trickpadPID, &idleEnd)) {

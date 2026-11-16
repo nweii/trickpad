@@ -1,5 +1,5 @@
 // Keeps one copy of the app running when the updater and launchd both start
-// one, and lets a development build take over from a running release copy.
+// one, and lets whichever channel was opened last take over from the other.
 
 #import "SingleInstance.h"
 #import <AppKit/AppKit.h>
@@ -26,31 +26,85 @@ static NSString *instanceLockPath(void) {
     return [folder stringByAppendingPathComponent:@".instance.lock"];
 }
 
-// A development build carries the release identifier with a ".dev" suffix and
-// installs beside the released copy. Both read one configuration folder, so
-// the lock stays shared and keyed on that folder: two copies running at once
-// would dispatch every gesture twice, whichever builds they are.
-static BOOL isDevelopmentBundle(void) {
-    return [[[NSBundle mainBundle] bundleIdentifier] hasSuffix:@".dev"];
+NSString *const MGLoginAgentLabel = @"fyi.thirdwind.trickpad.agent";
+
+NSString *MGLoginAgentPlistPath(void) {
+    NSString *name = [MGLoginAgentLabel stringByAppendingPathExtension:@"plist"];
+    return [[NSHomeDirectory() stringByAppendingPathComponent:@"Library/LaunchAgents"]
+        stringByAppendingPathComponent:name];
 }
 
-// The development build is the copy someone just launched deliberately, and
-// this app has no window in which to explain standing down, so it takes the
-// lock instead: ask every other running copy to quit, then wait for the lock
-// the kernel releases when the holder exits. The released copy never does
-// this in reverse. The terminate request is repeated because a holder that
-// started moments ago may not yet be registered with the workspace.
-static BOOL seizeInstanceLock(void) {
-    NSString *devID = [[NSBundle mainBundle] bundleIdentifier];
-    NSString *releaseID = [devID substringToIndex:devID.length - [@".dev" length]];
+// Trickpad Dev carries the release identifier with a ".dev" suffix and installs
+// beside the released copy. Both read one configuration folder, so the lock
+// stays shared and keyed on that folder: two copies running at once would
+// dispatch every gesture twice, whichever channels they come from.
+static NSString *const kDevelopmentSuffix = @".dev";
+
+BOOL MGIsDevelopmentBundleIdentifier(NSString *bundleID) {
+    return [bundleID hasSuffix:kDevelopmentSuffix] && [bundleID length] > [kDevelopmentSuffix length];
+}
+
+NSString *MGOtherChannelBundleIdentifier(NSString *bundleID) {
+    if ([bundleID length] == 0)
+        return nil;
+    if (MGIsDevelopmentBundleIdentifier(bundleID))
+        return [bundleID substringToIndex:[bundleID length] - [kDevelopmentSuffix length]];
+    return [bundleID stringByAppendingString:kDevelopmentSuffix];
+}
+
+BOOL MGIsDevelopmentBundle(void) {
+    return MGIsDevelopmentBundleIdentifier([[NSBundle mainBundle] bundleIdentifier]);
+}
+
+static BOOL runLaunchctl(NSArray *arguments) {
+    NSTask *task = [[[NSTask alloc] init] autorelease];
+    [task setLaunchPath:@"/bin/launchctl"];
+    [task setArguments:arguments];
+    [task setStandardOutput:[NSFileHandle fileHandleWithNullDevice]];
+    [task setStandardError:[NSFileHandle fileHandleWithNullDevice]];
+    @try {
+        [task launch];
+        [task waitUntilExit];
+    } @catch (NSException *exception) {
+        return NO;
+    }
+    return [task terminationStatus] == 0;
+}
+
+static NSString *loginAgentTarget(void) {
+    return [NSString stringWithFormat:@"gui/%d/%@", (int)getuid(), MGLoginAgentLabel];
+}
+
+static NSArray<NSRunningApplication *> *otherCopies(NSString *bundleID) {
+    NSMutableArray *copies = [NSMutableArray array];
+    for (NSRunningApplication *app in [NSRunningApplication runningApplicationsWithBundleIdentifier:bundleID]) {
+        if (app.processIdentifier != getpid())
+            [copies addObject:app];
+    }
+    return copies;
+}
+
+// Opening one channel while the other runs is a deliberate switch, and this app
+// has no window in which to explain standing down, so the copy just opened
+// takes the lock: ask the other channel to quit, then wait for the lock the
+// kernel releases when it exits. A copy of the same channel never takes over,
+// because the updater and the login agent can each start one moments after the
+// other, and taking over there would leave the two trading the lock forever.
+//
+// Trickpad Dev also stops the release channel's login agent. Its job would
+// otherwise restart the released copy as soon as it exits, and that copy would
+// take the lock straight back. Quitting Dev starts the job again; see
+// MGHandBackToReleaseChannel.
+static BOOL seizeInstanceLock(NSString *otherID) {
+    if (MGIsDevelopmentBundle())
+        runLaunchctl(@[@"bootout", loginAgentTarget()]);
+
+    // The terminate request is repeated because a holder that started moments
+    // ago may not yet be registered with the workspace.
     for (int attempt = 0; attempt < 5; attempt++) {
-        for (NSString *bundleID in @[releaseID, devID]) {
-            for (NSRunningApplication *app in [NSRunningApplication runningApplicationsWithBundleIdentifier:bundleID]) {
-                if (app.processIdentifier == getpid())
-                    continue;
-                NSLog(@"Development build asking pid %d (%@) to quit", app.processIdentifier, bundleID);
-                [app terminate];
-            }
+        for (NSRunningApplication *app in otherCopies(otherID)) {
+            NSLog(@"Taking over from pid %d (%@)", app.processIdentifier, otherID);
+            [app terminate];
         }
         for (int i = 0; i < 10; i++) {
             usleep(100000);
@@ -60,8 +114,36 @@ static BOOL seizeInstanceLock(void) {
             }
         }
     }
-    NSLog(@"Development build could not take the instance lock; standing down");
+    NSLog(@"Could not take the instance lock from %@; standing down", otherID);
     return NO;
+}
+
+void MGHandBackToReleaseChannel(void) {
+    NSString *releaseID = MGOtherChannelBundleIdentifier([[NSBundle mainBundle] bundleIdentifier]);
+    if (!MGIsDevelopmentBundle() || releaseID == nil)
+        return;
+
+    // The login agent supervises the released copy, so starting the job brings
+    // it back with its restart-on-exit behavior intact. Bootstrapping fails when
+    // the job is already loaded, which kickstart then covers.
+    NSString *plist = MGLoginAgentPlistPath();
+    if ([[NSFileManager defaultManager] fileExistsAtPath:plist]) {
+        NSString *domain = [NSString stringWithFormat:@"gui/%d", (int)getuid()];
+        if (runLaunchctl(@[@"bootstrap", domain, plist]) ||
+            runLaunchctl(@[@"kickstart", loginAgentTarget()]))
+            return;
+    }
+
+    // Without a login agent the released copy was opened by hand, so it is
+    // opened again the same way, if it is installed at all.
+    NSURL *releaseURL = [[NSWorkspace sharedWorkspace] URLForApplicationWithBundleIdentifier:releaseID];
+    if (releaseURL == nil)
+        return;
+    NSWorkspaceOpenConfiguration *configuration = [NSWorkspaceOpenConfiguration configuration];
+    [configuration setActivates:NO];
+    [[NSWorkspace sharedWorkspace] openApplicationAtURL:releaseURL
+                                          configuration:configuration
+                                      completionHandler:nil];
 }
 
 MGInstanceLockOutcome MGTakeInstanceLockAtPath(const char *path, int *descriptor) {
@@ -95,11 +177,13 @@ BOOL MGAnotherInstanceOwnsThisBundle(void) {
             NSLog(@"Instance lock acquired by pid %d", getpid());
             return NO;
 
-        case MGInstanceLockHeldByAnother:
-            if (isDevelopmentBundle() && seizeInstanceLock())
+        case MGInstanceLockHeldByAnother: {
+            NSString *otherID = MGOtherChannelBundleIdentifier([[NSBundle mainBundle] bundleIdentifier]);
+            if (otherID != nil && [otherCopies(otherID) count] > 0 && seizeInstanceLock(otherID))
                 return NO;
             NSLog(@"Standing down, another instance holds the lock; pid %d", getpid());
             return YES;
+        }
 
         case MGInstanceLockCouldNotOpen:
             // Without a lock the app still runs. A duplicate is a worse outcome

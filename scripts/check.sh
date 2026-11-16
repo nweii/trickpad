@@ -206,9 +206,12 @@ gesture_fail() {
   exit 1
 }
 
-for f in "$APP_SRC" "$INSTALL_SH" "$ROOT/scripts/uninstall-login-agent.sh" "$ROOT/scripts/uninstall.sh"; do
+# The app names the label once, in SingleInstance.m, and writes its plist with
+# that constant.
+for f in "$ROOT/src/SingleInstance.m" "$INSTALL_SH" "$ROOT/scripts/uninstall-login-agent.sh" "$ROOT/scripts/uninstall.sh"; do
   source_has "$LABEL" "$f" || fail "$f does not contain the label $LABEL"
 done
+source_has 'MGLoginAgentLabel, escaped' "$APP_SRC" || fail "the app's plist does not use MGLoginAgentLabel"
 
 for key in RunAtLoad KeepAlive ProcessType; do
   source_has "<key>$key</key>" "$APP_SRC"    || fail "the app's plist is missing <key>$key</key>"

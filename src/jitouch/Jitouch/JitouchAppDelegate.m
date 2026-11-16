@@ -21,6 +21,7 @@
 #import "KeyUtility.h"
 #import "TraceRecorder.h"
 #import "UpdaterController.h"
+#import "SingleInstance.h"
 #import "TraceSessionModel.h"
 
 static NSMenuItem *MGMenuSectionHeader(NSString *title);
@@ -241,9 +242,8 @@ CGKeyCode keyMap[128]; // for dvorak support
 
 @synthesize window;
 
-// The launchd job that starts the app at login.
-static NSString *const kLoginAgentLabel = @"fyi.thirdwind.trickpad.agent";
-static NSString *const kLoginAgentPlistPath = @"~/Library/LaunchAgents/fyi.thirdwind.trickpad.agent.plist";
+// The launchd job that starts the released copy at login is named in
+// SingleInstance.h, which also stops and restarts it around Trickpad Dev.
 static NSString *const kDidChooseLoginItem = @"DidChooseLoginItem";
 static BOOL runLaunchctl(NSArray *arguments);
 
@@ -251,7 +251,7 @@ static BOOL runLaunchctl(NSArray *arguments);
 // plist has already been deleted still stops instead of being respawned by
 // KeepAlive after quit.
 - (void)unloadJitouchLaunchAgent {
-    NSString *target = [NSString stringWithFormat:@"gui/%d/%@", (int)getuid(), kLoginAgentLabel];
+    NSString *target = [NSString stringWithFormat:@"gui/%d/%@", (int)getuid(), MGLoginAgentLabel];
     NSArray *unloadArgs = [NSArray arrayWithObjects:@"bootout",
                            target,
                            nil];
@@ -371,7 +371,7 @@ static NSString *describeBinding(NSDictionary *g) {
 }
 
 - (NSString *)loginAgentPlistPath {
-    return [kLoginAgentPlistPath stringByStandardizingPath];
+    return MGLoginAgentPlistPath();
 }
 
 - (BOOL)isLoginItemInstalled {
@@ -445,14 +445,14 @@ static BOOL runLaunchctl(NSArray *arguments) {
         @"  <key>ProcessType</key>\n"
         @"  <string>Interactive</string>\n"
         @"</dict>\n"
-        @"</plist>\n", kLoginAgentLabel, escaped];
+        @"</plist>\n", MGLoginAgentLabel, escaped];
 }
 
 // Writes or removes the login item plist without changing the running launchd
 // job. Returns a description when the requested state could not be reached.
 - (NSString *)setLoginItemInstalled:(BOOL)install {
     NSString *plistPath = [self loginAgentPlistPath];
-    NSString *guiTarget = [NSString stringWithFormat:@"gui/%d/%@", (int)getuid(), kLoginAgentLabel];
+    NSString *guiTarget = [NSString stringWithFormat:@"gui/%d/%@", (int)getuid(), MGLoginAgentLabel];
     NSFileManager *fm = [NSFileManager defaultManager];
     NSError *error = nil;
     NSString *failure = nil;
@@ -490,7 +490,12 @@ static BOOL runLaunchctl(NSArray *arguments) {
 
 // The app is only useful while running, so a fresh installation starts at
 // login. Recording the choice separately preserves a later opt-out.
+//
+// The login item belongs to the released copy. Trickpad Dev is opened by hand,
+// takes over, and hands back on quit, so it never writes the login agent.
 - (void)enableLoginItemOnFirstLaunch {
+    if (MGIsDevelopmentBundle())
+        return;
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     if ([defaults boolForKey:kDidChooseLoginItem])
         return;
@@ -1890,8 +1895,11 @@ static NSMenuItem *MGMenuSectionHeader(NSString *title) {
 
     // Open at Login sits with the app-lifecycle rows rather than the
     // configuration actions above, keeping its checkmark out of that group.
-    item = [theMenu addItemWithTitle:@"Open at Login" action:@selector(toggleLoginItem:) keyEquivalent:@""];
-    [item setTag:kMenuTagLoginItem];
+    // Trickpad Dev omits it, since the login item starts the released copy.
+    if (!MGIsDevelopmentBundle()) {
+        item = [theMenu addItemWithTitle:@"Open at Login" action:@selector(toggleLoginItem:) keyEquivalent:@""];
+        [item setTag:kMenuTagLoginItem];
+    }
 
     NSMenu *aboutMenu = [[[NSMenu alloc] initWithTitle:@"About Trickpad"] autorelease];
     NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
@@ -2030,6 +2038,15 @@ static NSMenuItem *MGMenuSectionHeader(NSString *title) {
 }
 
 - (void)quit:(id)sender {
+    // Quitting Trickpad Dev ends a test session rather than gestures, so the
+    // released copy starts again. Its login agent was stopped when Dev took
+    // over and is not Dev's to stop again here.
+    if (MGIsDevelopmentBundle()) {
+        MGHandBackToReleaseChannel();
+        [NSApp terminate:sender];
+        return;
+    }
+
     if (![self isLoginItemInstalled]) {
         NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
         NSAlert *alert = [[[NSAlert alloc] init] autorelease];

@@ -4,20 +4,29 @@ set -euo pipefail
 APP_NAME="Trickpad"
 BUNDLE_ID="fyi.thirdwind.trickpad"
 
-# --dev builds a development bundle that installs beside the released copy:
-# its own name, bundle identifier, and icon, everything else shared. The
-# separate identifier keys separate user defaults, a separate Accessibility
-# grant, and separate updater state, so repeated test installs leave no state
-# behind for the released copy. Both builds read the same config.toml, and
-# SingleInstance.m keeps one copy running: a development build takes the
-# shared instance lock over a running release copy.
+# --dev builds Trickpad Dev, the development channel that installs beside the
+# released copy: its own name, bundle identifier, icon, build numbers, and
+# update feed, everything else shared. The separate identifier keys separate
+# user defaults, a separate Accessibility grant, and separate updater state, so
+# Dev builds leave no state behind for the released copy. Both builds read the
+# same config.toml, and SingleInstance.m keeps one copy running: whichever
+# channel was opened last takes over from the other.
+DEV_CHANNEL=0
 if [[ "${1:-}" == "--dev" ]]; then
-  APP_NAME="Trickpad DEV"
+  DEV_CHANNEL=1
+  APP_NAME="Trickpad Dev"
   BUNDLE_ID="fyi.thirdwind.trickpad.dev"
 fi
 
 APP_VERSION="0.14.2-dev"
 APP_BUILD_NUMBER="25"
+# Sparkle offers a build only when its number exceeds the installed one, and
+# Dev builds come from any commit at any time, so each numbers itself by the
+# UTC minute it was built. A Dev build is never compared with a release, which
+# is a separate app with its own feed.
+if (( DEV_CHANNEL )); then
+  APP_BUILD_NUMBER="$(date -u +%Y%m%d%H%M)"
+fi
 MIN_MACOS_VERSION="11.0"
 ARCHITECTURES=(x86_64 arm64)
 ROOT="${0:A:h:h}"
@@ -36,7 +45,10 @@ SPARKLE_FRAMEWORK="$ROOT/third_party/sparkle/Sparkle.framework"
 # The key is empty until `generate_keys` has been run and its private half is
 # in the Keychain with a recovery copy in 1Password. An empty key builds an app
 # with no updater rather than one that cannot verify what it downloads.
+#
+# Dev builds ask for their own feed beside it, under the same permanence rule.
 SPARKLE_FEED_URL="https://updates.thirdwind.fyi/trickpad/9zvff4/appcast.xml"
+SPARKLE_DEV_FEED_URL="https://updates.thirdwind.fyi/trickpad/9zvff4/dev/appcast.xml"
 SPARKLE_PUBLIC_KEY="PRUR58SW8YdEJmAFlzV+LxGjQR1xS8txBGJdU8ZOeyw="
 ICON_SOURCE="$ROOT/icons/$APP_NAME.icon"
 ICON_BUILD_SOURCE="$BUILD_ROOT/$APP_NAME.icon"
@@ -107,6 +119,7 @@ fi
 #
 # SUAutomaticallyUpdate sets that option's starting state. Off, so agreeing to
 # automatic checks does not quietly agree to unattended installs as well.
+(( DEV_CHANNEL )) && SPARKLE_FEED_URL="$SPARKLE_DEV_FEED_URL"
 SPARKLE_KEYS=""
 if [[ "$SPARKLE_ENABLED" == "1" ]]; then
   SPARKLE_KEYS="  <key>SUFeedURL</key>

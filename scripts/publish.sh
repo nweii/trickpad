@@ -1,16 +1,35 @@
 #!/bin/zsh
 # Publishes an existing Sparkle update set to its fixed R2 feed, with a
 # read-only preview first and public read-back verification after every write.
+# --dev publishes the Trickpad Dev set that `package.sh --dev` wrote to the Dev
+# feed, where builds are named by build number rather than version.
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
-UPDATES_DIR="${TRICKPAD_PUBLISH_UPDATES_DIR:-$ROOT/build/updates}"
+DEV_CHANNEL=0
+for argument in "$@"; do
+  [[ "$argument" == --dev ]] && DEV_CHANNEL=1
+done
+DEFAULT_UPDATES_DIR="$ROOT/build/updates"
+(( DEV_CHANNEL )) && DEFAULT_UPDATES_DIR="$ROOT/build/updates-dev"
+UPDATES_DIR="${TRICKPAD_PUBLISH_UPDATES_DIR:-$DEFAULT_UPDATES_DIR}"
 CURL_BIN="${TRICKPAD_PUBLISH_CURL:-curl}"
 SLEEP_BIN="${TRICKPAD_PUBLISH_SLEEP:-sleep}"
 INFISICAL_RUNNER="$HOME/.local/bin/infisical-macos-run"
 ACCOUNT_ID="f37ef727745eb9b364f87806a00f7bd2"
 BUCKET="thirdwind-updates"
 OBJECT_PREFIX="trickpad/9zvff4"
+FEED_KEY="SPARKLE_FEED_URL"
+CHANNEL_NAME="Trickpad"
+# The Dev feed names each build by its number, since every Dev build in a train
+# shares one version string.
+VERSION_ELEMENT="sparkle:shortVersionString"
+if (( DEV_CHANNEL )); then
+  OBJECT_PREFIX="$OBJECT_PREFIX/dev"
+  FEED_KEY="SPARKLE_DEV_FEED_URL"
+  CHANNEL_NAME="Trickpad Dev"
+  VERSION_ELEMENT="sparkle:version"
+fi
 PUBLIC_BASE="https://updates.thirdwind.fyi/$OBJECT_PREFIX"
 S3_BASE="https://$ACCOUNT_ID.r2.cloudflarestorage.com/$BUCKET/$OBJECT_PREFIX"
 ARCHIVE_CACHE_CONTROL="public, max-age=31536000, immutable"
@@ -21,15 +40,16 @@ ASSUME_YES=0
 REQUESTED_VERSION=""
 ORIGINAL_ARGUMENTS=("$@")
 
-CONFIGURED_FEED="$(sed -n 's/^SPARKLE_FEED_URL="\(.*\)"$/\1/p' "$ROOT/scripts/build.sh")"
+CONFIGURED_FEED="$(sed -n "s/^$FEED_KEY=\"\(.*\)\"\$/\1/p" "$ROOT/scripts/build.sh")"
 [[ "$CONFIGURED_FEED" == "$PUBLIC_BASE/appcast.xml" ]] || {
   echo "scripts/build.sh and publish.sh disagree about the permanent feed URL." >&2
   exit 1
 }
 
 usage() {
-  echo "Usage: $0 [--publish VERSION] [--yes]"
+  echo "Usage: $0 [--dev] [--publish VERSION] [--yes]"
   echo "Without --publish, shows a read-only preview and uploads nothing."
+  echo "With --dev, VERSION is the Trickpad Dev build number."
 }
 
 while (( $# > 0 )); do
@@ -42,6 +62,9 @@ while (( $# > 0 )); do
       ;;
     --yes)
       ASSUME_YES=1
+      shift
+      ;;
+    --dev)
       shift
       ;;
     --help|-h)
@@ -83,7 +106,7 @@ fi
   exit 1
 }
 
-VERSION="$(perl -0777 -ne 'print $1 if m{<sparkle:shortVersionString>([^<]+)</sparkle:shortVersionString>}' "$APPCAST")"
+VERSION="$(VERSION_ELEMENT="$VERSION_ELEMENT" perl -0777 -ne 'my $e = quotemeta $ENV{VERSION_ELEMENT}; print $1 if m{<$e>([^<]+)</$e>}' "$APPCAST")"
 [[ -n "$VERSION" ]] || {
   echo "The appcast has no release version." >&2
   exit 1
@@ -222,7 +245,7 @@ verify_copy() {
 }
 
 typeset -a ARCHIVE_ACTIONS
-echo "Trickpad $VERSION publishing preview"
+echo "$CHANNEL_NAME $VERSION publishing preview"
 echo "Feed: $PUBLIC_BASE/appcast.xml"
 echo "R2: $BUCKET/$OBJECT_PREFIX/"
 echo
@@ -329,7 +352,7 @@ public_appcast="$(mktemp)"
 public_headers="$(mktemp)"
 public_code="$(public_download appcast.xml "$public_appcast" "$public_headers")"
 if [[ "$public_code" == 200 ]]; then
-  current_versions="$(perl -0777 -ne 'while (m{<sparkle:shortVersionString>([^<]+)</sparkle:shortVersionString>}g) { push @v, $1 } END { print join(", ", @v) }' "$public_appcast")"
+  current_versions="$(VERSION_ELEMENT="$VERSION_ELEMENT" perl -0777 -ne 'my $e = quotemeta $ENV{VERSION_ELEMENT}; while (m{<$e>([^<]+)</$e>}g) { push @v, $1 } END { print join(", ", @v) }' "$public_appcast")"
   echo "Public feed versions: ${current_versions:-unreadable}"
 else
   echo "Public feed: HTTP $public_code"
@@ -392,4 +415,4 @@ for index in {1..${#REFERENCED_NAMES[@]}}; do
     "$ARCHIVE_CACHE_CONTROL" public 1
 done
 
-echo "Published and publicly verified Trickpad $VERSION."
+echo "Published and publicly verified $CHANNEL_NAME $VERSION."

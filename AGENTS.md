@@ -56,7 +56,8 @@ Jitouch reads the private `MultitouchSupport.framework`, which is undocumented a
 
 ```bash
 ./scripts/build.sh             # single clang call, no Xcode project
-./scripts/build.sh --dev       # development bundle that installs beside the release copy
+./scripts/build.sh --dev       # Trickpad Dev, the development channel, into build/
+./scripts/dev.sh               # build Trickpad Dev, install it in /Applications, open it
 ./scripts/check.sh             # configuration parser checks
 ./scripts/stop.sh && ./scripts/start.sh
 ./scripts/update.sh            # preview and install a source update
@@ -72,11 +73,17 @@ The app observes `NSWorkspaceDidWakeNotification` and fully rebuilds its device 
 
 The Accessibility grant binds to the bundle path plus the designated requirement that `scripts/build.sh` pins. Keep both stable and the grant survives every rebuild.
 
-### Development bundle
+### Trickpad Dev
 
-Test source changes through a development bundle rather than over the installed release. The loop: `./scripts/build.sh --dev`, open `build/Trickpad DEV.app`, test against the live bindings, quit when done. Launching it takes over from the running released copy, and quitting hands back on its own — the login agent's `KeepAlive` restarts the released copy, which takes the freed lock. There is one source tree; a change proven in the development bundle reaches the release build through the normal release path, with nothing to port.
+Trickpad Dev is the development channel: a separate app that installs beside the released copy, with its own name, icon, bundle identifier (`fyi.thirdwind.trickpad.dev`), and Sparkle feed. Test source changes through it rather than over the installed release. There is one source tree; a change proven in Trickpad Dev reaches the release build through the normal release path, with nothing to port.
 
-The bundle identifier `fyi.thirdwind.trickpad.dev` keys its own user defaults, updater state, and Accessibility grant, so repeated test installs leave no state behind for the released copy — and a fresh development build needs its own Accessibility grant before gestures dispatch. Both builds read `~/.config/trickpad/config.toml` and share one instance lock keyed on that folder, so one copy runs at a time and a configuration change under test runs against the user's real file. While a development build holds the lock, the restarted released copy stands down and exits every ten seconds or so; that is log noise, not a defect.
+`./scripts/dev.sh` builds the current checkout or worktree, replaces `/Applications/Trickpad Dev.app`, and opens it, so the copy in `/Applications` is always the last one built. `./scripts/build.sh --dev` builds the same bundle into `build/` without installing it. A Dev build's `CFBundleVersion` is the UTC minute it was built (`YYYYMMDDhhmm`), so every later build counts as newer to Sparkle, whatever commit it comes from.
+
+Whichever channel was opened last runs. Both read `~/.config/trickpad/config.toml` and share one instance lock keyed on that folder, so a configuration change under test runs against the user's real file. A copy that finds the other channel holding the lock asks it to quit and takes over; a copy that finds its own channel holding it stands down, which is how duplicate starts from the updater and the login agent resolve. Opening Dev also boots out the release channel's login agent, whose `KeepAlive` would otherwise restart the released copy into a takeover of its own. Quitting Dev from its menu hands back: it bootstraps the login agent again when its plist exists, and otherwise opens the installed release copy. A Dev copy that exits any other way (a crash, the updater, or `dev.sh` replacing it) does not hand back. A released copy opened by hand while Dev runs takes over, and then runs without its login agent until the next login.
+
+The login item belongs to the released copy, so Dev omits Open at Login and never writes the login agent. Its own bundle identifier keys separate user defaults, updater state, and Accessibility grant, so Dev builds leave no state behind for the released copy, and a first Dev install needs its own Accessibility grant before gestures dispatch.
+
+`docs/releasing.md` covers publishing a Dev build to the Dev feed.
 
 ## Menu bar item
 
@@ -90,7 +97,7 @@ About opens a submenu carrying the version, read from the running bundle, plus a
 - Manage with Agent, a submenu that leads with the installed desktop agent apps under an Apps header, then lists terminal coding agents under a Terminal header. A desktop row appears only when macOS resolves its URL scheme to an installed app, `claude://` for Claude and `codex://` for ChatGPT, and is titled by that app's name. Picking one opens a new session (Cowork for Claude, a local chat for ChatGPT) with the configuration folder attached and the same prompt typed but not sent; the app asks the user to confirm the folder. Terminal agents are found through the user's login shell. Candidates are probed in one background shell when the menu opens, and the submenu serves the cached result, so hovering it costs no shell spawns. Picking a terminal agent writes `~/.config/trickpad/manage-with-agent.command` and opens it, starting that agent in the configuration folder with the running app path and a prompt pointing at the installed instructions. The submenu also carries Copy Prompt (⌘C), which keeps the configuration private and tells the agent to ask for lines, and Copy Prompt + Settings (⌥⌘C), which attaches the whole `config.toml` as the user's explicit choice.
 - Edit Settings (⌘,), which opens `config.toml` in the user's editor.
 - Reload Settings (⌘R), which rereads the file into the running engine. Key equivalents, including ⌘Q on Quit, fire while the menu is open. Rows carry no icons, which would sit unevenly beside the Open at Login checkmark.
-- Open at Login, a checkbox running `install-login-agent.sh` or `uninstall-login-agent.sh` with `PLIST_ONLY` set, so the file changes without launchd terminating the running process. It sits after the separator with the app-lifecycle rows, not among the configuration actions.
+- Open at Login, absent from Trickpad Dev, a checkbox running `install-login-agent.sh` or `uninstall-login-agent.sh` with `PLIST_ONLY` set, so the file changes without launchd terminating the running process. It sits after the separator with the app-lifecycle rows, not among the configuration actions.
 - About Trickpad, whose submenu shows the running version and opens the product-owned documentation, latest-version retrieval, and website pages, then offers Diagnostics. Diagnostics is user-facing support tooling for copying a state summary, opening the last 15 minutes of logs, and enabling verbose logging for the current session; an internal preference can also reveal the guided Magic Mouse trace session described below. Rare-use troubleshooting rows are tucked under About, where version and debug info already travel together in support requests; Accessibility stays top-level because it is the first thing a broken install needs. Menu rows that only open a page carry no ellipsis; the mark is reserved for commands needing further input, so Edit Settings keeps it and the outbound links do not.
 - Quit Trickpad stays last and alone.
 
@@ -114,7 +121,7 @@ Write entries according to the [Google developer documentation style guide](http
 
 Sparkle, vendored at a pinned version under `third_party/sparkle/` with its own README recording the release and checksum. Its settings are documented at <https://sparkle-project.org/documentation/customization/>. Three build-time facts are not, and each fails quietly. `docs/releasing.md` covers publication.
 
-**The feed URL can never change.** Every copy in the wild asks for it forever, and one that cannot reach its feed has no path to an update but a manual reinstall. Archives can move, since the feed names their URLs on every check.
+**The feed URL can never change.** That holds for the Dev feed as well as the release feed. Every copy in the wild asks for it forever, and one that cannot reach its feed has no path to an update but a manual reinstall. Archives can move, since the feed names their URLs on every check.
 
 **`codesign --deep` does not sign Sparkle correctly.** It re-signs nested code in its own order and leaves the framework reported as modified. Nested components are signed innermost first and the bundle last without `--deep`. Restoring `--deep` fails verification with an error naming the framework rather than the signing order.
 
