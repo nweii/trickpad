@@ -74,6 +74,6 @@ The changelog rules under Changelog in `AGENTS.md` also bind every release, beca
 
 ## After a release
 
-1. The product website's reference pages, which carry their own copy of the configuration syntax and are updated by hand, so a change to `GESTURES.md` reaches them only when someone ports it.
+1. The product website's guide, which explains the configuration in its own words and is updated by hand, so a name added to `GESTURES.md` or a behavior change reaches it only when someone writes it there.
 2. Any surface that derives from `CHANGELOG.md`, which needs a rebuild to pick up the new entry.
 3. The storefront listing, where any copy naming a feature the release changed is maintained by hand. The listing's downloadable DMG is not hand-maintained: `scripts/storefront.sh` uploads the packaged image to Polar and points the benefit at it, with the same preview, `--publish`, and read-back discipline as `publish.sh`, reading `POLAR_ACCESS_TOKEN` from the same Infisical folder.
