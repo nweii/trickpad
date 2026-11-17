@@ -871,10 +871,10 @@ static BOOL runLaunchctl(NSArray *arguments) {
             NSString *scope = [application isEqualToString:@"All Applications"]
                 ? @"" : [NSString stringWithFormat:@"%@ · ", application];
             if ([[app objectForKey:@"InheritGlobalBindings"] isEqual:@NO]) {
-                NSString *gesture = [scope stringByAppendingString:@"Inherited bindings"];
+                NSString *gestureLabel = [scope stringByAppendingString:@"Inherited bindings"];
                 [appLines addObject:@{
-                    @"Gesture": gesture, @"Action": @"Off", @"Detail": @"", @"Comment": @"",
-                    @"Key": [gesture stringByAppendingString:@"\nOff"],
+                    @"Gesture": gestureLabel, @"Action": @"Off", @"Detail": @"", @"Comment": @"",
+                    @"Key": [gestureLabel stringByAppendingString:@"\nOff"],
                 }];
             }
             NSMutableSet *seenGestures = [NSMutableSet set];
@@ -892,18 +892,18 @@ static BOOL runLaunchctl(NSArray *arguments) {
                 NSString *comment = [lastAppliedConfigResult commentForDevice:pair[0]
                                                                   application:application
                                                                       gesture:gestureName];
-                NSString *gesture = [scope stringByAppendingString:
+                NSString *gestureLabel = [scope stringByAppendingString:
                                      [Config humanNameForGesture:gestureName]];
                 NSString *url = [g objectForKey:@"OpenURL"] ?: @"";
                 NSString *action = describeBindingBriefly(g);
                 [appLines insertObject:@{
-                    @"Gesture": gesture,
+                    @"Gesture": gestureLabel,
                     @"Action": action,
                     // The full URL, where the action column names only the
                     // app that opens it.
                     @"Detail": [action isEqualToString:fires] ? @"" : url,
                     @"Comment": comment ?: @"",
-                    @"Key": [NSString stringWithFormat:@"%@\n%@\n%@", gesture, fires, url],
+                    @"Key": [NSString stringWithFormat:@"%@\n%@\n%@", gestureLabel, fires, url],
                 } atIndex:0];
             }
             [lines addObjectsFromArray:appLines];
