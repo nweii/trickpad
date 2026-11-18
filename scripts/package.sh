@@ -131,6 +131,8 @@ if (( ! DEV_CHANNEL )); then
     "https://github.com/nweii/trickpad/tree/v$VERSION" \
     > "$STAGE/Legal/SOURCE.txt"
 
+  # The closing JSON stays at column 0: a plain <<JSON heredoc ends only at an
+  # unindented terminator, and an indented one swallows the rest of the script.
   cat > "$SPEC" <<JSON
   {
     "title": "$VOLUME_NAME",
@@ -148,7 +150,7 @@ if (( ! DEV_CHANNEL )); then
       { "x": 330, "y": 445, "type": "file", "path": "$STAGE/Legal" }
     ]
   }
-  JSON
+JSON
 
   [[ ! -e "$DMG_PATH" ]] || mv "$DMG_PATH" "$WORK_ROOT/previous.dmg"
   appdmg "$SPEC" "$DMG_PATH"
