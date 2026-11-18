@@ -359,6 +359,49 @@ static NSString *describeBinding(NSDictionary *g) {
     return [Config keystrokeDisplayNameForBinding:g];
 }
 
+// Names what a binding fires in the fewest words the menu's action column
+// can carry. A URL binding names the app that opens it, since the URL itself
+// is long and the app is what the user recognizes; every other binding reads
+// as describeBinding gives it.
+static NSString *describeBindingBriefly(NSDictionary *g) {
+    NSString *full = describeBinding(g);
+    NSString *url = [g objectForKey:@"OpenURL"];
+    if ([url length] == 0 || ![[g objectForKey:@"Enable"] boolValue]
+        || [g objectForKey:@"Sequence"] != nil || [[g objectForKey:@"MenuPath"] count] > 0
+        || [[g objectForKey:@"ScriptPath"] length] > 0 || [[g objectForKey:@"PlaySound"] length] > 0
+        || [[g objectForKey:@"SpeakText"] length] > 0)
+        return full;
+    // Only the scheme decides the handler, and a URL holding substitutions
+    // may not parse whole.
+    NSRange colon = [url rangeOfString:@":"];
+    if (colon.location == NSNotFound || colon.location == 0)
+        return full;
+    NSString *scheme = [url substringToIndex:colon.location];
+    NSURL *probe = [NSURL URLWithString:[scheme stringByAppendingString:@"://"]];
+    NSURL *handler = probe != nil
+        ? [[NSWorkspace sharedWorkspace] URLForApplicationToOpenURL:probe] : nil;
+    if (handler == nil)
+        return full;
+    NSString *name = [[[NSFileManager defaultManager] displayNameAtPath:[handler path]]
+                      stringByDeletingPathExtension];
+    return [name length] > 0 ? [@"Open in " stringByAppendingString:name] : full;
+}
+
+// A binding's note as the menu shows it beside the gesture: in parentheses,
+// cut at 40 characters, or empty when the line has no note. The cut lands on
+// a composed-character boundary so an emoji or accented letter at the limit
+// is dropped whole rather than split into a broken glyph.
+static NSString *menuNoteSuffix(NSString *comment) {
+    if ([comment length] == 0)
+        return @"";
+    NSString *shown = comment;
+    if ([comment length] > 40) {
+        NSRange safe = [comment rangeOfComposedCharacterSequenceAtIndex:40];
+        shown = [[comment substringToIndex:safe.location] stringByAppendingString:@"…"];
+    }
+    return [NSString stringWithFormat:@"  (%@)", shown];
+}
+
 // Two levels above the bundle, which is the project root when the app was built
 // from a source checkout into its build directory. Anywhere else the path is
 // meaningless and its contents are absent.
@@ -794,7 +837,6 @@ static BOOL runLaunchctl(NSArray *arguments) {
     }
     NSArray *sources = @[@[@"Mouse", magicMouseCommands ?: @[], [Config mouseGestureSlugs]],
                          @[@"Trackpad", trackpadCommands ?: @[], [Config trackpadGestureSlugs]]];
-    BOOL any = NO;
 
     // Skipped binding lines join their device group dimmed so the gap shows
     // where the user expects the binding. A rejected reload keeps the previous
@@ -817,6 +859,10 @@ static BOOL runLaunchctl(NSArray *arguments) {
         }
     }
 
+    // Each device's live bindings in file order. A row's Key is everything
+    // that decides what the user reads and what fires, so two devices' rows
+    // with equal keys are one binding the user wrote twice.
+    NSMutableArray *deviceRows = [NSMutableArray array];
     for (NSArray *pair in sources) {
         NSMutableArray *lines = [NSMutableArray array];
         for (NSDictionary *app in pair[1]) {
@@ -824,9 +870,13 @@ static BOOL runLaunchctl(NSArray *arguments) {
             NSString *application = [app objectForKey:@"Application"];
             NSString *scope = [application isEqualToString:@"All Applications"]
                 ? @"" : [NSString stringWithFormat:@"%@ · ", application];
-            if ([[app objectForKey:@"InheritGlobalBindings"] isEqual:@NO])
-                [appLines addObject:@[[NSString stringWithFormat:
-                    @"%@Inherited bindings  →  Off", scope], @""]];
+            if ([[app objectForKey:@"InheritGlobalBindings"] isEqual:@NO]) {
+                NSString *gestureLabel = [scope stringByAppendingString:@"Inherited bindings"];
+                [appLines addObject:@{
+                    @"Gesture": gestureLabel, @"Action": @"Off", @"Detail": @"", @"Comment": @"",
+                    @"Key": [gestureLabel stringByAppendingString:@"\nOff"],
+                }];
+            }
             NSMutableSet *seenGestures = [NSMutableSet set];
             for (NSDictionary *g in [[app objectForKey:@"Gestures"] reverseObjectEnumerator]) {
                 NSString *gestureName = [g objectForKey:@"Gesture"];
@@ -842,60 +892,143 @@ static BOOL runLaunchctl(NSArray *arguments) {
                 NSString *comment = [lastAppliedConfigResult commentForDevice:pair[0]
                                                                   application:application
                                                                       gesture:gestureName];
-                [appLines insertObject:@[[NSString stringWithFormat:@"%@%@  →  %@", scope,
-                                          [Config humanNameForGesture:gestureName], fires],
-                                         comment ?: @""]
-                                 atIndex:0];
+                NSString *gestureLabel = [scope stringByAppendingString:
+                                     [Config humanNameForGesture:gestureName]];
+                NSString *url = [g objectForKey:@"OpenURL"] ?: @"";
+                NSString *action = describeBindingBriefly(g);
+                [appLines insertObject:@{
+                    @"Gesture": gestureLabel,
+                    @"Action": action,
+                    // The full URL, where the action column names only the
+                    // app that opens it.
+                    @"Detail": [action isEqualToString:fires] ? @"" : url,
+                    @"Comment": comment ?: @"",
+                    @"Key": [NSString stringWithFormat:@"%@\n%@\n%@", gestureLabel, fires, url],
+                } atIndex:0];
             }
             [lines addObjectsFromArray:appLines];
         }
-        NSArray *skipped = [skippedByDevice objectForKey:pair[0]] ?: @[];
-        if ([lines count] == 0 && [skipped count] == 0)
+        [deviceRows addObject:lines];
+    }
+
+    // A binding both devices carry appears once. The rest fall under the
+    // device that has them. With nothing shared, the devices keep their plain
+    // names, since "only" would have nothing to contrast with.
+    NSArray *mouseRows = deviceRows[0];
+    NSArray *trackpadRows = deviceRows[1];
+    NSMutableDictionary *trackpadByKey = [NSMutableDictionary dictionary];
+    for (NSDictionary *row in trackpadRows)
+        [trackpadByKey setObject:row forKey:row[@"Key"]];
+    NSMutableArray *sharedRows = [NSMutableArray array];
+    NSMutableArray *mouseOnly = [NSMutableArray array];
+    NSMutableArray *trackpadOnly = [NSMutableArray array];
+    NSMutableSet *sharedKeys = [NSMutableSet set];
+    for (NSDictionary *row in mouseRows) {
+        NSDictionary *twin = [trackpadByKey objectForKey:row[@"Key"]];
+        if (twin == nil) {
+            [mouseOnly addObject:row];
+            continue;
+        }
+        [sharedKeys addObject:row[@"Key"]];
+        // The two lines may carry different notes. The row shows the mouse
+        // line's note, or the trackpad's when the mouse line has none, and
+        // the tooltip names both when they differ.
+        NSString *mouseNote = row[@"Comment"];
+        NSString *trackpadNote = twin[@"Comment"];
+        NSMutableDictionary *merged = [[row mutableCopy] autorelease];
+        if ([mouseNote length] == 0)
+            [merged setObject:trackpadNote forKey:@"Comment"];
+        else if ([trackpadNote length] > 0 && ![mouseNote isEqualToString:trackpadNote])
+            [merged setObject:[NSString stringWithFormat:@"Mouse: %@\nTrackpad: %@",
+                               mouseNote, trackpadNote]
+                       forKey:@"Tooltip"];
+        [sharedRows addObject:merged];
+    }
+    for (NSDictionary *row in trackpadRows) {
+        if (![sharedKeys containsObject:row[@"Key"]])
+            [trackpadOnly addObject:row];
+    }
+    NSArray *mouseSkipped = [skippedByDevice objectForKey:@"Mouse"] ?: @[];
+    NSArray *trackpadSkipped = [skippedByDevice objectForKey:@"Trackpad"] ?: @[];
+    NSArray *sections = [sharedRows count] > 0
+        ? @[@[@"Mouse and Trackpad", sharedRows, @[]],
+            @[@"Mouse only", mouseOnly, mouseSkipped],
+            @[@"Trackpad only", trackpadOnly, trackpadSkipped]]
+        : @[@[@"Mouse", mouseRows, mouseSkipped],
+            @[@"Trackpad", trackpadRows, trackpadSkipped]];
+
+    // The action sits in a right-aligned column, where a menu shows a key
+    // equivalent. One tab stop serves every row so the column lines up across
+    // sections: the widest gesture and note, a gap, then the widest action.
+    NSDictionary *measure = @{NSFontAttributeName: [NSFont menuFontOfSize:0]};
+    CGFloat widestLeft = 0, widestAction = 0;
+    for (NSArray *section in sections) {
+        for (NSDictionary *row in section[1]) {
+            NSString *left = [row[@"Gesture"] stringByAppendingString:
+                              menuNoteSuffix(row[@"Comment"])];
+            widestLeft = MAX(widestLeft, [left sizeWithAttributes:measure].width);
+            widestAction = MAX(widestAction, [row[@"Action"] sizeWithAttributes:measure].width);
+        }
+    }
+    NSMutableParagraphStyle *columns = [[[NSMutableParagraphStyle alloc] init] autorelease];
+    [columns setTabStops:@[[[[NSTextTab alloc]
+        initWithTextAlignment:NSTextAlignmentRight
+                     location:ceil(widestLeft + 28 + widestAction)
+                      options:@{}] autorelease]]];
+    NSDictionary *strong = @{
+        NSFontAttributeName: [NSFont menuFontOfSize:0],
+        NSForegroundColorAttributeName: [NSColor labelColor],
+        NSParagraphStyleAttributeName: columns,
+    };
+    NSDictionary *dim = @{
+        NSFontAttributeName: [NSFont menuFontOfSize:0],
+        NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
+        NSParagraphStyleAttributeName: columns,
+    };
+
+    BOOL any = NO;
+    for (NSArray *section in sections) {
+        NSArray *rows = section[1];
+        NSArray *skipped = section[2];
+        if ([rows count] == 0 && [skipped count] == 0)
             continue;
 
         if (any)
             [sub addItem:[NSMenuItem separatorItem]];
         any = YES;
 
-        [sub addItem:MGMenuSectionHeader(pair[0])];
-        for (NSArray *line in lines) {
-            NSMenuItem *row = [sub addItemWithTitle:line[0] action:NULL keyEquivalent:@""];
+        [sub addItem:MGMenuSectionHeader(section[0])];
+        for (NSDictionary *line in rows) {
+            // The plain title is what assistive technology reads; the
+            // attributed title below is what the menu draws.
+            NSMenuItem *row = [sub addItemWithTitle:[NSString stringWithFormat:@"%@  →  %@",
+                                                     line[@"Gesture"], line[@"Action"]]
+                                             action:NULL
+                                      keyEquivalent:@""];
             [row setIndentationLevel:1];
-            // The user's own note from the binding's line, the way they wrote
-            // it. The dimmed suffix keeps the row scannable; the tooltip
-            // carries the note in full when it is long.
-            NSString *comment = line[1];
-            if ([comment length] > 0) {
-                [row setToolTip:comment];
-                // The cut lands on a composed-character boundary so an emoji
-                // or accented letter at the limit is dropped whole rather
-                // than split into a broken glyph.
-                NSString *shown = comment;
-                if ([comment length] > 40) {
-                    NSRange safe = [comment rangeOfComposedCharacterSequenceAtIndex:40];
-                    shown = [[comment substringToIndex:safe.location]
-                             stringByAppendingString:@"…"];
-                }
-                // Parentheses at full menu size separate the user's note from
-                // the binding while skimming; shrunken text read as noise, and
-                // color alone cannot carry the boundary. The binding renders
-                // at full label strength like its neighbors; the dimmed note
-                // marks where the user's own words begin.
-                NSMutableAttributedString *title = [[[NSMutableAttributedString alloc]
-                    initWithString:[NSString stringWithFormat:@"%@  (%@)", line[0], shown]]
-                    autorelease];
-                NSUInteger mainLength = [(NSString *)line[0] length];
-                [title addAttributes:@{
-                        NSFontAttributeName: [NSFont menuFontOfSize:0],
-                        NSForegroundColorAttributeName: [NSColor labelColor],
-                    } range:NSMakeRange(0, mainLength)];
-                [title addAttributes:@{
-                        NSFontAttributeName: [NSFont menuFontOfSize:0],
-                        NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
-                    } range:NSMakeRange(mainLength,
-                                        [[title string] length] - mainLength)];
-                [row setAttributedTitle:title];
-            }
+            // The tooltip carries what the row abbreviates: the user's note
+            // in full, as they wrote it, and the URL behind an app name.
+            NSString *comment = line[@"Comment"];
+            NSMutableArray *tips = [NSMutableArray array];
+            if ([line[@"Tooltip"] length] > 0)
+                [tips addObject:line[@"Tooltip"]];
+            else if ([comment length] > 0)
+                [tips addObject:comment];
+            if ([line[@"Detail"] length] > 0)
+                [tips addObject:line[@"Detail"]];
+            if ([tips count] > 0)
+                [row setToolTip:[tips componentsJoinedByString:@"\n"]];
+            // The gesture renders at full label strength. The dimmed note
+            // marks where the user's own words begin, in parentheses at full
+            // menu size because shrunken text read as noise and color alone
+            // cannot carry the boundary.
+            NSMutableAttributedString *title = [[[NSMutableAttributedString alloc]
+                initWithString:line[@"Gesture"] attributes:strong] autorelease];
+            [title appendAttributedString:[[[NSAttributedString alloc]
+                initWithString:[NSString stringWithFormat:@"%@\t%@",
+                                menuNoteSuffix(comment), line[@"Action"]]
+                    attributes:dim] autorelease]];
+            [row setAttributedTitle:title];
         }
         // The whole row dims where a note only dims its parenthetical, so a
         // skipped line reads as absent rather than active; the reason it was

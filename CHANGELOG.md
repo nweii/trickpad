@@ -21,6 +21,7 @@
 ### Changed
 
 - Group **Manage with Agent** into **Apps** and **Terminal** sections.
+- Shorten the binding list in the menu. A binding that is the same on Magic Mouse and trackpad appears once, each action sits in its own column, and a URL binding names the app that opens it. The full URL appears when the pointer rests on the row.
 
 ## 0.14.1
 
