@@ -10,7 +10,10 @@ flowchart TD
     Watch -->|Nothing new| Quiet["Advance checkpoint; no message"]
     Watch --> Read["Read the thread; check claims against main; read PR diff and Checks"]
     Read --> Label["Label needs-triage (trickpad only)"]
-    Label --> Report["Report to the owner with a recommendation and any draft reply"]
+    Label --> Fix{"Clear, contained defect?"}
+    Fix -->|Yes| Draft["Draft fix PR on its own branch"]
+    Fix -->|No| Report
+    Draft --> Report["Report to the owner with a recommendation and any draft reply"]
     Report --> Owner["Owner decides: reply, ready-for-agent, needs-info, wontfix"]
     Owner --> Lifecycle["Issue tracker lifecycle"]
 ```
@@ -28,14 +31,15 @@ The intake watch task:
 
 1. **Trigger.** The scheduled task's clock, at 8:38 AM and 4:38 PM Eastern.
 2. **Action.** A script in the owner's project files lists issues, PRs, issue comments, and review comments created since a saved checkpoint, excluding the owner and bots. The run reads each item, checks an issue's claims against the default branch, reads a PR's diff and its `Checks` run, and subscribes to new outside PRs so their CI and review events reach the same thread.
-3. **Next.** Nothing automatic. Implementation starts only after the owner labels an issue `ready-for-agent` or asks for it.
-4. **Human re-entry.** The owner answers the run's report in the project thread. Any reply on GitHub is drafted in that report and posted only with the owner's approval.
+3. **Next.** For an outside issue that is a clearly reproducible defect with a small, contained cause, the run drafts one fix: a new `fix/issue-<number>-<slug>` branch from `main`, opened as a draft PR that refers to the issue without closing it, built through pstack's bug-fix playbook. At most one draft per run, and none when a fix PR for that issue already exists. Feature requests, design questions, and defects whose cause needs hardware to confirm wait for the owner, who labels them `ready-for-agent` or asks for the work.
+4. **Human re-entry.** The owner answers the run's report in the project thread and reviews any draft PR before marking it ready. Any reply on GitHub is drafted in that report and posted only with the owner's approval.
 5. **Duplicates.** The checkpoint advances only after a report is posted, so a failed run lists the same items again; the run also skips items already reported in its thread.
 
 ## Boundaries
 
-- The run may add `needs-triage` to an outside issue or PR in this repository. It does not comment, review, close, push, approve workflow runs for forks, or apply any other label, because anything it posts appears as the owner's.
-- These limits are instructions to the run, not a platform control: the session acts through the owner's GitHub identity. Holding them by permission would need a separate GitHub App or token with only the `issues: write` scope.
+- The run may add `needs-triage` to an outside issue or PR in this repository and open one draft fix PR per run from its own branch. It does not comment, review, close, merge, push to anyone else's branch, approve workflow runs for forks, or apply any other label, because anything it posts appears as the owner's.
+- A draft fix's evidence is its `Checks` run (build and `check.sh`). Gesture behavior on hardware stays the owner's check before the PR leaves draft.
+- These limits are instructions to the run, not a platform control: the session acts through the owner's GitHub identity. Holding them by permission would need a separate GitHub App or token limited to issues, pull requests, and `fix/` branches.
 - A `Checks` job on `macos-26` cancelled after about 15 minutes with no logs means GitHub assigned no runner. The report treats it as capacity and suggests a re-run, not a code fix.
 
 ## Operating evidence
