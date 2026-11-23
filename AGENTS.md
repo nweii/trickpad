@@ -36,6 +36,10 @@ The five canonical triage roles, each label string equal to its name. See `docs/
 
 A step can report success it did not achieve. Proving a check fails, reading a build's exit code, the two devices' asymmetries, and instrumenting a path before diagnosing it. See `docs/agents/verification.md`.
 
+### Factory
+
+For work intake, implementation, review, or release, read `docs/agents/factory.md` and follow the applicable workflow. When changing the intake watch, its checks, or its configuration, update the affected guide sections, then verify the changed path.
+
 ### Domain docs
 
 Single-context: `GLOSSARY.md` and `docs/adr/` at the repository root. See `docs/agents/domain.md`.
