@@ -1,0 +1,45 @@
+# Trickpad factory
+
+This guide covers how outside issues and pull requests reach the maintainer. It spans this repository and `nweii/thirdwind-site`, the website that hosts the Trickpad guide. Implementation, review, and release follow the sources linked from `AGENTS.md`; this guide does not restate them.
+
+## Intake from outside contributors
+
+```mermaid
+flowchart TD
+    Outside["Issue, PR, or comment from anyone but the owner"] --> Watch["Intake watch run, twice daily"]
+    Watch -->|Nothing new| Quiet["Advance checkpoint; no message"]
+    Watch --> Read["Read the thread; check claims against main; read PR diff and Checks"]
+    Read --> Label["Label needs-triage (trickpad only)"]
+    Label --> Report["Report to the owner with a recommendation and any draft reply"]
+    Report --> Owner["Owner decides: reply, ready-for-agent, needs-info, wontfix"]
+    Owner --> Lifecycle["Issue tracker lifecycle"]
+```
+
+| Service | Product |
+| --- | --- |
+| Ticket tracker | GitHub Issues in both repositories ([issue tracker](issue-tracker.md), [triage labels](triage-labels.md)) |
+| Ticket source | Outside users and contributors |
+| Git host | GitHub |
+| Orchestrator | A Claude scheduled task, "Trickpad intake watch", in the owner's Trickpad project; its prompt holds the run's instructions |
+| Runner | A Claude Code cloud session with `gh` access scoped to the two repositories |
+| Observability platform | None: the project thread shows each report, and the scheduled task records each run |
+
+The intake watch task:
+
+1. **Trigger.** The scheduled task's clock, at 8:38 AM and 4:38 PM Eastern.
+2. **Action.** A script in the owner's project files lists issues, PRs, issue comments, and review comments created since a saved checkpoint, excluding the owner and bots. The run reads each item, checks an issue's claims against the default branch, reads a PR's diff and its `Checks` run, and subscribes to new outside PRs so their CI and review events reach the same thread.
+3. **Next.** Nothing automatic. Implementation starts only after the owner labels an issue `ready-for-agent` or asks for it.
+4. **Human re-entry.** The owner answers the run's report in the project thread. Any reply on GitHub is drafted in that report and posted only with the owner's approval.
+5. **Duplicates.** The checkpoint advances only after a report is posted, so a failed run lists the same items again; the run also skips items already reported in its thread.
+
+## Boundaries
+
+- The run may add `needs-triage` to an outside issue or PR in this repository. It does not comment, review, close, push, approve workflow runs for forks, or apply any other label, because anything it posts appears as the owner's.
+- These limits are instructions to the run, not a platform control: the session acts through the owner's GitHub identity. Holding them by permission would need a separate GitHub App or token with only the `issues: write` scope.
+- A `Checks` job on `macos-26` cancelled after about 15 minutes with no logs means GitHub assigned no runner. The report treats it as capacity and suggests a re-run, not a code fix.
+
+## Operating evidence
+
+- Shaped with `factory-guide` 0.3.2.
+- Not yet exercised against a live outside item; the first such report is the pilot. Review the arrangement after five reported items, or sooner if the owner has to relay an item the watch missed.
+- `thirdwind-site` has no `needs-triage` label, so the run reports its items without labelling them.
