@@ -1,7 +1,7 @@
 ---
 name: trickpad-release
 description: "Use when discussing, planning, preparing, cutting, publishing, or verifying a Trickpad release, including versioning, changelogs, packaging, delivery, and the next development train."
-compatibility: "Advisory use has no special requirements. Release execution requires macOS and the repository's release tools. Publishing accepts ambient R2 and Polar environment variables; the configured MacBook can load them from Infisical through ~/.local/bin/infisical-macos-run."
+compatibility: "Advisory use has no special requirements. Release execution requires macOS and the repository's release tools. Publishing accepts ambient R2 and Polar environment variables; on the maintainer's Mac, `scripts/publish.sh` and `scripts/storefront.sh` load them from Infisical."
 ---
 
 # Trickpad release
