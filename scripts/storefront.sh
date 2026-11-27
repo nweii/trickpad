@@ -5,7 +5,7 @@ set -euo pipefail
 
 ROOT="${0:A:h:h}"
 CURL_BIN="${TRICKPAD_STOREFRONT_CURL:-curl}"
-INFISICAL_RUNNER="$HOME/.local/bin/infisical-macos-run"
+ENVIRONMENT_CONFIG="$ROOT/.1password-environment"
 API="https://api.polar.sh"
 DMG_MIME="application/x-apple-diskimage"
 PUBLISH=0
@@ -47,19 +47,30 @@ if (( ASSUME_YES && ! PUBLISH )); then
 fi
 
 if [[ -z "${POLAR_ACCESS_TOKEN:-}" ]]; then
-  [[ -x "$INFISICAL_RUNNER" ]] || {
-    echo "Missing POLAR_ACCESS_TOKEN and Infisical runner: $INFISICAL_RUNNER" >&2
+  [[ -s "$ENVIRONMENT_CONFIG" ]] || {
+    echo "Missing POLAR_ACCESS_TOKEN. Put the trickpad-publish 1Password Environment ID in $ENVIRONMENT_CONFIG." >&2
     exit 1
   }
-  exec "$INFISICAL_RUNNER" \
-    --project-config-dir "$ROOT" \
-    --env prod \
-    --path /trickpad-publish \
-    -- "$0" "${ORIGINAL_ARGUMENTS[@]}"
+  ENVIRONMENT_ID="$(<"$ENVIRONMENT_CONFIG")"
+  [[ -n "$ENVIRONMENT_ID" && "$ENVIRONMENT_ID" != *[[:space:]]* ]] || {
+    echo "$ENVIRONMENT_CONFIG must contain only the trickpad-publish 1Password Environment ID." >&2
+    exit 1
+  }
+  command -v op >/dev/null 2>&1 || {
+    echo "Install 1Password CLI and enable its desktop-app integration, or supply POLAR_ACCESS_TOKEN in the environment." >&2
+    exit 1
+  }
+  exec op run --environment "$ENVIRONMENT_ID" -- /bin/zsh -c '
+    [[ -n "${POLAR_ACCESS_TOKEN:-}" ]] || {
+      echo "The 1Password Environment must contain POLAR_ACCESS_TOKEN." >&2
+      exit 1
+    }
+    exec "$@"
+  ' trickpad-storefront "$0" "${ORIGINAL_ARGUMENTS[@]}"
 fi
 
 if [[ "$POLAR_ACCESS_TOKEN" == REPLACE_ME ]]; then
-  echo "Replace the Polar access token placeholder in Infisical." >&2
+  echo "Replace the Polar access token placeholder in 1Password or the supplied environment." >&2
   exit 1
 fi
 

@@ -5,6 +5,7 @@ run/
 *.app
 *.dSYM
 .scratch/
+.1password-environment
 .claude/*
 !.claude/skills/
 .claude/skills/*

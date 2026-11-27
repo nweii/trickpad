@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Exercises the release publisher through its command-line interface without
-# contacting Infisical, R2, or the public update feed.
+# contacting 1Password, R2, or the public update feed.
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
