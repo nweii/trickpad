@@ -122,6 +122,7 @@ run_compiled_check menu-path run_without_arguments "${OBJC_FLAGS[@]}" -framework
 run_compiled_check menu-command-runner run_without_arguments -fblocks "${OBJC_FLAGS[@]}" -framework Foundation -framework AppKit -framework ApplicationServices "$ROOT/src/MenuPath.m" "$ROOT/src/MenuCommandRunner.m" "$ROOT/src/MenuCommandRunnerCheck.m"
 run_compiled_check script-runner run_without_arguments -fblocks "${OBJC_FLAGS[@]}" -framework Foundation "$ROOT/src/ScriptRunner.m" "$ROOT/src/ScriptRunnerCheck.m"
 run_shell_check publish "$ROOT/scripts/publish-check.sh"
+run_shell_check publishing-credentials "$ROOT/scripts/publishing-credentials-check.sh"
 
 if [[ -n "$CHECK_FILTER" ]]; then
   (( CHECK_COUNT > 0 )) || { echo "unknown CHECK_FILTER: $CHECK_FILTER" >&2; exit 1; }

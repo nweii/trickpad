@@ -1,7 +1,7 @@
 ---
 name: trickpad-release
 description: "Use when discussing, planning, preparing, cutting, publishing, or verifying a Trickpad release, including versioning, changelogs, packaging, delivery, and the next development train."
-compatibility: "Advisory use has no special requirements. Release execution requires macOS and the repository's release tools. Publishing accepts ambient R2 and Polar environment variables; on the maintainer's Mac, `scripts/publish.sh` and `scripts/storefront.sh` load them from Infisical."
+compatibility: "Advisory use has no special requirements. Release execution requires macOS and the repository's release tools. Publishing accepts ambient R2 and Polar environment variables; otherwise `scripts/publish.sh` and `scripts/storefront.sh` load them with the 1Password CLI from the Environment named in the local `.1password-environment` file."
 ---
 
 # Trickpad release

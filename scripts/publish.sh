@@ -15,7 +15,7 @@ DEFAULT_UPDATES_DIR="$ROOT/build/updates"
 UPDATES_DIR="${TRICKPAD_PUBLISH_UPDATES_DIR:-$DEFAULT_UPDATES_DIR}"
 CURL_BIN="${TRICKPAD_PUBLISH_CURL:-curl}"
 SLEEP_BIN="${TRICKPAD_PUBLISH_SLEEP:-sleep}"
-INFISICAL_RUNNER="$HOME/.local/bin/infisical-macos-run"
+ENVIRONMENT_CONFIG="$ROOT/.1password-environment"
 ACCOUNT_ID="f37ef727745eb9b364f87806a00f7bd2"
 BUCKET="thirdwind-updates"
 OBJECT_PREFIX="trickpad/9zvff4"
@@ -84,19 +84,30 @@ if (( ASSUME_YES && ! PUBLISH )); then
 fi
 
 if [[ -z "${R2_ACCESS_KEY_ID:-}" || -z "${R2_SECRET_ACCESS_KEY:-}" ]]; then
-  [[ -x "$INFISICAL_RUNNER" ]] || {
-    echo "Missing R2 credentials and Infisical runner: $INFISICAL_RUNNER" >&2
+  [[ -s "$ENVIRONMENT_CONFIG" ]] || {
+    echo "Missing R2 credentials. Put the trickpad-publish 1Password Environment ID in $ENVIRONMENT_CONFIG." >&2
     exit 1
   }
-  exec "$INFISICAL_RUNNER" \
-    --project-config-dir "$ROOT" \
-    --env prod \
-    --path /trickpad-publish \
-    -- "$0" "${ORIGINAL_ARGUMENTS[@]}"
+  ENVIRONMENT_ID="$(<"$ENVIRONMENT_CONFIG")"
+  [[ -n "$ENVIRONMENT_ID" && "$ENVIRONMENT_ID" != *[[:space:]]* ]] || {
+    echo "$ENVIRONMENT_CONFIG must contain only the trickpad-publish 1Password Environment ID." >&2
+    exit 1
+  }
+  command -v op >/dev/null 2>&1 || {
+    echo "Install 1Password CLI and enable its desktop-app integration, or supply R2 credentials in the environment." >&2
+    exit 1
+  }
+  exec op run --environment "$ENVIRONMENT_ID" -- /bin/zsh -c '
+    [[ -n "${R2_ACCESS_KEY_ID:-}" && -n "${R2_SECRET_ACCESS_KEY:-}" ]] || {
+      echo "The 1Password Environment must contain R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY." >&2
+      exit 1
+    }
+    exec "$@"
+  ' trickpad-publish "$0" "${ORIGINAL_ARGUMENTS[@]}"
 fi
 
 if [[ "$R2_ACCESS_KEY_ID" == REPLACE_ME || "$R2_SECRET_ACCESS_KEY" == REPLACE_ME ]]; then
-  echo "Replace the Trickpad publishing credential placeholders in Infisical." >&2
+  echo "Replace the Trickpad publishing credential placeholders in 1Password or the supplied environment." >&2
   exit 1
 fi
 
